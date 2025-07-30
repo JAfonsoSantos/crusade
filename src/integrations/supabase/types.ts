@@ -14,7 +14,275 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      ad_server_integrations: {
+        Row: {
+          api_key_encrypted: string | null
+          company_id: string
+          configuration: Json | null
+          created_at: string
+          id: string
+          last_sync: string | null
+          name: string
+          provider: string
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          api_key_encrypted?: string | null
+          company_id: string
+          configuration?: Json | null
+          created_at?: string
+          id?: string
+          last_sync?: string | null
+          name: string
+          provider: string
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          api_key_encrypted?: string | null
+          company_id?: string
+          configuration?: Json | null
+          created_at?: string
+          id?: string
+          last_sync?: string | null
+          name?: string
+          provider?: string
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_server_integrations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ad_spaces: {
+        Row: {
+          base_price: number | null
+          company_id: string
+          created_at: string
+          currency: string | null
+          id: string
+          location: string | null
+          name: string
+          price_model: string | null
+          size: string | null
+          status: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          base_price?: number | null
+          company_id: string
+          created_at?: string
+          currency?: string | null
+          id?: string
+          location?: string | null
+          name: string
+          price_model?: string | null
+          size?: string | null
+          status?: string | null
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          base_price?: number | null
+          company_id?: string
+          created_at?: string
+          currency?: string | null
+          id?: string
+          location?: string | null
+          name?: string
+          price_model?: string | null
+          size?: string | null
+          status?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_spaces_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_ad_spaces: {
+        Row: {
+          ad_space_id: string
+          allocated_budget: number | null
+          campaign_id: string
+          created_at: string
+          end_date: string | null
+          id: string
+          start_date: string | null
+        }
+        Insert: {
+          ad_space_id: string
+          allocated_budget?: number | null
+          campaign_id: string
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          start_date?: string | null
+        }
+        Update: {
+          ad_space_id?: string
+          allocated_budget?: number | null
+          campaign_id?: string
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          start_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_ad_spaces_ad_space_id_fkey"
+            columns: ["ad_space_id"]
+            isOneToOne: false
+            referencedRelation: "ad_spaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_ad_spaces_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaigns: {
+        Row: {
+          budget: number | null
+          company_id: string
+          created_at: string
+          created_by: string
+          currency: string | null
+          description: string | null
+          end_date: string
+          id: string
+          name: string
+          start_date: string
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          budget?: number | null
+          company_id: string
+          created_at?: string
+          created_by: string
+          currency?: string | null
+          description?: string | null
+          end_date: string
+          id?: string
+          name: string
+          start_date: string
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          budget?: number | null
+          company_id?: string
+          created_at?: string
+          created_by?: string
+          currency?: string | null
+          description?: string | null
+          end_date?: string
+          id?: string
+          name?: string
+          start_date?: string
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaigns_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      companies: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          industry: string | null
+          name: string
+          status: string | null
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          industry?: string | null
+          name: string
+          status?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          industry?: string | null
+          name?: string
+          status?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          role: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          role?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          role?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
