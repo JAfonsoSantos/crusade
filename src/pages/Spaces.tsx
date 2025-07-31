@@ -63,10 +63,10 @@ const Spaces = () => {
         variant: "destructive",
       });
     } else {
-      // Mock data for demonstration - simulating usage data
+      // Assign spaces to integrated ad servers only
       const spacesWithUsage = (data || []).map((space: any) => ({
         ...space,
-        ad_server: (space as any).ad_server || ['kevel', 'google', 'criteo', 'koddi'][Math.floor(Math.random() * 4)],
+        ad_server: 'kevel', // Only use Kevel since it's the only active integration
         usage_count: Math.floor(Math.random() * 100),
         last_used: Math.random() > 0.3 ? new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString() : null
       }));
