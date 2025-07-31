@@ -59,7 +59,6 @@ const KevelAd = ({
             {
               networkId: networkId,
               siteId: siteId,
-              adUnitId: adUnitId,
               divName: `kevel-ad-${adUnitId}`,
               count: 1,
               adTypes: [4] // Leaderboard ad type
