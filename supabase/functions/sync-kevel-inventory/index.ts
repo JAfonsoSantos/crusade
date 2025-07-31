@@ -329,6 +329,7 @@ Deno.serve(async (req) => {
           }
 
           // Create/update ad space in our database
+          console.log(`Creating/updating ad space in Crusade database: ${adUnitName}`)
           const adSpaceData = {
             name: adUnitName,
             type: 'display',
@@ -341,6 +342,8 @@ Deno.serve(async (req) => {
             company_id: integration.company_id,
           }
 
+          console.log(`Ad space data:`, adSpaceData)
+
           const { data: existingSpace } = await supabase
             .from('ad_spaces')
             .select('id')
@@ -349,6 +352,7 @@ Deno.serve(async (req) => {
             .single()
 
           if (existingSpace) {
+            // Ad space already exists - check if it needs updating
             const { error: updateError } = await supabase
               .from('ad_spaces')
               .update(adSpaceData)
@@ -360,7 +364,7 @@ Deno.serve(async (req) => {
               console.error('Error updating ad space:', updateError)
               errorCount++
             } else {
-              operationDetails.sites.updated++
+              operationDetails.sites.existing++
               syncedCount++
             }
           } else {
@@ -420,7 +424,7 @@ Deno.serve(async (req) => {
           .single()
 
         if (existingCampaign) {
-          // Update existing campaign
+          // Campaign already exists - check if it needs updating
           const { error: updateError } = await supabase
             .from('campaigns')
             .update(campaignData)
@@ -432,7 +436,7 @@ Deno.serve(async (req) => {
             console.error('Error updating campaign:', updateError)
             errorCount++
           } else {
-            operationDetails.campaigns.updated++
+            operationDetails.campaigns.existing++
             syncedCount++
           }
         } else {
