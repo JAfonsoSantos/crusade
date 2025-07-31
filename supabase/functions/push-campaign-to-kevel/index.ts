@@ -269,6 +269,40 @@ Deno.serve(async (req) => {
                 const flight = await flightResponse.json()
                 console.log(`Created flight: ${flight.Name} (ID: ${flight.Id})`)
                 flightCount++
+
+                // Create a basic Ad for this Flight
+                try {
+                  const adData = {
+                    FlightId: flight.Id,
+                    AdType: 1, // Banner/Display Ad
+                    Title: `${campaign.name} Ad`,
+                    Url: "https://example.com", // Default click URL
+                    ImageName: "", // Can be empty for text ads
+                    Alt: `${campaign.name} Advertisement`,
+                    IsDeleted: false,
+                    IsActive: false // Start inactive
+                  }
+
+                  console.log(`Creating Ad for flight: ${flight.Name}`)
+                  const adResponse = await fetch('https://api.kevel.co/v1/ad', {
+                    method: 'POST',
+                    headers: {
+                      'X-Adzerk-ApiKey': apiKey,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(adData),
+                  })
+
+                  if (adResponse.ok) {
+                    const ad = await adResponse.json()
+                    console.log(`Created Ad: ${ad.Title} (ID: ${ad.Id}) for Flight: ${flight.Id}`)
+                  } else {
+                    const errorText = await adResponse.text()
+                    console.error(`Failed to create Ad for flight ${flight.Id}:`, errorText)
+                  }
+                } catch (adError) {
+                  console.error(`Error creating Ad for flight ${flight.Id}:`, adError)
+                }
               } else {
                 const errorText = await flightResponse.text()
                 console.error(`Failed to create flight for ${adUnit.Name}:`, errorText)

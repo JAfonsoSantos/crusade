@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Edit, Trash2, Megaphone, Calendar, Upload } from 'lucide-react';
+import { Plus, Edit, Trash2, Megaphone, Calendar, Upload, ExternalLink, Loader2, PlayCircle, PauseCircle } from 'lucide-react';
 
 interface Campaign {
   id: string;
@@ -27,7 +27,7 @@ const Campaigns = () => {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [pushingCampaign, setPushingCampaign] = useState<string | null>(null);
+  const [pushingCampaigns, setPushingCampaigns] = useState<Set<string>>(new Set());
   const [integrations, setIntegrations] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     name: '',
@@ -76,22 +76,13 @@ const Campaigns = () => {
     }
   };
 
-  const pushCampaignToKevel = async (campaignId: string) => {
-    if (integrations.length === 0) {
-      toast({
-        title: "No Integrations",
-        description: "Please set up a Kevel integration first.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setPushingCampaign(campaignId);
+  const pushCampaignToKevel = async (campaignId: string, integrationId: string) => {
+    setPushingCampaigns(prev => new Set([...prev, campaignId]));
     try {
       const { data, error } = await supabase.functions.invoke('push-campaign-to-kevel', {
         body: {
           campaignId,
-          integrationId: integrations[0].id, // Use first active Kevel integration
+          integrationId,
         },
       });
 
@@ -103,6 +94,9 @@ const Campaigns = () => {
         title: "Success",
         description: data.message || "Campaign pushed to Kevel successfully!",
       });
+      
+      // Refresh integrations to get updated config
+      await fetchIntegrations();
     } catch (error) {
       console.error('Push campaign error:', error);
       toast({
@@ -111,7 +105,46 @@ const Campaigns = () => {
         variant: "destructive",
       });
     } finally {
-      setPushingCampaign(null);
+      setPushingCampaigns(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(campaignId);
+        return newSet;
+      });
+    }
+  };
+
+  const toggleCampaignInKevel = async (campaignId: string, integrationId: string, activate: boolean) => {
+    setPushingCampaigns(prev => new Set([...prev, campaignId]));
+    try {
+      const { data, error } = await supabase.functions.invoke('toggle-campaign-kevel', {
+        body: {
+          campaignId,
+          integrationId,
+          activate,
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Success",
+        description: `Campaign ${activate ? 'activated' : 'paused'} in Kevel successfully!`,
+      });
+    } catch (error) {
+      console.error('Toggle campaign error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to toggle campaign in Kevel.",
+        variant: "destructive",
+      });
+    } finally {
+      setPushingCampaigns(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(campaignId);
+        return newSet;
+      });
     }
   };
 
@@ -294,50 +327,154 @@ const Campaigns = () => {
         </Dialog>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="space-y-4">
         {campaigns.map((campaign) => (
-          <Card key={campaign.id}>
+          <Card key={campaign.id} className="w-full">
             <CardHeader>
               <div className="flex justify-between items-start">
                 <div>
-                  <CardTitle className="text-lg">{campaign.name}</CardTitle>
-                  <CardDescription className="line-clamp-2">
-                    {campaign.description || 'No description'}
-                  </CardDescription>
+                  <CardTitle className="text-lg font-semibold">
+                    {campaign.name}
+                  </CardTitle>
+                  {campaign.description && (
+                    <p className="text-muted-foreground mt-1">
+                      {campaign.description}
+                    </p>
+                  )}
                 </div>
-                <Badge className={getStatusColor(campaign.status)}>
+                <Badge 
+                  variant={
+                    campaign.status === 'active' ? 'default' : 
+                    campaign.status === 'paused' ? 'secondary' : 
+                    'outline'
+                  }
+                  className={getStatusColor(campaign.status)}
+                >
                   {campaign.status}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <Calendar className="mr-2 h-4 w-4" />
-                  {formatDate(campaign.start_date)} - {formatDate(campaign.end_date)}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Start Date</p>
+                  <p className="font-medium">{formatDate(campaign.start_date)}</p>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  <strong>Budget:</strong> {campaign.budget} {campaign.currency}
-                </p>
-                <div className="flex gap-2 pt-2">
-                  <Button variant="outline" size="sm">
-                    <Edit className="mr-2 h-4 w-4" />
-                    Edit
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => pushCampaignToKevel(campaign.id)}
-                    disabled={pushingCampaign === campaign.id || integrations.length === 0}
-                  >
-                    <Upload className="mr-2 h-4 w-4" />
-                    {pushingCampaign === campaign.id ? 'Pushing...' : 'Push to Kevel'}
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete
-                  </Button>
+                <div>
+                  <p className="text-sm text-muted-foreground">End Date</p>
+                  <p className="font-medium">{formatDate(campaign.end_date)}</p>
                 </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Budget</p>
+                  <p className="font-medium">
+                    {campaign.budget ? 
+                      `${campaign.currency} ${campaign.budget.toLocaleString()}` : 
+                      'Not set'
+                    }
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Created</p>
+                  <p className="font-medium">{formatDate(campaign.created_at)}</p>
+                </div>
+              </div>
+
+              {/* Kevel Integration Status */}
+              {integrations.map(integration => {
+                const campaignConfig = integration.configuration as any || {}
+                const kevelData = campaignConfig.campaigns?.[campaign.id]
+                
+                if (!kevelData) return null
+                
+                return (
+                  <div key={integration.id} className="bg-muted/50 rounded-lg p-3 mb-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge variant="outline" className="text-xs">
+                        Kevel Integration
+                      </Badge>
+                      <Badge variant={kevelData.status === 'synced' ? 'default' : 'secondary'}>
+                        {kevelData.status}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Campaign ID:</span>
+                        <p className="font-mono">{kevelData.kevel_id}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Flights Created:</span>
+                        <p>{kevelData.flights_created || 0}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Last Sync:</span>
+                        <p>{kevelData.pushed_at ? formatDate(kevelData.pushed_at) : 'Never'}</p>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+              
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm">
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit
+                </Button>
+                {integrations
+                  .filter(i => i.provider === 'kevel' && i.status === 'active')
+                  .map(integration => {
+                    const campaignConfig = integration.configuration as any || {}
+                    const kevelData = campaignConfig.campaigns?.[campaign.id]
+                    const isInKevel = !!kevelData?.kevel_id
+                    
+                    return (
+                      <div key={integration.id} className="flex gap-2">
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => pushCampaignToKevel(campaign.id, integration.id)}
+                          disabled={pushingCampaigns.has(campaign.id)}
+                        >
+                          {pushingCampaigns.has(campaign.id) ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Pushing...
+                            </>
+                          ) : (
+                            <>
+                              <ExternalLink className="h-4 w-4 mr-2" />
+                              {isInKevel ? 'Update in Kevel' : 'Push to Kevel'}
+                            </>
+                          )}
+                        </Button>
+                        
+                        {isInKevel && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => toggleCampaignInKevel(campaign.id, integration.id, campaign.status !== 'active')}
+                            disabled={pushingCampaigns.has(campaign.id)}
+                          >
+                            {campaign.status === 'active' ? (
+                              <>
+                                <PauseCircle className="h-4 w-4 mr-2" />
+                                Pause in Kevel
+                              </>
+                            ) : (
+                              <>
+                                <PlayCircle className="h-4 w-4 mr-2" />
+                                Activate in Kevel
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                    )
+                  })
+                }
+                <Button variant="destructive" size="sm">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </Button>
               </div>
             </CardContent>
           </Card>
