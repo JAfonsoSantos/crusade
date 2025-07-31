@@ -119,7 +119,7 @@ const ResetPassword = () => {
           </CardHeader>
           <CardContent className="text-center">
             <Button onClick={() => navigate('/auth')} className="w-full">
-              Voltar ao Login
+              Back to Login
             </Button>
           </CardContent>
         </Card>
@@ -185,7 +185,7 @@ const ResetPassword = () => {
             )}
             
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirmar Password</Label>
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
               <div className="relative">
                 <Input
                   id="confirmPassword"

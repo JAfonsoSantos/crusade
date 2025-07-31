@@ -129,21 +129,21 @@ const Auth = () => {
     if (error) {
       if (error.message.includes("already registered") || error.message.includes("already been taken")) {
         toast({
-          title: "Email já registado",
-          description: "Este email já está registado. Tenta fazer login ou usar a funcionalidade 'Esqueci a minha password'.",
+          title: "Email already registered",
+          description: "This email is already registered. Try logging in or use the 'Forgot password' feature.",
           variant: "destructive",
         });
       } else {
         toast({
-          title: "Erro no registo",
+          title: "Registration Error",
           description: error.message,
           variant: "destructive",
         });
       }
     } else {
       toast({
-        title: "Conta criada!",
-        description: "Verifica o teu email para confirmar a conta.",
+        title: "Account created!",
+        description: "Check your email to confirm your account.",
       });
       // Clear form after successful signup
       setEmail('');
@@ -157,8 +157,8 @@ const Auth = () => {
     e.preventDefault();
     if (!resetEmail) {
       toast({
-        title: "Erro",
-        description: "Por favor insere o teu email.",
+        title: "Error",
+        description: "Please enter your email.",
         variant: "destructive",
       });
       return;
@@ -172,14 +172,14 @@ const Auth = () => {
 
     if (error) {
       toast({
-        title: "Erro",
+        title: "Error",
         description: error.message,
         variant: "destructive",
       });
     } else {
       toast({
-        title: "Email enviado!",
-        description: "Verifica o teu email para instruções de reset da password.",
+        title: "Email sent!",
+        description: "Check your email for password reset instructions.",
       });
       setShowForgotPassword(false);
       setResetEmail('');
@@ -256,9 +256,9 @@ const Auth = () => {
                     required
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "A fazer login..." : "Entrar"}
-                </Button>
+                 <Button type="submit" className="w-full" disabled={loading}>
+                   {loading ? "Logging in..." : "Sign In"}
+                 </Button>
                 
                 <div className="text-center">
                   <button
@@ -266,7 +266,7 @@ const Auth = () => {
                     onClick={() => setShowForgotPassword(true)}
                     className="text-sm text-muted-foreground hover:text-foreground underline"
                   >
-                    Esqueci a minha password
+                    Forgot my password
                   </button>
                 </div>
               </form>
@@ -309,12 +309,12 @@ const Auth = () => {
                 </div>
                  {emailExists && !checkingEmail && (
                    <div className="text-sm text-destructive mb-2">
-                     Este email já está registado. Tenta fazer login.
+                     This email is already registered. Try logging in.
                    </div>
                  )}
                  {checkingEmail && (
                    <div className="text-sm text-muted-foreground mb-2">
-                     A verificar email...
+                     Checking email...
                    </div>
                  )}
                  <Button 
@@ -322,7 +322,7 @@ const Auth = () => {
                    className="w-full" 
                    disabled={loading || emailExists || checkingEmail}
                  >
-                   {loading ? "A criar conta..." : emailExists ? "Email já registado" : checkingEmail ? "A verificar..." : "Criar Conta"}
+                   {loading ? "Creating account..." : emailExists ? "Email already registered" : checkingEmail ? "Checking..." : "Create Account"}
                  </Button>
               </form>
             </TabsContent>
@@ -335,7 +335,7 @@ const Auth = () => {
                 <CardHeader>
                   <CardTitle>Reset Password</CardTitle>
                   <CardDescription>
-                    Insere o teu email para receberes instruções de reset
+                    Enter your email to receive reset instructions
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -353,7 +353,7 @@ const Auth = () => {
                     </div>
                     <div className="flex gap-2">
                       <Button type="submit" className="flex-1" disabled={loading}>
-                        {loading ? "A enviar..." : "Enviar Reset"}
+                        {loading ? "Sending..." : "Send Reset"}
                       </Button>
                       <Button 
                         type="button" 
@@ -363,7 +363,7 @@ const Auth = () => {
                           setResetEmail('');
                         }}
                       >
-                        Cancelar
+                        Cancel
                       </Button>
                     </div>
                   </form>
