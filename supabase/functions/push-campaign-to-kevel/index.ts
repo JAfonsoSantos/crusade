@@ -213,6 +213,74 @@ Deno.serve(async (req) => {
     const kevelCampaign = await kevelResponse.json()
     console.log('Kevel campaign response:', kevelCampaign)
 
+    // Get available ad units (zones) to create flights
+    console.log('Fetching available ad units for flights...')
+    const sitesResponse = await fetch('https://api.kevel.co/v1/site', {
+      method: 'GET',
+      headers: {
+        'X-Adzerk-ApiKey': apiKey,
+        'Content-Type': 'application/json',
+      },
+    })
+
+    let flightCount = 0
+    if (sitesResponse.ok) {
+      const sitesData = await sitesResponse.json()
+      
+      // Create flights for each site's ad units
+      for (const site of sitesData.items || []) {
+        const adUnitsResponse = await fetch(`https://api.kevel.co/v1/site/${site.Id}/zone`, {
+          method: 'GET',
+          headers: {
+            'X-Adzerk-ApiKey': apiKey,
+            'Content-Type': 'application/json',
+          },
+        })
+        
+        if (adUnitsResponse.ok) {
+          const adUnitsData = await adUnitsResponse.json()
+          
+          // Create one flight per ad unit (limit to 3 for demo)
+          for (const adUnit of adUnitsData.items?.slice(0, 3) || []) {
+            try {
+              const flightData = {
+                Name: `${campaign.name} - ${adUnit.Name}`,
+                CampaignId: kevelCampaign.Id,
+                PriorityId: 5, // Medium priority
+                ZoneId: adUnit.Id,
+                StartDate: campaign.start_date + 'T00:00:00.000Z',
+                EndDate: campaign.end_date + 'T23:59:59.999Z',
+                IsActive: false, // Start inactive for safety
+                IsUnlimited: true,
+                Price: Math.round((campaign.budget || 1000) * 100 / 3) // Distribute budget
+              }
+
+              console.log(`Creating flight for ad unit: ${adUnit.Name}`)
+              const flightResponse = await fetch('https://api.kevel.co/v1/flight', {
+                method: 'POST',
+                headers: {
+                  'X-Adzerk-ApiKey': apiKey,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(flightData),
+              })
+
+              if (flightResponse.ok) {
+                const flight = await flightResponse.json()
+                console.log(`Created flight: ${flight.Name} (ID: ${flight.Id})`)
+                flightCount++
+              } else {
+                const errorText = await flightResponse.text()
+                console.error(`Failed to create flight for ${adUnit.Name}:`, errorText)
+              }
+            } catch (error) {
+              console.error(`Error creating flight for ${adUnit.Name}:`, error)
+            }
+          }
+        }
+      }
+    }
+
     // Update integration configuration with campaign mapping
     const updatedConfig = {
       ...campaignConfig,
@@ -221,7 +289,8 @@ Deno.serve(async (req) => {
         [campaign.id]: {
           kevel_id: kevelCampaign.Id,
           pushed_at: new Date().toISOString(),
-          status: 'synced'
+          status: 'synced',
+          flights_created: flightCount
         }
       }
     }
@@ -234,13 +303,14 @@ Deno.serve(async (req) => {
       })
       .eq('id', integrationId)
 
-    console.log(`Campaign ${campaign.name} successfully pushed to Kevel with ID ${kevelCampaign.Id}`)
+    console.log(`Campaign ${campaign.name} successfully pushed to Kevel with ID ${kevelCampaign.Id} and ${flightCount} flights`)
 
     return new Response(
       JSON.stringify({ 
         success: true,
         kevel_campaign_id: kevelCampaign.Id,
-        message: `Campaign "${campaign.name}" successfully ${existingKevelCampaignId ? 'updated in' : 'created in'} Kevel`
+        flights_created: flightCount,
+        message: `Campaign "${campaign.name}" successfully ${existingKevelCampaignId ? 'updated in' : 'created in'} Kevel with ${flightCount} flights`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )

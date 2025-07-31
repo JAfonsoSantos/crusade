@@ -166,15 +166,66 @@ Deno.serve(async (req) => {
       { Name: 'Square', Width: 250, Height: 250 }
     ]
 
-    // Sync Ad Spaces
-    console.log('Syncing ad spaces...')
+    // Sync Ad Spaces and create Ad Units in Kevel
+    console.log('Syncing ad spaces and creating Ad Units in Kevel...')
     for (const site of sitesData.items || []) {
       console.log(`Processing site: ${site.Title} (ID: ${site.Id})`)
       
       for (const adSize of commonAdSizes) {
         try {
+          // First, create Ad Unit in Kevel if it doesn't exist
+          const adUnitName = `${site.Title} - ${adSize.Name}`
+          
+          // Check if Ad Unit already exists in Kevel
+          const adUnitsResponse = await fetch(`https://api.kevel.co/v1/site/${site.Id}/zone`, {
+            method: 'GET',
+            headers: {
+              'X-Adzerk-ApiKey': apiKey,
+              'Content-Type': 'application/json',
+            },
+          })
+          
+          let adUnitId = null
+          if (adUnitsResponse.ok) {
+            const adUnitsData = await adUnitsResponse.json()
+            const existingAdUnit = adUnitsData.items?.find((unit: any) => unit.Name === adUnitName)
+            
+            if (existingAdUnit) {
+              adUnitId = existingAdUnit.Id
+              console.log(`Found existing Ad Unit: ${adUnitName} (ID: ${adUnitId})`)
+            }
+          }
+          
+          // Create Ad Unit in Kevel if it doesn't exist
+          if (!adUnitId) {
+            console.log(`Creating Ad Unit in Kevel: ${adUnitName}`)
+            const createAdUnitResponse = await fetch(`https://api.kevel.co/v1/site/${site.Id}/zone`, {
+              method: 'POST',
+              headers: {
+                'X-Adzerk-ApiKey': apiKey,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                Name: adUnitName,
+                SiteId: site.Id,
+                IsDeleted: false,
+                Width: adSize.Width,
+                Height: adSize.Height
+              }),
+            })
+            
+            if (createAdUnitResponse.ok) {
+              const newAdUnit = await createAdUnitResponse.json()
+              adUnitId = newAdUnit.Id
+              console.log(`Created Ad Unit in Kevel: ${adUnitName} (ID: ${adUnitId})`)
+            } else {
+              console.error(`Failed to create Ad Unit in Kevel: ${adUnitName}`)
+            }
+          }
+
+          // Create/update ad space in our database
           const adSpaceData = {
-            name: `${site.Title} - ${adSize.Name}`,
+            name: adUnitName,
             type: 'display',
             size: `${adSize.Width}x${adSize.Height}`,
             location: site.Url || site.Title,
