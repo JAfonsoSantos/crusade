@@ -50,6 +50,10 @@ const Integrations = () => {
   const [syncHistory, setSyncHistory] = useState<{[key: string]: any[]}>({});
   const [expandedSyncHistory, setExpandedSyncHistory] = useState<{[key: string]: boolean}>({});
   const [expandedSyncDetails, setExpandedSyncDetails] = useState<{[key: string]: boolean}>({});
+  const [configFormData, setConfigFormData] = useState({
+    name: '',
+    api_key: ''
+  });
   const [formData, setFormData] = useState({
     name: '',
     provider: 'kevel',
@@ -229,30 +233,55 @@ const Integrations = () => {
 
   const handleConfigure = (integration: Integration) => {
     setSelectedIntegration(integration);
+    setConfigFormData({
+      name: integration.name,
+      api_key: ''
+    });
     setConfigDialogOpen(true);
   };
 
-  const handleUpdateApiKey = async (newApiKey: string) => {
+  const handleUpdateIntegration = async () => {
     if (!selectedIntegration) return;
+
+    const updateData: any = {};
+    
+    if (configFormData.name && configFormData.name !== selectedIntegration.name) {
+      updateData.name = configFormData.name;
+    }
+    
+    if (configFormData.api_key) {
+      updateData.api_key_encrypted = configFormData.api_key;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      toast({
+        title: "No changes",
+        description: "No changes were made.",
+        variant: "default",
+      });
+      setConfigDialogOpen(false);
+      return;
+    }
 
     const { error } = await supabase
       .from('ad_server_integrations')
-      .update({ api_key_encrypted: newApiKey })
+      .update(updateData)
       .eq('id', selectedIntegration.id);
 
     if (error) {
       toast({
         title: "Error",
-        description: "Could not update API key.",
+        description: "Could not update integration.",
         variant: "destructive",
       });
     } else {
       toast({
         title: "Success",
-        description: "API key updated successfully!",
+        description: "Integration updated successfully!",
       });
       setConfigDialogOpen(false);
       setSelectedIntegration(null);
+      setConfigFormData({ name: '', api_key: '' });
       fetchIntegrations();
     }
   };
@@ -450,32 +479,34 @@ const Integrations = () => {
             <DialogHeader>
               <DialogTitle>Configure Integration</DialogTitle>
               <DialogDescription>
-                Update API key for {selectedIntegration?.name}
+                Update settings for {selectedIntegration?.name}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="new_api_key">New API Key</Label>
+                <Label htmlFor="integration_name">Integration Name</Label>
+                <Input
+                  id="integration_name"
+                  value={configFormData.name}
+                  onChange={(e) => setConfigFormData(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Enter integration name"
+                />
+              </div>
+              <div className="grid w-full items-center gap-1.5">
+                <Label htmlFor="new_api_key">New API Key (optional)</Label>
                 <Input
                   id="new_api_key"
                   type="password"
-                  placeholder="Enter your new API key"
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      const target = e.target as HTMLInputElement;
-                      handleUpdateApiKey(target.value);
-                    }
-                  }}
+                  value={configFormData.api_key}
+                  onChange={(e) => setConfigFormData(prev => ({ ...prev, api_key: e.target.value }))}
+                  placeholder="Enter new API key (leave empty to keep current)"
                 />
               </div>
               <Button 
                 className="w-full" 
-                onClick={() => {
-                  const input = document.getElementById('new_api_key') as HTMLInputElement;
-                  handleUpdateApiKey(input.value);
-                }}
+                onClick={handleUpdateIntegration}
               >
-                Update API Key
+                Update Integration
               </Button>
             </div>
           </DialogContent>
