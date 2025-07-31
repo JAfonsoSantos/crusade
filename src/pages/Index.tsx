@@ -1,137 +1,233 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
-import { User, Session } from '@supabase/supabase-js';
+import { LayoutDashboard, Target, Megaphone, Settings, TrendingUp, Users, Building2 } from 'lucide-react';
 
 const Index = () => {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [stats, setStats] = useState({
+    adSpaces: 0,
+    campaigns: 0,
+    integrations: 0,
+    revenue: 0
+  });
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-      }
-    );
-
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    fetchStats();
   }, []);
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
+  const fetchStats = async () => {
+    try {
+      // Get user's company
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('user_id', user?.id)
+        .single();
+
+      if (!profile?.company_id) {
+        setLoading(false);
+        return;
+      }
+
+      // Fetch statistics in parallel
+      const [adSpacesResult, campaignsResult, integrationsResult] = await Promise.all([
+        supabase.from('ad_spaces').select('id', { count: 'exact' }).eq('company_id', profile.company_id),
+        supabase.from('campaigns').select('id', { count: 'exact' }).eq('company_id', profile.company_id),
+        supabase.from('ad_server_integrations').select('id', { count: 'exact' }).eq('company_id', profile.company_id)
+      ]);
+
+      setStats({
+        adSpaces: adSpacesResult.count || 0,
+        campaigns: campaignsResult.count || 0,
+        integrations: integrationsResult.count || 0,
+        revenue: 0 // TODO: Calculate from real data
+      });
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const quickActions = [
+    {
+      title: 'Criar Espaço Publicitário',
+      description: 'Adicionar novo espaço para anúncios',
+      icon: Target,
+      action: () => navigate('/ad-spaces'),
+      color: 'bg-blue-500'
+    },
+    {
+      title: 'Nova Campanha',
+      description: 'Criar campanha publicitária',
+      icon: Megaphone,
+      action: () => navigate('/campaigns'),
+      color: 'bg-green-500'
+    },
+    {
+      title: 'Adicionar Integração',
+      description: 'Conectar servidor de anúncios',
+      icon: Settings,
+      action: () => navigate('/integrations'),
+      color: 'bg-purple-500'
+    },
+    {
+      title: 'Ver Dashboard',
+      description: 'Análises e relatórios',
+      icon: LayoutDashboard,
+      action: () => navigate('/dashboard'),
+      color: 'bg-orange-500'
+    }
+  ];
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <p className="text-xl text-muted-foreground">A carregar...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center space-y-4">
-          <h1 className="text-4xl font-bold mb-4">AdSpace CRM</h1>
-          <p className="text-xl text-muted-foreground mb-6">
-            Gerencie os seus espaços publicitários e campanhas
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+          <p className="text-muted-foreground">
+            A carregar dados...
           </p>
-          <Button onClick={() => navigate('/auth')} size="lg">
-            Entrar / Registar
-          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-14 items-center">
-          <div className="mr-4 flex">
-            <h1 className="text-lg font-semibold">AdSpace CRM</h1>
-          </div>
-          <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-muted-foreground">
-                Olá, {user.user_metadata?.full_name || user.email}
-              </span>
-              <Button variant="outline" size="sm" onClick={handleSignOut}>
-                Sair
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+        <p className="text-muted-foreground">
+          Bem-vindo ao seu painel de controlo AdSpace CRM
+        </p>
+      </div>
+      
+      {/* Statistics Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Espaços Ativos</CardTitle>
+            <Target className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.adSpaces}</div>
+            <p className="text-xs text-muted-foreground">
+              Espaços publicitários disponíveis
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Campanhas</CardTitle>
+            <Megaphone className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.campaigns}</div>
+            <p className="text-xs text-muted-foreground">
+              Campanhas criadas
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Receita</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">€{stats.revenue}</div>
+            <p className="text-xs text-muted-foreground">
+              Receita total este mês
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Integrações</CardTitle>
+            <Settings className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.integrations}</div>
+            <p className="text-xs text-muted-foreground">
+              Plataformas conectadas
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Quick Actions */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Ações Rápidas</h3>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {quickActions.map((action, index) => {
+            const Icon = action.icon;
+            return (
+              <Card key={index} className="cursor-pointer hover:shadow-md transition-shadow" onClick={action.action}>
+                <CardHeader>
+                  <div className={`w-12 h-12 ${action.color} rounded-lg flex items-center justify-center mb-2`}>
+                    <Icon className="h-6 w-6 text-white" />
+                  </div>
+                  <CardTitle className="text-base">{action.title}</CardTitle>
+                  <CardDescription className="text-sm">
+                    {action.description}
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Getting Started */}
+      {stats.integrations === 0 && (
+        <Card className="border-dashed">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Primeiros Passos
+            </CardTitle>
+            <CardDescription>
+              Configure o seu sistema de gestão publicitária
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <h4 className="font-medium">1. Configurar Integrações</h4>
+              <p className="text-sm text-muted-foreground">
+                Conecte plataformas como Kevel, Koddi ou Topsort para gerir campanhas.
+              </p>
+              <Button variant="outline" size="sm" onClick={() => navigate('/integrations')}>
+                Configurar Integrações
               </Button>
             </div>
-          </div>
-        </div>
-      </header>
-      
-      <main className="container py-6">
-        <div className="space-y-6">
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-            <p className="text-muted-foreground">
-              Bem-vindo ao seu painel de controlo AdSpace CRM
-            </p>
-          </div>
-          
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
-              <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <h3 className="tracking-tight text-sm font-medium">Espaços Ativos</h3>
-              </div>
-              <div className="text-2xl font-bold">0</div>
-              <p className="text-xs text-muted-foreground">
-                Espaços publicitários disponíveis
+            <div className="space-y-2">
+              <h4 className="font-medium">2. Criar Espaços Publicitários</h4>
+              <p className="text-sm text-muted-foreground">
+                Defina os espaços onde os anúncios serão exibidos.
               </p>
+              <Button variant="outline" size="sm" onClick={() => navigate('/ad-spaces')}>
+                Criar Espaços
+              </Button>
             </div>
-            
-            <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
-              <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <h3 className="tracking-tight text-sm font-medium">Campanhas</h3>
-              </div>
-              <div className="text-2xl font-bold">0</div>
-              <p className="text-xs text-muted-foreground">
-                Campanhas em execução
+            <div className="space-y-2">
+              <h4 className="font-medium">3. Lançar Campanhas</h4>
+              <p className="text-sm text-muted-foreground">
+                Crie e gerencie campanhas publicitárias através das plataformas integradas.
               </p>
+              <Button variant="outline" size="sm" onClick={() => navigate('/campaigns')}>
+                Criar Campanha
+              </Button>
             </div>
-            
-            <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
-              <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <h3 className="tracking-tight text-sm font-medium">Receita</h3>
-              </div>
-              <div className="text-2xl font-bold">€0</div>
-              <p className="text-xs text-muted-foreground">
-                Receita total este mês
-              </p>
-            </div>
-            
-            <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
-              <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <h3 className="tracking-tight text-sm font-medium">Integrações</h3>
-              </div>
-              <div className="text-2xl font-bold">0</div>
-              <p className="text-xs text-muted-foreground">
-                Servidores de anúncios conectados
-              </p>
-            </div>
-          </div>
-        </div>
-      </main>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
