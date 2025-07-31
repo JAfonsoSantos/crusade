@@ -411,7 +411,7 @@ const Integrations = () => {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {integrations.map((integration) => (
-          <Card key={integration.id} className={`${expandedDetails.has(integration.id) ? 'md:col-span-1 lg:col-span-2 xl:col-span-3' : ''} transition-all duration-300`}>
+          <Card key={integration.id} className={`${expandedDetails.has(integration.id) ? 'col-span-full' : ''} transition-all duration-300 overflow-hidden`}>
             <CardHeader>
               <div className="flex justify-between items-start">
                 <div>
