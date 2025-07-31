@@ -3,13 +3,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Settings, Trash2, Wifi, WifiOff, RefreshCw, ChevronDown, ChevronRight, Eye, AlertCircle, CheckCircle, Info } from 'lucide-react';
+import { Plus, Settings, Trash2, Wifi, WifiOff, RefreshCw, ChevronDown, ChevronRight, Eye, AlertCircle, CheckCircle, Info, Pause, Play } from 'lucide-react';
 import kevelLogo from '@/assets/kevel-logo.png';
 import koddiLogo from '@/assets/koddi-logo.png';
 import topsortLogo from '@/assets/topsort-logo.png';
@@ -173,6 +174,8 @@ const Integrations = () => {
     switch (status) {
       case 'active':
         return 'bg-green-100 text-green-800';
+      case 'paused':
+        return 'bg-yellow-100 text-yellow-800';
       case 'inactive':
         return 'bg-gray-100 text-gray-800';
       case 'error':
@@ -282,6 +285,48 @@ const Integrations = () => {
       setConfigDialogOpen(false);
       setSelectedIntegration(null);
       setConfigFormData({ name: '', api_key: '' });
+      fetchIntegrations();
+    }
+  };
+
+  const handlePauseIntegration = async (integration: Integration) => {
+    const { error } = await supabase
+      .from('ad_server_integrations')
+      .update({ status: 'paused' })
+      .eq('id', integration.id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Could not pause integration.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: "Integration paused successfully!",
+      });
+      fetchIntegrations();
+    }
+  };
+
+  const handleResumeIntegration = async (integration: Integration) => {
+    const { error } = await supabase
+      .from('ad_server_integrations')
+      .update({ status: 'active' })
+      .eq('id', integration.id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Could not resume integration.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: "Integration resumed successfully!",
+      });
       fetchIntegrations();
     }
   };
@@ -555,14 +600,47 @@ const Integrations = () => {
                     <RefreshCw className={`mr-2 h-4 w-4 ${syncing === integration.id ? 'animate-spin' : ''}`} />
                     {syncing === integration.id ? 'Syncing...' : 'Sync Now'}
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleConfigure(integration)}>
-                    <Settings className="mr-2 h-4 w-4" />
-                    Configure
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Remove
-                  </Button>
+                   <Button variant="outline" size="sm" onClick={() => handleConfigure(integration)}>
+                     <Settings className="mr-2 h-4 w-4" />
+                     Configure
+                   </Button>
+                   
+                   {integration.status === 'active' && (
+                     <AlertDialog>
+                       <AlertDialogTrigger asChild>
+                         <Button variant="outline" size="sm">
+                           <Pause className="mr-2 h-4 w-4" />
+                           Pause
+                         </Button>
+                       </AlertDialogTrigger>
+                       <AlertDialogContent>
+                         <AlertDialogHeader>
+                           <AlertDialogTitle>Pause Integration</AlertDialogTitle>
+                           <AlertDialogDescription>
+                             Are you sure you want to pause "{integration.name}"? This will stop all sync operations until resumed.
+                           </AlertDialogDescription>
+                         </AlertDialogHeader>
+                         <AlertDialogFooter>
+                           <AlertDialogCancel>Cancel</AlertDialogCancel>
+                           <AlertDialogAction onClick={() => handlePauseIntegration(integration)}>
+                             Pause Integration
+                           </AlertDialogAction>
+                         </AlertDialogFooter>
+                       </AlertDialogContent>
+                     </AlertDialog>
+                   )}
+                   
+                   {integration.status === 'paused' && (
+                     <Button variant="outline" size="sm" onClick={() => handleResumeIntegration(integration)}>
+                       <Play className="mr-2 h-4 w-4" />
+                       Resume
+                     </Button>
+                   )}
+                   
+                   <Button variant="outline" size="sm">
+                     <Trash2 className="mr-2 h-4 w-4" />
+                     Remove
+                   </Button>
                   {integration.configuration?.last_sync_details && (
                     <Button 
                       variant="outline" 
