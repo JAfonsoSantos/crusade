@@ -114,7 +114,7 @@ const DemoSite = () => {
 
             {/* Sidebar Ad */}
             <div className="flex justify-center">
-              <KevelAd id={5} size="300x250" position="Sidebar" />
+              <KevelAd id={5} size="300x250" position="Sidebar" adTypes={[5]} />
             </div>
           </div>
 

@@ -4,6 +4,7 @@ interface KevelAdProps {
   id: number;
   size: string;
   position: string;
+  adTypes?: number[];
   networkId?: number;
   siteId?: number;
 }
@@ -39,6 +40,7 @@ const KevelAd = ({
   id, 
   size, 
   position, 
+  adTypes = [4],
   networkId = 11833, 
   siteId = 1306350 
 }: KevelAdProps) => {
@@ -61,7 +63,7 @@ const KevelAd = ({
               siteId: siteId,
               divName: `kevel-ad-${id}`,
               count: 1,
-              adTypes: [4] // Leaderboard ad type
+              adTypes: adTypes
             }
           ],
           user: {
@@ -115,7 +117,7 @@ const KevelAd = ({
     };
 
     fetchAd();
-  }, [id, networkId, siteId]);
+  }, [id, adTypes, networkId, siteId]);
 
   // Handle click tracking
   const handleAdClick = (event: React.MouseEvent) => {
