@@ -51,6 +51,9 @@ const Integrations = () => {
   const [syncHistory, setSyncHistory] = useState<{[key: string]: any[]}>({});
   const [expandedSyncHistory, setExpandedSyncHistory] = useState<{[key: string]: boolean}>({});
   const [expandedSyncDetails, setExpandedSyncDetails] = useState<{[key: string]: boolean}>({});
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [integrationToDelete, setIntegrationToDelete] = useState<Integration | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [configFormData, setConfigFormData] = useState({
     name: '',
     api_key: ''
@@ -331,6 +334,44 @@ const Integrations = () => {
     }
   };
 
+  const handleDeleteIntegration = (integration: Integration) => {
+    setIntegrationToDelete(integration);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteIntegration = async () => {
+    if (!integrationToDelete) return;
+
+    setDeleting(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('delete-integration', {
+        body: { integrationId: integrationToDelete.id }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Integration Deleted",
+        description: `"${integrationToDelete.name}" and all related data have been removed from your Crusade account.`,
+      });
+      
+      setDeleteDialogOpen(false);
+      setIntegrationToDelete(null);
+      fetchIntegrations();
+      
+    } catch (error: any) {
+      console.error('Delete error:', error);
+      toast({
+        title: "Delete Failed",
+        description: error.message || "Could not delete integration.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleSync = async (integration: Integration) => {
     if (integration.status === 'paused') {
       toast({
@@ -565,6 +606,47 @@ const Integrations = () => {
             </div>
           </DialogContent>
         </Dialog>
+        
+        {/* Delete Integration Dialog */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Integration</AlertDialogTitle>
+              <AlertDialogDescription className="space-y-2">
+                <p>
+                  Are you sure you want to delete "{integrationToDelete?.name}"?
+                </p>
+                <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3 mt-3">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+                    <div className="text-sm text-yellow-800 dark:text-yellow-200">
+                      <p className="font-medium mb-1">This action will permanently remove from your Crusade account:</p>
+                      <ul className="list-disc list-inside space-y-1 text-xs">
+                        <li>All campaigns created through this integration</li>
+                        <li>All ad units and platform mappings</li>
+                        <li>Complete sync history and configuration</li>
+                        <li>Any related data specific to this ad server</li>
+                      </ul>
+                      <p className="font-medium mt-2 text-xs">
+                        ⚠️ This will NOT affect your data on the ad server itself.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={confirmDeleteIntegration}
+                disabled={deleting}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {deleting ? 'Deleting...' : 'Delete Integration'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       <div className="grid gap-4 grid-cols-1">
@@ -627,7 +709,7 @@ const Integrations = () => {
                        </Button>
                      )}
                      
-                     <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                     <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleDeleteIntegration(integration)}>
                        <Trash2 className="h-4 w-4" />
                      </Button>
                    </div>
