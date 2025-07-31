@@ -300,11 +300,15 @@ Deno.serve(async (req) => {
       console.log(`Processing campaign: ${kevelCampaign.Name} (ID: ${kevelCampaign.Id})`)
       
       try {
+        // Safely handle date fields that might be undefined
+        const startDate = kevelCampaign.StartDate ? kevelCampaign.StartDate.split('T')[0] : new Date().toISOString().split('T')[0]
+        const endDate = kevelCampaign.EndDate ? kevelCampaign.EndDate.split('T')[0] : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // Default to 7 days from now
+        
         const campaignData = {
           name: kevelCampaign.Name,
           description: `Imported from Kevel (ID: ${kevelCampaign.Id})`,
-          start_date: kevelCampaign.StartDate.split('T')[0], // Convert to date format
-          end_date: kevelCampaign.EndDate.split('T')[0],
+          start_date: startDate,
+          end_date: endDate,
           budget: kevelCampaign.Price || 1000, // Default budget if not provided
           currency: 'USD',
           status: kevelCampaign.IsActive ? 'active' : 'paused',
