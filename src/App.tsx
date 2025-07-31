@@ -9,6 +9,8 @@ import Dashboard from "./pages/Dashboard";
 import AdSpaces from "./pages/AdSpaces";
 import Campaigns from "./pages/Campaigns";
 import Integrations from "./pages/Integrations";
+import PersonalSettings from "./pages/PersonalSettings";
+import BusinessSettings from "./pages/BusinessSettings";
 import Layout from "./components/Layout";
 import NotFound from "./pages/NotFound";
 
@@ -28,6 +30,8 @@ const App = () => (
             <Route path="ad-spaces" element={<AdSpaces />} />
             <Route path="campaigns" element={<Campaigns />} />
             <Route path="integrations" element={<Integrations />} />
+            <Route path="personal-settings" element={<PersonalSettings />} />
+            <Route path="business-settings" element={<BusinessSettings />} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { supabase } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
-import { LayoutDashboard, Target, Megaphone, Settings } from 'lucide-react';
+import { LayoutDashboard, Target, Megaphone, Settings, ChevronDown, User as UserIcon, Building2, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const Layout = () => {
@@ -93,12 +94,31 @@ const Layout = () => {
           </nav>
           
           <div className="flex flex-1 items-center justify-end space-x-2">
-            <span className="text-sm text-muted-foreground">
-              {user.user_metadata?.full_name || user.email}
-            </span>
-            <Button variant="outline" size="sm" onClick={handleSignOut}>
-              Logout
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="flex items-center space-x-2">
+                  <span className="text-sm">
+                    {user.user_metadata?.full_name || user.email}
+                  </span>
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onClick={() => navigate('/personal-settings')}>
+                  <UserIcon className="mr-2 h-4 w-4" />
+                  <span>Personal Settings</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/business-settings')}>
+                  <Building2 className="mr-2 h-4 w-4" />
+                  <span>Business Settings</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleSignOut}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Logout</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>
