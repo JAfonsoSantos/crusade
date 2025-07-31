@@ -272,7 +272,7 @@ const Spaces = () => {
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Spaces</h2>
           <p className="text-muted-foreground">
-            Organize por servidor de anúncios e utilização
+            Organize by ad server and usage
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -433,15 +433,15 @@ const Spaces = () => {
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="usage" className="flex items-center gap-2">
               <TrendingUp className="w-4 h-4" />
-              Por Utilização
+              By Usage
             </TabsTrigger>
             <TabsTrigger value="server" className="flex items-center gap-2">
               <Server className="w-4 h-4" />
-              Por Ad Server
+              By Ad Server
             </TabsTrigger>
             <TabsTrigger value="all" className="flex items-center gap-2">
               <Target className="w-4 h-4" />
-              Todos
+              All Spaces
             </TabsTrigger>
           </TabsList>
 
@@ -452,7 +452,7 @@ const Spaces = () => {
                 <div className="flex items-center gap-2 mb-4">
                   <TrendingUp className="w-5 h-5 text-green-600" />
                   <h3 className="text-lg font-semibold text-green-600">
-                    Espaços com Boa Utilização ({spacesbyUsage.used.length})
+                    High Usage Spaces ({spacesbyUsage.used.length})
                   </h3>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -469,7 +469,7 @@ const Spaces = () => {
                 <div className="flex items-center gap-2 mb-4">
                   <TrendingDown className="w-5 h-5 text-gray-400" />
                   <h3 className="text-lg font-semibold text-muted-foreground">
-                    Espaços Pouco Utilizados ({spacesbyUsage.unused.length})
+                    Low Usage Spaces ({spacesbyUsage.unused.length})
                   </h3>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
