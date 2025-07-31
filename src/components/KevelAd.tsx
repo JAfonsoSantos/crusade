@@ -55,6 +55,7 @@ const KevelAd = ({
       try {
         setLoading(true);
         setError(null);
+        impressionFired.current = false; // Reset impression flag on new fetch
         
         const requestBody = {
           placements: [
