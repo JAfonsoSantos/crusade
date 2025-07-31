@@ -18,6 +18,8 @@ const Auth = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
+  const [emailExists, setEmailExists] = useState(false);
+  const [checkingEmail, setCheckingEmail] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -47,6 +49,43 @@ const Auth = () => {
 
     return () => subscription.unsubscribe();
   }, [navigate]);
+
+  // Check if email exists with debounce
+  useEffect(() => {
+    if (!email || email.length < 3) {
+      setEmailExists(false);
+      setCheckingEmail(false);
+      return;
+    }
+
+    const checkEmailExists = async () => {
+      setCheckingEmail(true);
+      try {
+        // Try to sign up with a fake password to check if email exists
+        const { error } = await supabase.auth.signUp({
+          email,
+          password: 'temp-check-12345',
+          options: {
+            data: { temp_check: true }
+          }
+        });
+        
+        if (error && error.message.includes("already registered")) {
+          setEmailExists(true);
+        } else {
+          setEmailExists(false);
+        }
+      } catch (error) {
+        console.error('Error checking email:', error);
+        setEmailExists(false);
+      } finally {
+        setCheckingEmail(false);
+      }
+    };
+
+    const timeoutId = setTimeout(checkEmailExists, 800);
+    return () => clearTimeout(timeoutId);
+  }, [email]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -255,9 +294,23 @@ const Auth = () => {
                     required
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "A criar conta..." : "Criar Conta"}
-                </Button>
+                 {emailExists && (
+                   <div className="text-sm text-destructive mb-2">
+                     Este email já está registado. Tenta fazer login.
+                   </div>
+                 )}
+                 {checkingEmail && (
+                   <div className="text-sm text-muted-foreground mb-2">
+                     A verificar email...
+                   </div>
+                 )}
+                 <Button 
+                   type="submit" 
+                   className="w-full" 
+                   disabled={loading || emailExists || checkingEmail}
+                 >
+                   {loading ? "A criar conta..." : emailExists ? "Email já registado" : "Criar Conta"}
+                 </Button>
               </form>
             </TabsContent>
           </Tabs>
