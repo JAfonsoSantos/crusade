@@ -40,6 +40,9 @@ const Integrations = () => {
   const [selectedIntegration, setSelectedIntegration] = useState<Integration | null>(null);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [expandedDetails, setExpandedDetails] = useState<Set<string>>(new Set());
+  const [syncHistory, setSyncHistory] = useState<{[key: string]: any[]}>({});
+  const [expandedSyncHistory, setExpandedSyncHistory] = useState<{[key: string]: boolean}>({});
+  const [expandedSyncDetails, setExpandedSyncDetails] = useState<{[key: string]: boolean}>({});
   const [formData, setFormData] = useState({
     name: '',
     provider: 'google_ad_manager',
@@ -67,6 +70,45 @@ const Integrations = () => {
       setIntegrations((data || []) as Integration[]);
     }
     setLoading(false);
+  };
+
+  const fetchSyncHistory = async (integrationId: string) => {
+    if (syncHistory[integrationId]) return; // Already loaded
+    
+    const { data, error } = await supabase
+      .from('integration_sync_history')
+      .select('*')
+      .eq('integration_id', integrationId)
+      .order('sync_timestamp', { ascending: false })
+      .limit(10);
+
+    if (!error && data) {
+      setSyncHistory(prev => ({
+        ...prev,
+        [integrationId]: data
+      }));
+    }
+  };
+
+  const toggleSyncHistory = (integrationId: string) => {
+    setExpandedSyncHistory(prev => ({
+      ...prev,
+      [integrationId]: !prev[integrationId]
+    }));
+    
+    if (!expandedSyncHistory[integrationId]) {
+      fetchSyncHistory(integrationId);
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString('pt-PT', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -150,16 +192,6 @@ const Integrations = () => {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    if (!dateString) return 'Never';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
 
   const handleConfigure = (integration: Integration) => {
     setSelectedIntegration(integration);
@@ -536,9 +568,91 @@ const Integrations = () => {
                               )}
                             </div>
                           )}
-                        </div>
-                      </div>
-                    </div>
+                         </div>
+                       </div>
+
+                       {/* Sync History Section */}
+                       <div className="mt-6 pt-4 border-t">
+                         <div className="flex items-center justify-between mb-3">
+                           <h5 className="font-medium text-sm text-muted-foreground">Sync History</h5>
+                           <Button
+                             variant="ghost"
+                             size="sm"
+                             onClick={() => toggleSyncHistory(integration.id)}
+                             className="p-0 h-auto"
+                           >
+                             {expandedSyncHistory[integration.id] ? (
+                               <ChevronDown className="h-4 w-4" />
+                             ) : (
+                               <ChevronRight className="h-4 w-4" />
+                             )}
+                           </Button>
+                         </div>
+
+                         {expandedSyncHistory[integration.id] && (
+                           <div className="space-y-2">
+                             {syncHistory[integration.id] ? (
+                               syncHistory[integration.id].length > 0 ? (
+                                 syncHistory[integration.id].map((sync) => (
+                                   <div key={sync.id} className="p-3 bg-gray-50 dark:bg-gray-900/20 rounded-md border">
+                                     <div className="flex items-center justify-between">
+                                       <div className="flex items-center gap-3">
+                                         <div className={`w-2 h-2 rounded-full ${sync.status === 'completed' ? 'bg-green-500' : sync.status === 'completed_with_errors' ? 'bg-yellow-500' : 'bg-red-500'}`} />
+                                         <span className="text-sm font-medium">
+                                           {formatDate(sync.sync_timestamp)}
+                                         </span>
+                                         <span className="text-xs text-muted-foreground">
+                                           {sync.synced_count} synced, {sync.errors_count} errors
+                                         </span>
+                                       </div>
+                                       <Button
+                                         variant="ghost"
+                                         size="sm"
+                                         onClick={() => setExpandedSyncDetails(prev => ({
+                                           ...prev,
+                                           [sync.id]: !prev[sync.id]
+                                         }))}
+                                         className="p-0 h-auto"
+                                       >
+                                         {expandedSyncDetails[sync.id] ? (
+                                           <ChevronDown className="h-3 w-3" />
+                                         ) : (
+                                           <ChevronRight className="h-3 w-3" />
+                                         )}
+                                       </Button>
+                                     </div>
+                                     
+                                     {expandedSyncDetails[sync.id] && sync.operations && (
+                                       <div className="mt-3 pt-3 border-t space-y-2">
+                                         {sync.operations.campaigns && (
+                                           <div className="text-xs text-blue-700 dark:text-blue-300">
+                                             Campaigns: {sync.operations.campaigns.existing || 0} existing, {sync.operations.campaigns.created} created, {sync.operations.campaigns.updated} updated
+                                           </div>
+                                         )}
+                                         {sync.operations.ad_units && (
+                                           <div className="text-xs text-purple-700 dark:text-purple-300">
+                                             Ad Units: {sync.operations.ad_units.existing || 0} existing, {sync.operations.ad_units.created} created, {sync.operations.ad_units.updated} updated
+                                           </div>
+                                         )}
+                                         {sync.operations.sites && (
+                                           <div className="text-xs text-orange-700 dark:text-orange-300">
+                                             Sites: {sync.operations.sites.existing || 0} existing, {sync.operations.sites.created} created, {sync.operations.sites.updated} updated
+                                           </div>
+                                         )}
+                                       </div>
+                                     )}
+                                   </div>
+                                 ))
+                               ) : (
+                                 <p className="text-sm text-muted-foreground">No sync history available</p>
+                               )
+                             ) : (
+                               <p className="text-sm text-muted-foreground">Loading history...</p>
+                             )}
+                           </div>
+                         )}
+                       </div>
+                     </div>
                   </div>
                 )}
               </div>

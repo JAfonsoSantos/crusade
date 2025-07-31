@@ -56,6 +56,7 @@ Deno.serve(async (req) => {
     }
 
     console.log(`Starting sync for integration: ${integrationId}`)
+    const syncStartTime = Date.now()
 
     // Get the integration details
     const { data: integration, error: integrationError } = await supabase
@@ -426,6 +427,22 @@ Deno.serve(async (req) => {
         errorCount++
       }
     }
+
+    // Save sync history
+    const syncEndTime = Date.now()
+    const syncDuration = syncEndTime - syncStartTime
+    
+    await supabase
+      .from('integration_sync_history')
+      .insert({
+        integration_id: integrationId,
+        sync_timestamp: new Date().toISOString(),
+        status: errorCount > 0 ? 'completed_with_errors' : 'completed',
+        synced_count: syncedCount,
+        errors_count: errorCount,
+        operations: operationDetails,
+        duration_ms: syncDuration
+      })
 
     // Update integration status and last sync time
     await supabase

@@ -248,6 +248,50 @@ export type Database = {
         }
         Relationships: []
       }
+      integration_sync_history: {
+        Row: {
+          created_at: string
+          duration_ms: number | null
+          errors_count: number
+          id: string
+          integration_id: string
+          operations: Json | null
+          status: string
+          sync_timestamp: string
+          synced_count: number
+        }
+        Insert: {
+          created_at?: string
+          duration_ms?: number | null
+          errors_count?: number
+          id?: string
+          integration_id: string
+          operations?: Json | null
+          status?: string
+          sync_timestamp?: string
+          synced_count?: number
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number | null
+          errors_count?: number
+          id?: string
+          integration_id?: string
+          operations?: Json | null
+          status?: string
+          sync_timestamp?: string
+          synced_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_sync_history_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "ad_server_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       platform_mappings: {
         Row: {
           created_at: string
