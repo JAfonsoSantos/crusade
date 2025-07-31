@@ -97,9 +97,67 @@ Deno.serve(async (req) => {
 
     console.log(`Found campaign: ${campaign.name}`)
 
-    // First, we need to ensure we have an advertiser in Kevel
-    // For simplicity, we'll use a default advertiser ID or create one
-    let advertiserId = 1 // Default advertiser ID - in production, you'd want to manage this better
+    // First, get available advertisers from Kevel
+    console.log('Fetching advertisers from Kevel...')
+    const advertisersResponse = await fetch('https://api.kevel.co/v1/advertiser', {
+      method: 'GET',
+      headers: {
+        'X-Adzerk-ApiKey': apiKey,
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!advertisersResponse.ok) {
+      const errorText = await advertisersResponse.text()
+      console.error('Kevel Advertisers API error:', advertisersResponse.status, errorText)
+      return new Response(
+        JSON.stringify({ 
+          error: 'Failed to fetch advertisers from Kevel', 
+          details: `${advertisersResponse.status}: ${errorText}` 
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const advertisersData = await advertisersResponse.json()
+    console.log('Available advertisers:', advertisersData)
+
+    // Use the first available advertiser, or create one if none exist
+    let advertiserId
+    if (advertisersData.items && advertisersData.items.length > 0) {
+      advertiserId = advertisersData.items[0].Id
+      console.log(`Using existing advertiser ID: ${advertiserId}`)
+    } else {
+      // Create a default advertiser if none exist
+      console.log('No advertisers found, creating default advertiser...')
+      const createAdvertiserResponse = await fetch('https://api.kevel.co/v1/advertiser', {
+        method: 'POST',
+        headers: {
+          'X-Adzerk-ApiKey': apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          Title: 'Default Advertiser',
+          IsActive: true
+        }),
+      })
+
+      if (!createAdvertiserResponse.ok) {
+        const errorText = await createAdvertiserResponse.text()
+        console.error('Failed to create advertiser:', createAdvertiserResponse.status, errorText)
+        return new Response(
+          JSON.stringify({ 
+            error: 'Failed to create advertiser in Kevel', 
+            details: `${createAdvertiserResponse.status}: ${errorText}` 
+          }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const newAdvertiser = await createAdvertiserResponse.json()
+      advertiserId = newAdvertiser.Id
+      console.log(`Created new advertiser with ID: ${advertiserId}`)
+    }
 
     // Check if campaign already exists in Kevel (by checking if it has external metadata)
     const campaignConfig = integration.configuration as any || {}
