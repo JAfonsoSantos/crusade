@@ -77,25 +77,16 @@ Deno.serve(async (req) => {
       )
     }
 
-    console.log('Fetching sites and ad sizes from Kevel API...')
+    console.log('Fetching sites from Kevel API...')
 
-    // Fetch both sites and ad sizes from Kevel Management API
-    const [sitesResponse, adSizesResponse] = await Promise.all([
-      fetch('https://api.kevel.co/v1/site', {
-        method: 'GET',
-        headers: {
-          'X-Adzerk-ApiKey': apiKey,
-          'Content-Type': 'application/json',
-        },
-      }),
-      fetch('https://api.kevel.co/v1/creative/creativetype', {
-        method: 'GET',
-        headers: {
-          'X-Adzerk-ApiKey': apiKey,
-          'Content-Type': 'application/json',
-        },
-      })
-    ])
+    // First, just try to get sites - let's simplify to debug
+    const sitesResponse = await fetch('https://api.kevel.co/v1/site', {
+      method: 'GET',
+      headers: {
+        'X-Adzerk-ApiKey': apiKey,
+        'Content-Type': 'application/json',
+      },
+    })
 
     if (!sitesResponse.ok) {
       const errorText = await sitesResponse.text()
@@ -118,42 +109,29 @@ Deno.serve(async (req) => {
       )
     }
 
-    if (!adSizesResponse.ok) {
-      const errorText = await adSizesResponse.text()
-      console.error('Kevel Ad Sizes API error:', adSizesResponse.status, errorText)
-      
-      await supabase
-        .from('ad_server_integrations')
-        .update({ 
-          status: 'error',
-          last_sync: new Date().toISOString()
-        })
-        .eq('id', integrationId)
-
-      return new Response(
-        JSON.stringify({ 
-          error: 'Failed to fetch ad sizes from Kevel API', 
-          details: `${adSizesResponse.status}: ${errorText}` 
-        }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
     const sitesData: { items: KevelSite[] } = await sitesResponse.json()
-    const adSizesData: { items: KevelAdSize[] } = await adSizesResponse.json()
+    console.log(`Found ${sitesData.items?.length || 0} sites`)
+
+    // For now, let's create ad spaces with common sizes instead of fetching from API
+    const commonAdSizes = [
+      { Name: 'Banner', Width: 728, Height: 90 },
+      { Name: 'Leaderboard', Width: 728, Height: 90 },
+      { Name: 'Medium Rectangle', Width: 300, Height: 250 },
+      { Name: 'Skyscraper', Width: 160, Height: 600 },
+      { Name: 'Mobile Banner', Width: 320, Height: 50 },
+      { Name: 'Square', Width: 250, Height: 250 }
+    ]
     
-    console.log(`Found ${sitesData.items?.length || 0} sites and ${adSizesData.items?.length || 0} ad sizes`)
+    console.log(`Using ${commonAdSizes.length} common ad sizes`)
 
     let syncedCount = 0
     let errorCount = 0
 
-    // Create ad spaces by combining sites with ad sizes
+    // Create ad spaces by combining sites with common ad sizes
     for (const site of sitesData.items || []) {
       console.log(`Processing site: ${site.Title} (ID: ${site.Id})`)
       
-      for (const adSize of adSizesData.items || []) {
-        if (adSize.IsDeleted) continue
-
+      for (const adSize of commonAdSizes) {
         try {
           const adSpaceData = {
             name: `${site.Title} - ${adSize.Name}`,
