@@ -87,7 +87,8 @@ const KevelAd = ({
         console.log('Kevel response:', data);
         
         const placementKey = `kevel-ad-${adUnitId}`;
-        const decision = data.decisions?.[placementKey];
+        const decisions = data.decisions?.[placementKey];
+        const decision = Array.isArray(decisions) ? decisions[0] : decisions;
         
         if (decision && decision.contents && decision.contents.length > 0) {
           const content = decision.contents[0];
