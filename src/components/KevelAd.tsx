@@ -125,7 +125,7 @@ const KevelAd = ({
     };
 
     fetchAd();
-  }, [id, adTypes, networkId, siteId]);
+  }, [id, networkId, siteId]); // Removed adTypes from dependencies to prevent infinite re-renders
 
   // Handle click tracking
   const handleAdClick = (event: React.MouseEvent) => {
