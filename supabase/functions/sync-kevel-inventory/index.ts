@@ -266,7 +266,8 @@ Deno.serve(async (req) => {
             console.log(`Could not verify existing ad units, but will still create ad space in Crusade for ${adUnitName}`)
           }
           
-          // Only create Ad Unit in Kevel if it doesn't exist
+          // Try to create Ad Unit in Kevel if it doesn't exist
+          let kevelAdUnitCreated = false
           if (!adUnitId) {
             console.log(`Creating new Ad Unit in Kevel: ${adUnitName}`)
             const createAdUnitResponse = await fetch(`https://api.kevel.co/v1/site/${site.Id}/zone`, {
@@ -288,13 +289,14 @@ Deno.serve(async (req) => {
               const newAdUnit = await createAdUnitResponse.json()
               adUnitId = newAdUnit.Id
               operationDetails.ad_units.created++
+              kevelAdUnitCreated = true
               console.log(`Successfully created Ad Unit: ${adUnitName} (ID: ${adUnitId})`)
             } else {
               const errorText = await createAdUnitResponse.text()
               const errorMsg = `Failed to create Ad Unit: ${adUnitName} - ${createAdUnitResponse.status}: ${errorText}`
               operationDetails.ad_units.errors.push(errorMsg)
               console.error(errorMsg)
-              continue // Skip to next ad size if creation failed
+              // Don't skip - still create ad space in our database
             }
           } else if (needsUpdate) {
             // Update existing Ad Unit if dimensions changed
