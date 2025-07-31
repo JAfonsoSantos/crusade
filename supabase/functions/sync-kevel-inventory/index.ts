@@ -178,6 +178,9 @@ Deno.serve(async (req) => {
     for (const site of sitesData.items || []) {
       console.log(`Processing site: ${site.Title} (ID: ${site.Id})`)
       
+      // Count existing ad units for this site (only once per site)
+      let siteAdUnitsCountedAlready = false
+      
       for (const adSize of commonAdSizes) {
         try {
           // First, check if Ad Unit already exists in Kevel with exact match
@@ -203,8 +206,11 @@ Deno.serve(async (req) => {
           if (adUnitsResponse.ok) {
             const adUnitsData = await adUnitsResponse.json()
             
-            // Count all existing ad units for this site
-            operationDetails.ad_units.existing += adUnitsData.items?.length || 0
+            // Count all existing ad units for this site (only once per site)
+            if (!siteAdUnitsCountedAlready) {
+              operationDetails.ad_units.existing += adUnitsData.items?.length || 0
+              siteAdUnitsCountedAlready = true
+            }
             
             const existingAdUnit = adUnitsData.items?.find((unit: any) => 
               unit.Name === adUnitName || 
