@@ -164,7 +164,7 @@ export type Database = {
           budget: number | null
           company_id: string
           created_at: string
-          created_by: string
+          created_by: string | null
           currency: string | null
           description: string | null
           end_date: string
@@ -178,7 +178,7 @@ export type Database = {
           budget?: number | null
           company_id: string
           created_at?: string
-          created_by: string
+          created_by?: string | null
           currency?: string | null
           description?: string | null
           end_date: string
@@ -192,7 +192,7 @@ export type Database = {
           budget?: number | null
           company_id?: string
           created_at?: string
-          created_by?: string
+          created_by?: string | null
           currency?: string | null
           description?: string | null
           end_date?: string
