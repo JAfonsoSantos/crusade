@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 
 interface KevelAdProps {
-  id: number;
   size: string;
   position: string;
   adTypes?: number[];
@@ -37,7 +36,6 @@ interface KevelResponse {
 }
 
 const KevelAd = ({ 
-  id, 
   size, 
   position, 
   adTypes = [4],
@@ -49,6 +47,9 @@ const KevelAd = ({
   const [error, setError] = useState<string | null>(null);
   const adRef = useRef<HTMLDivElement>(null);
   const impressionFired = useRef(false);
+  
+  // Generate unique ID based on position and size
+  const adId = `${position.toLowerCase().replace(/\s+/g, '-')}-${size}`;
 
   useEffect(() => {
     const fetchAd = async () => {
@@ -62,7 +63,7 @@ const KevelAd = ({
             {
               networkId: networkId,
               siteId: siteId,
-              divName: `kevel-ad-${id}`,
+              divName: `kevel-ad-${adId}`,
               count: 1,
               adTypes: adTypes
             }
@@ -96,7 +97,7 @@ const KevelAd = ({
         const data: KevelResponse = await response.json();
         console.log('Kevel response:', data);
         
-        const placementKey = `kevel-ad-${id}`;
+        const placementKey = `kevel-ad-${adId}`;
         const decisions = data.decisions?.[placementKey];
         const decision = Array.isArray(decisions) ? decisions[0] : decisions;
         
@@ -125,12 +126,12 @@ const KevelAd = ({
     };
 
     fetchAd();
-  }, [id, networkId, siteId]); // Removed adTypes from dependencies to prevent infinite re-renders
+  }, [adId, networkId, siteId]); // Removed adTypes from dependencies to prevent infinite re-renders
 
   // Handle click tracking
   const handleAdClick = (event: React.MouseEvent) => {
     // Let the click proceed naturally, Kevel handles tracking via clickUrl
-    console.log('Ad clicked:', id);
+    console.log('Ad clicked:', adId);
   };
 
   const getContainerClasses = () => {
@@ -170,7 +171,7 @@ const KevelAd = ({
             {size} - {position}
           </div>
           <div className="text-xs text-muted-foreground/50 mt-1">
-            ID: {id}
+            ID: {adId}
           </div>
         </div>
       </div>
