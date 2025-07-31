@@ -51,8 +51,8 @@ const AdSpaces = () => {
 
     if (error) {
       toast({
-        title: "Erro",
-        description: "Não foi possível carregar os espaços publicitários.",
+        title: "Error",
+        description: "Could not load ad spaces.",
         variant: "destructive",
       });
     } else {
@@ -72,8 +72,8 @@ const AdSpaces = () => {
 
     if (!profile?.company_id) {
       toast({
-        title: "Erro",
-        description: "Perfil de empresa não encontrado. Configure sua empresa primeiro.",
+        title: "Error",
+        description: "Company profile not found. Set up your company first.",
         variant: "destructive",
       });
       return;
@@ -87,14 +87,14 @@ const AdSpaces = () => {
 
     if (error) {
       toast({
-        title: "Erro",
-        description: "Não foi possível criar o espaço publicitário.",
+        title: "Error",
+        description: "Could not create ad space.",
         variant: "destructive",
       });
     } else {
       toast({
-        title: "Sucesso",
-        description: "Espaço publicitário criado com sucesso!",
+        title: "Success",
+        description: "Ad space created successfully!",
       });
       setDialogOpen(false);
       setFormData({
@@ -124,61 +124,61 @@ const AdSpaces = () => {
   };
 
   if (loading) {
-    return <div>A carregar...</div>;
+    return <div>Loading...</div>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Espaços Publicitários</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Ad Spaces</h2>
           <p className="text-muted-foreground">
-            Gerencie os seus espaços publicitários disponíveis
+            Manage your available advertising spaces
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              Novo Espaço
+              New Space
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>Criar Novo Espaço</DialogTitle>
+              <DialogTitle>Create New Space</DialogTitle>
               <DialogDescription>
-                Adicione um novo espaço publicitário ao seu inventário
+                Add a new advertising space to your inventory
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="name">Nome</Label>
+                <Label htmlFor="name">Name</Label>
                 <Input
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Ex: Banner Homepage"
+                  placeholder="Ex: Homepage Banner"
                   required
                 />
               </div>
               
               <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="type">Tipo</Label>
+                <Label htmlFor="type">Type</Label>
                 <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="banner">Banner</SelectItem>
-                    <SelectItem value="video">Vídeo</SelectItem>
-                    <SelectItem value="native">Nativo</SelectItem>
+                    <SelectItem value="video">Video</SelectItem>
+                    <SelectItem value="native">Native</SelectItem>
                     <SelectItem value="popup">Popup</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               
               <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="size">Tamanho</Label>
+                <Label htmlFor="size">Size</Label>
                 <Input
                   id="size"
                   value={formData.size}
@@ -188,18 +188,18 @@ const AdSpaces = () => {
               </div>
               
               <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="location">Localização</Label>
+                <Label htmlFor="location">Location</Label>
                 <Input
                   id="location"
                   value={formData.location}
                   onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  placeholder="Ex: Topo da página, Sidebar"
+                  placeholder="Ex: Top of page, Sidebar"
                 />
               </div>
               
               <div className="grid grid-cols-2 gap-2">
                 <div className="grid w-full items-center gap-1.5">
-                  <Label htmlFor="price">Preço Base</Label>
+                  <Label htmlFor="price">Base Price</Label>
                   <Input
                     id="price"
                     type="number"
@@ -211,7 +211,7 @@ const AdSpaces = () => {
                 </div>
                 
                 <div className="grid w-full items-center gap-1.5">
-                  <Label htmlFor="model">Modelo</Label>
+                  <Label htmlFor="model">Model</Label>
                   <Select value={formData.price_model} onValueChange={(value) => setFormData({ ...formData, price_model: value })}>
                     <SelectTrigger>
                       <SelectValue />
@@ -220,14 +220,14 @@ const AdSpaces = () => {
                       <SelectItem value="cpm">CPM</SelectItem>
                       <SelectItem value="cpc">CPC</SelectItem>
                       <SelectItem value="cpa">CPA</SelectItem>
-                      <SelectItem value="fixed">Fixo</SelectItem>
+                      <SelectItem value="fixed">Fixed</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
               
               <Button type="submit" className="w-full">
-                Criar Espaço
+                Create Space
               </Button>
             </form>
           </DialogContent>
@@ -251,19 +251,19 @@ const AdSpaces = () => {
             <CardContent>
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">
-                  <strong>Localização:</strong> {space.location || 'Não especificada'}
+                  <strong>Location:</strong> {space.location || 'Not specified'}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  <strong>Preço:</strong> {space.base_price} {space.currency} ({space.price_model.toUpperCase()})
+                  <strong>Price:</strong> {space.base_price} {space.currency} ({space.price_model.toUpperCase()})
                 </p>
                 <div className="flex gap-2 pt-2">
                   <Button variant="outline" size="sm">
                     <Edit className="mr-2 h-4 w-4" />
-                    Editar
+                    Edit
                   </Button>
                   <Button variant="outline" size="sm">
                     <Trash2 className="mr-2 h-4 w-4" />
-                    Eliminar
+                    Delete
                   </Button>
                 </div>
               </div>
@@ -276,13 +276,13 @@ const AdSpaces = () => {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-8">
             <Target className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Nenhum espaço publicitário</h3>
+            <h3 className="text-lg font-semibold mb-2">No ad spaces</h3>
             <p className="text-muted-foreground text-center mb-4">
-              Comece criando o seu primeiro espaço publicitário para começar a gerar receita.
+              Start by creating your first ad space to begin generating revenue.
             </p>
             <Button onClick={() => setDialogOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              Criar Primeiro Espaço
+              Create First Space
             </Button>
           </CardContent>
         </Card>

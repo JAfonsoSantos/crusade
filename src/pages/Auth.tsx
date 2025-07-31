@@ -50,8 +50,8 @@ const Auth = () => {
     e.preventDefault();
     if (!email || !password || !fullName) {
       toast({
-        title: "Erro",
-        description: "Por favor, preencha todos os campos.",
+        title: "Error",
+        description: "Please fill in all fields.",
         variant: "destructive",
       });
       return;
@@ -73,16 +73,16 @@ const Auth = () => {
 
     if (error) {
       toast({
-        title: "Erro no registo",
+        title: "Registration Error",
         description: error.message === "User already registered" 
-          ? "Este email já está registado. Tente fazer login."
+          ? "This email is already registered. Try logging in."
           : error.message,
         variant: "destructive",
       });
     } else {
       toast({
-        title: "Conta criada!",
-        description: "Verifique o seu email para confirmar a conta.",
+        title: "Account Created!",
+        description: "Check your email to confirm your account.",
       });
     }
     setLoading(false);
@@ -92,8 +92,8 @@ const Auth = () => {
     e.preventDefault();
     if (!email || !password) {
       toast({
-        title: "Erro",
-        description: "Por favor, preencha email e password.",
+        title: "Error",
+        description: "Please fill in email and password.",
         variant: "destructive",
       });
       return;
@@ -107,9 +107,9 @@ const Auth = () => {
 
     if (error) {
       toast({
-        title: "Erro no login",
+        title: "Login Error",
         description: error.message === "Invalid login credentials"
-          ? "Email ou password incorretos."
+          ? "Incorrect email or password."
           : error.message,
         variant: "destructive",
       });
@@ -123,14 +123,14 @@ const Auth = () => {
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">AdSpace CRM</CardTitle>
           <CardDescription>
-            Faça login ou crie uma conta para continuar
+            Login or create an account to continue
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="login" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="login">Login</TabsTrigger>
-              <TabsTrigger value="signup">Registo</TabsTrigger>
+              <TabsTrigger value="signup">Sign Up</TabsTrigger>
             </TabsList>
             
             <TabsContent value="login">
@@ -142,7 +142,7 @@ const Auth = () => {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="seu@email.com"
+                    placeholder="your@email.com"
                     required
                   />
                 </div>
@@ -158,7 +158,7 @@ const Auth = () => {
                   />
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "A entrar..." : "Entrar"}
+                  {loading ? "Signing in..." : "Sign In"}
                 </Button>
               </form>
             </TabsContent>
@@ -166,13 +166,13 @@ const Auth = () => {
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="fullName">Nome Completo</Label>
+                  <Label htmlFor="fullName">Full Name</Label>
                   <Input
                     id="fullName"
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    placeholder="João Silva"
+                    placeholder="John Smith"
                     required
                   />
                 </div>
@@ -183,7 +183,7 @@ const Auth = () => {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="seu@email.com"
+                    placeholder="your@email.com"
                     required
                   />
                 </div>
@@ -199,7 +199,7 @@ const Auth = () => {
                   />
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "A criar conta..." : "Criar Conta"}
+                  {loading ? "Creating account..." : "Create Account"}
                 </Button>
               </form>
             </TabsContent>

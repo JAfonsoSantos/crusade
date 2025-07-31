@@ -30,23 +30,23 @@ const Dashboard = () => {
 
   const welcomeCards = [
     {
-      title: 'Bem-vindo ao AdSpace!',
-      description: 'Configure seus primeiros espaços publicitários para começar a gerar receita.',
-      buttonText: 'Começar',
+      title: 'Welcome to AdSpace!',
+      description: 'Set up your first ad spaces to start generating revenue.',
+      buttonText: 'Get Started',
       iconColor: 'text-red-500',
       bgColor: 'bg-red-50',
     },
     {
-      title: 'Configure integrações',
-      description: 'Conecte-se aos principais servidores de anúncios para maximizar sua receita.',
-      buttonText: 'Integrar',
+      title: 'Set up integrations',
+      description: 'Connect to major ad servers to maximize your revenue.',
+      buttonText: 'Integrate',
       iconColor: 'text-blue-500',
       bgColor: 'bg-blue-50',
     },
     {
-      title: 'Otimize suas campanhas',
-      description: 'Use analytics avançados para melhorar o desempenho dos seus anúncios.',
-      buttonText: 'Ver métricas',
+      title: 'Optimize your campaigns',
+      description: 'Use advanced analytics to improve your ad performance.',
+      buttonText: 'View metrics',
       iconColor: 'text-orange-500',
       bgColor: 'bg-orange-50',
     },
@@ -54,44 +54,44 @@ const Dashboard = () => {
 
   const keyMetrics = [
     {
-      title: 'Espaços Ativos',
+      title: 'Active Spaces',
       value: stats.adSpaces,
       period: 'Total',
       trend: 'up',
       icon: Target,
     },
     {
-      title: 'Campanhas Ativas',
+      title: 'Active Campaigns',
       value: stats.campaigns,
-      period: 'Em execução',
+      period: 'Running',
       trend: 'up',
       icon: Megaphone,
     },
     {
-      title: 'Receita Total',
+      title: 'Total Revenue',
       value: `€${stats.revenue.toLocaleString()}`,
-      period: 'Este mês',
+      period: 'This month',
       trend: stats.revenue > 0 ? 'up' : 'neutral',
       icon: Euro,
     },
     {
-      title: 'Impressões',
+      title: 'Impressions',
       value: '0',
-      period: 'Hoje',
+      period: 'Today',
       trend: 'neutral',
       icon: TrendingUp,
     },
     {
-      title: 'Taxa de Clique',
+      title: 'Click Rate',
       value: '0%',
-      period: 'Últimos 7 dias',
+      period: 'Last 7 days',
       trend: 'neutral',
       icon: TrendingUp,
     },
     {
-      title: 'Integrações',
+      title: 'Integrations',
       value: stats.integrations,
-      period: 'Conectadas',
+      period: 'Connected',
       trend: stats.integrations > 0 ? 'up' : 'neutral',
       icon: Settings,
     },
@@ -102,7 +102,7 @@ const Dashboard = () => {
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
         <p className="text-muted-foreground">
-          Visão geral do seu negócio de publicidade
+          Overview of your advertising business
         </p>
       </div>
       
@@ -127,7 +127,7 @@ const Dashboard = () => {
       {/* Key Metrics */}
       <div>
         <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
-          Métricas Principais
+          Key Metrics
         </h3>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {keyMetrics.map((metric, index) => {
@@ -157,7 +157,7 @@ const Dashboard = () => {
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Atualizado há {Math.floor(Math.random() * 30) + 1} minutos
+                      Updated {Math.floor(Math.random() * 30) + 1} minutes ago
                     </p>
                   </div>
                 </CardContent>

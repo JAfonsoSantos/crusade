@@ -42,8 +42,8 @@ const Integrations = () => {
 
     if (error) {
       toast({
-        title: "Erro",
-        description: "Não foi possível carregar as integrações.",
+        title: "Error",
+        description: "Could not load integrations.",
         variant: "destructive",
       });
     } else {
@@ -63,8 +63,8 @@ const Integrations = () => {
 
     if (!profile?.company_id) {
       toast({
-        title: "Erro",
-        description: "Perfil de empresa não encontrado. Configure sua empresa primeiro.",
+        title: "Error",
+        description: "Company profile not found. Set up your company first.",
         variant: "destructive",
       });
       return;
@@ -80,14 +80,14 @@ const Integrations = () => {
 
     if (error) {
       toast({
-        title: "Erro",
-        description: "Não foi possível criar a integração.",
+        title: "Error",
+        description: "Could not create integration.",
         variant: "destructive",
       });
     } else {
       toast({
-        title: "Sucesso",
-        description: "Integração criada com sucesso!",
+        title: "Success",
+        description: "Integration created successfully!",
       });
       setDialogOpen(false);
       setFormData({
@@ -130,8 +130,8 @@ const Integrations = () => {
   };
 
   const formatDate = (dateString: string) => {
-    if (!dateString) return 'Nunca';
-    return new Date(dateString).toLocaleDateString('pt-PT', {
+    if (!dateString) return 'Never';
+    return new Date(dateString).toLocaleDateString('en-US', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -141,46 +141,46 @@ const Integrations = () => {
   };
 
   if (loading) {
-    return <div>A carregar...</div>;
+    return <div>Loading...</div>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Integrações</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Integrations</h2>
           <p className="text-muted-foreground">
-            Configure integrações com servidores de anúncios
+            Set up integrations with ad servers
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              Nova Integração
+              New Integration
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>Nova Integração</DialogTitle>
+              <DialogTitle>New Integration</DialogTitle>
               <DialogDescription>
-                Configure uma nova integração com servidor de anúncios
+                Set up a new integration with an ad server
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="name">Nome da Integração</Label>
+                <Label htmlFor="name">Integration Name</Label>
                 <Input
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Ex: Google Ad Manager Principal"
+                  placeholder="Ex: Main Google Ad Manager"
                   required
                 />
               </div>
               
               <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="provider">Provedor</Label>
+                <Label htmlFor="provider">Provider</Label>
                 <Select value={formData.provider} onValueChange={(value) => setFormData({ ...formData, provider: value })}>
                   <SelectTrigger>
                     <SelectValue />
@@ -196,19 +196,19 @@ const Integrations = () => {
               </div>
               
               <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="api_key">Chave API</Label>
+                <Label htmlFor="api_key">API Key</Label>
                 <Input
                   id="api_key"
                   type="password"
                   value={formData.api_key}
                   onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
-                  placeholder="Insira a sua chave API"
+                  placeholder="Enter your API key"
                   required
                 />
               </div>
               
               <Button type="submit" className="w-full">
-                Criar Integração
+                Create Integration
               </Button>
             </form>
           </DialogContent>
@@ -241,17 +241,17 @@ const Integrations = () => {
             <CardContent>
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">
-                  <strong>Última Sincronização:</strong><br />
+                  <strong>Last Sync:</strong><br />
                   {formatDate(integration.last_sync)}
                 </p>
                 <div className="flex gap-2 pt-2">
                   <Button variant="outline" size="sm">
                     <Settings className="mr-2 h-4 w-4" />
-                    Configurar
+                    Configure
                   </Button>
                   <Button variant="outline" size="sm">
                     <Trash2 className="mr-2 h-4 w-4" />
-                    Remover
+                    Remove
                   </Button>
                 </div>
               </div>
@@ -264,13 +264,13 @@ const Integrations = () => {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-8">
             <Settings className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Nenhuma integração</h3>
+            <h3 className="text-lg font-semibold mb-2">No integrations</h3>
             <p className="text-muted-foreground text-center mb-4">
-              Configure integrações com servidores de anúncios para sincronizar dados automaticamente.
+              Set up integrations with ad servers to automatically sync data.
             </p>
             <Button onClick={() => setDialogOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              Primeira Integração
+              First Integration
             </Button>
           </CardContent>
         </Card>

@@ -45,16 +45,16 @@ const Layout = () => {
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Espaços', href: '/ad-spaces', icon: Target },
-    { name: 'Campanhas', href: '/campaigns', icon: Megaphone },
-    { name: 'Integrações', href: '/integrations', icon: Settings },
+    { name: 'Spaces', href: '/ad-spaces', icon: Target },
+    { name: 'Campaigns', href: '/campaigns', icon: Megaphone },
+    { name: 'Integrations', href: '/integrations', icon: Settings },
   ];
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
-          <p className="text-xl text-muted-foreground">A carregar...</p>
+          <p className="text-xl text-muted-foreground">Loading...</p>
         </div>
       </div>
     );
@@ -97,7 +97,7 @@ const Layout = () => {
               {user.user_metadata?.full_name || user.email}
             </span>
             <Button variant="outline" size="sm" onClick={handleSignOut}>
-              Sair
+              Logout
             </Button>
           </div>
         </div>

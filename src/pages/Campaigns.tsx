@@ -49,8 +49,8 @@ const Campaigns = () => {
 
     if (error) {
       toast({
-        title: "Erro",
-        description: "Não foi possível carregar as campanhas.",
+        title: "Error",
+        description: "Could not load campaigns.",
         variant: "destructive",
       });
     } else {
@@ -71,8 +71,8 @@ const Campaigns = () => {
 
     if (!profile?.company_id) {
       toast({
-        title: "Erro",
-        description: "Perfil de empresa não encontrado. Configure sua empresa primeiro.",
+        title: "Error",
+        description: "Company profile not found. Set up your company first.",
         variant: "destructive",
       });
       return;
@@ -87,14 +87,14 @@ const Campaigns = () => {
 
     if (error) {
       toast({
-        title: "Erro",
-        description: "Não foi possível criar a campanha.",
+        title: "Error",
+        description: "Could not create campaign.",
         variant: "destructive",
       });
     } else {
       toast({
-        title: "Sucesso",
-        description: "Campanha criada com sucesso!",
+        title: "Success",
+        description: "Campaign created successfully!",
       });
       setDialogOpen(false);
       setFormData({
@@ -125,61 +125,61 @@ const Campaigns = () => {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-PT');
+    return new Date(dateString).toLocaleDateString('en-US');
   };
 
   if (loading) {
-    return <div>A carregar...</div>;
+    return <div>Loading...</div>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Campanhas</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Campaigns</h2>
           <p className="text-muted-foreground">
-            Gerencie as suas campanhas publicitárias
+            Manage your advertising campaigns
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              Nova Campanha
+              New Campaign
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>Criar Nova Campanha</DialogTitle>
+              <DialogTitle>Create New Campaign</DialogTitle>
               <DialogDescription>
-                Configure uma nova campanha publicitária
+                Set up a new advertising campaign
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="name">Nome da Campanha</Label>
+                <Label htmlFor="name">Campaign Name</Label>
                 <Input
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Ex: Campanha Verão 2024"
+                  placeholder="Ex: Summer 2024 Campaign"
                   required
                 />
               </div>
               
               <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="description">Descrição</Label>
+                <Label htmlFor="description">Description</Label>
                 <Textarea
                   id="description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Descrição da campanha..."
+                  placeholder="Campaign description..."
                 />
               </div>
               
               <div className="grid grid-cols-2 gap-2">
                 <div className="grid w-full items-center gap-1.5">
-                  <Label htmlFor="start_date">Data Início</Label>
+                  <Label htmlFor="start_date">Start Date</Label>
                   <Input
                     id="start_date"
                     type="date"
@@ -190,7 +190,7 @@ const Campaigns = () => {
                 </div>
                 
                 <div className="grid w-full items-center gap-1.5">
-                  <Label htmlFor="end_date">Data Fim</Label>
+                  <Label htmlFor="end_date">End Date</Label>
                   <Input
                     id="end_date"
                     type="date"
@@ -203,7 +203,7 @@ const Campaigns = () => {
               
               <div className="grid grid-cols-2 gap-2">
                 <div className="grid w-full items-center gap-1.5">
-                  <Label htmlFor="budget">Orçamento</Label>
+                  <Label htmlFor="budget">Budget</Label>
                   <Input
                     id="budget"
                     type="number"
@@ -216,7 +216,7 @@ const Campaigns = () => {
                 </div>
                 
                 <div className="grid w-full items-center gap-1.5">
-                  <Label htmlFor="currency">Moeda</Label>
+                  <Label htmlFor="currency">Currency</Label>
                   <Select value={formData.currency} onValueChange={(value) => setFormData({ ...formData, currency: value })}>
                     <SelectTrigger>
                       <SelectValue />
@@ -231,7 +231,7 @@ const Campaigns = () => {
               </div>
               
               <Button type="submit" className="w-full">
-                Criar Campanha
+                Create Campaign
               </Button>
             </form>
           </DialogContent>
@@ -246,7 +246,7 @@ const Campaigns = () => {
                 <div>
                   <CardTitle className="text-lg">{campaign.name}</CardTitle>
                   <CardDescription className="line-clamp-2">
-                    {campaign.description || 'Sem descrição'}
+                    {campaign.description || 'No description'}
                   </CardDescription>
                 </div>
                 <Badge className={getStatusColor(campaign.status)}>
@@ -261,16 +261,16 @@ const Campaigns = () => {
                   {formatDate(campaign.start_date)} - {formatDate(campaign.end_date)}
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  <strong>Orçamento:</strong> {campaign.budget} {campaign.currency}
+                  <strong>Budget:</strong> {campaign.budget} {campaign.currency}
                 </p>
                 <div className="flex gap-2 pt-2">
                   <Button variant="outline" size="sm">
                     <Edit className="mr-2 h-4 w-4" />
-                    Editar
+                    Edit
                   </Button>
                   <Button variant="outline" size="sm">
                     <Trash2 className="mr-2 h-4 w-4" />
-                    Eliminar
+                    Delete
                   </Button>
                 </div>
               </div>
@@ -283,13 +283,13 @@ const Campaigns = () => {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-8">
             <Megaphone className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Nenhuma campanha</h3>
+            <h3 className="text-lg font-semibold mb-2">No campaigns</h3>
             <p className="text-muted-foreground text-center mb-4">
-              Crie a sua primeira campanha para começar a promover os seus anúncios.
+              Create your first campaign to start promoting your ads.
             </p>
             <Button onClick={() => setDialogOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              Criar Primeira Campanha
+              Create First Campaign
             </Button>
           </CardContent>
         </Card>
