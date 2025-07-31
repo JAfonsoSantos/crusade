@@ -49,6 +49,7 @@ const Layout = () => {
     { name: 'Spaces', href: '/spaces', icon: Target },
     { name: 'Campaigns', href: '/campaigns', icon: Megaphone },
     { name: 'Integrations', href: '/integrations', icon: Settings },
+    { name: 'Demo Site', href: '/demo-site', icon: Target },
   ];
 
   if (loading) {

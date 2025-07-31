@@ -12,6 +12,7 @@ import Campaigns from "./pages/Campaigns";
 import Integrations from "./pages/Integrations";
 import PersonalSettings from "./pages/PersonalSettings";
 import BusinessSettings from "./pages/BusinessSettings";
+import DemoSite from "./pages/DemoSite";
 import Layout from "./components/Layout";
 import NotFound from "./pages/NotFound";
 
@@ -32,6 +33,7 @@ const App = () => (
             <Route path="spaces" element={<Spaces />} />
             <Route path="campaigns" element={<Campaigns />} />
             <Route path="integrations" element={<Integrations />} />
+            <Route path="demo-site" element={<DemoSite />} />
             <Route path="personal-settings" element={<PersonalSettings />} />
             <Route path="business-settings" element={<BusinessSettings />} />
           </Route>
