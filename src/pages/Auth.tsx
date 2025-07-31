@@ -16,6 +16,8 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -58,6 +60,7 @@ const Auth = () => {
     }
 
     setLoading(true);
+
     const redirectUrl = `${window.location.origin}/`;
 
     const { error } = await supabase.auth.signUp({
@@ -72,18 +75,62 @@ const Auth = () => {
     });
 
     if (error) {
+      if (error.message.includes("already registered") || error.message.includes("already been taken")) {
+        toast({
+          title: "Email já registado",
+          description: "Este email já está registado. Tenta fazer login ou usar a funcionalidade 'Esqueci a minha password'.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Erro no registo",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    } else {
       toast({
-        title: "Registration Error",
-        description: error.message === "User already registered" 
-          ? "This email is already registered. Try logging in."
-          : error.message,
+        title: "Conta criada!",
+        description: "Verifica o teu email para confirmar a conta.",
+      });
+      // Clear form after successful signup
+      setEmail('');
+      setPassword('');
+      setFullName('');
+    }
+    setLoading(false);
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail) {
+      toast({
+        title: "Erro",
+        description: "Por favor insere o teu email.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+      redirectTo: `${window.location.origin}/auth?tab=reset-password`,
+    });
+
+    if (error) {
+      toast({
+        title: "Erro",
+        description: error.message,
         variant: "destructive",
       });
     } else {
       toast({
-        title: "Account Created!",
-        description: "Check your email to confirm your account.",
+        title: "Email enviado!",
+        description: "Verifica o teu email para instruções de reset da password.",
       });
+      setShowForgotPassword(false);
+      setResetEmail('');
     }
     setLoading(false);
   };
@@ -158,8 +205,18 @@ const Auth = () => {
                   />
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Signing in..." : "Sign In"}
+                  {loading ? "A fazer login..." : "Entrar"}
                 </Button>
+                
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotPassword(true)}
+                    className="text-sm text-muted-foreground hover:text-foreground underline"
+                  >
+                    Esqueci a minha password
+                  </button>
+                </div>
               </form>
             </TabsContent>
             
@@ -199,11 +256,55 @@ const Auth = () => {
                   />
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Creating account..." : "Create Account"}
+                  {loading ? "A criar conta..." : "Criar Conta"}
                 </Button>
               </form>
             </TabsContent>
           </Tabs>
+          
+          {/* Forgot Password Modal */}
+          {showForgotPassword && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+              <Card className="w-full max-w-md">
+                <CardHeader>
+                  <CardTitle>Reset Password</CardTitle>
+                  <CardDescription>
+                    Insere o teu email para receberes instruções de reset
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleForgotPassword} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="resetEmail">Email</Label>
+                      <Input
+                        id="resetEmail"
+                        type="email"
+                        value={resetEmail}
+                        onChange={(e) => setResetEmail(e.target.value)}
+                        placeholder="your@email.com"
+                        required
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button type="submit" className="flex-1" disabled={loading}>
+                        {loading ? "A enviar..." : "Enviar Reset"}
+                      </Button>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={() => {
+                          setShowForgotPassword(false);
+                          setResetEmail('');
+                        }}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
