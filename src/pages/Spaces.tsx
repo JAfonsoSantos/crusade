@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Edit, Trash2, Target } from 'lucide-react';
+import { Plus, Edit, Trash2, Target, RefreshCw, Eye, MousePointer, TrendingUp, Activity, Clock } from 'lucide-react';
 
 interface Space {
   id: string;
@@ -21,6 +21,13 @@ interface Space {
   price_model: string;
   status: string;
   created_at: string;
+  ad_server: string;
+  external_id?: string;
+  impressions: number;
+  clicks: number;
+  last_impression?: string;
+  last_click?: string;
+  usage_status: 'active' | 'past_used' | 'unused';
 }
 
 const Spaces = () => {
@@ -28,6 +35,7 @@ const Spaces = () => {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [refreshingUsage, setRefreshingUsage] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     type: 'banner',
@@ -36,6 +44,7 @@ const Spaces = () => {
     base_price: '',
     currency: 'EUR',
     price_model: 'cpm',
+    ad_server: 'kevel',
   });
   const { toast } = useToast();
 
@@ -47,7 +56,8 @@ const Spaces = () => {
     const { data, error } = await supabase
       .from('ad_spaces')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('usage_status', { ascending: true })
+      .order('impressions', { ascending: false });
 
     if (error) {
       toast({
@@ -56,16 +66,66 @@ const Spaces = () => {
         variant: "destructive",
       });
     } else {
-      setSpaces(data || []);
+      // Type assertion to handle the database response
+      const typedSpaces: Space[] = (data || []).map(space => ({
+        ...space,
+        usage_status: space.usage_status as 'active' | 'past_used' | 'unused'
+      }));
+      setSpaces(typedSpaces);
     }
     setLoading(false);
   };
 
-  const filteredSpaces = spaces.filter(space => 
-    space.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    space.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    space.location?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const spacesByAdServer = useMemo(() => {
+    const filtered = spaces.filter(space => 
+      space.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      space.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      space.location?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    const grouped = filtered.reduce((acc, space) => {
+      if (!acc[space.ad_server]) {
+        acc[space.ad_server] = {
+          active: [],
+          past_used: [],
+          unused: []
+        };
+      }
+      acc[space.ad_server][space.usage_status].push(space);
+      return acc;
+    }, {} as Record<string, { active: Space[], past_used: Space[], unused: Space[] }>);
+
+    return grouped;
+  }, [spaces, searchQuery]);
+
+  const refreshUsageData = async (spaceId: string) => {
+    setRefreshingUsage(prev => [...prev, spaceId]);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('fetch-space-usage', {
+        body: { spaceId }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Usage data updated successfully!",
+      });
+      
+      // Refresh the spaces list
+      fetchSpaces();
+    } catch (error) {
+      console.error('Error refreshing usage data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to refresh usage data.",
+        variant: "destructive",
+      });
+    } finally {
+      setRefreshingUsage(prev => prev.filter(id => id !== spaceId));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,6 +171,7 @@ const Spaces = () => {
         base_price: '',
         currency: 'EUR',
         price_model: 'cpm',
+        ad_server: 'kevel',
       });
       fetchSpaces();
     }
@@ -129,6 +190,130 @@ const Spaces = () => {
     }
   };
 
+  const getUsageStatusColor = (status: string) => {
+    switch (status) {
+      case 'active':
+        return 'bg-green-100 text-green-800';
+      case 'past_used':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'unused':
+        return 'bg-gray-100 text-gray-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getAdServerLogo = (server: string) => {
+    switch (server) {
+      case 'kevel':
+        return '🎯';
+      case 'google':
+        return '🟦';
+      case 'criteo':
+        return '🟧';
+      case 'koddi':
+        return '🟩';
+      default:
+        return '📡';
+    }
+  };
+
+  const formatNumber = (num: number) => {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1) + 'M';
+    }
+    if (num >= 1000) {
+      return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toString();
+  };
+
+  const SpaceCard = ({ space }: { space: Space }) => (
+    <Card className={`transition-all duration-200 hover:shadow-md ${space.usage_status === 'active' ? 'ring-2 ring-green-200' : ''}`}>
+      <CardHeader>
+        <div className="flex justify-between items-start">
+          <div>
+            <CardTitle className="text-lg flex items-center gap-2">
+              {space.name}
+              <Badge className={getUsageStatusColor(space.usage_status)}>
+                {space.usage_status.replace('_', ' ')}
+              </Badge>
+            </CardTitle>
+            <CardDescription>{space.type} • {space.size}</CardDescription>
+          </div>
+          <Badge className={getStatusColor(space.status)}>
+            {space.status}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            <strong>Location:</strong> {space.location || 'Not specified'}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            <strong>Price:</strong> {space.base_price} {space.currency} ({space.price_model.toUpperCase()})
+          </p>
+          
+          {/* Usage Statistics */}
+          {space.ad_server === 'kevel' && (space.impressions > 0 || space.clicks > 0) && (
+            <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
+              <h4 className="text-sm font-medium flex items-center gap-1">
+                <Activity className="w-4 h-4" />
+                Usage Statistics
+              </h4>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="flex items-center gap-1">
+                  <Eye className="w-3 h-3 text-blue-600" />
+                  <span>{formatNumber(space.impressions)} impressions</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <MousePointer className="w-3 h-3 text-green-600" />
+                  <span>{formatNumber(space.clicks)} clicks</span>
+                </div>
+              </div>
+              
+              {space.last_impression && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  Last activity: {new Date(space.last_impression).toLocaleDateString()}
+                </p>
+              )}
+              
+              {space.clicks > 0 && space.impressions > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  CTR: {((space.clicks / space.impressions) * 100).toFixed(2)}%
+                </p>
+              )}
+            </div>
+          )}
+          
+          <div className="flex gap-2 pt-2">
+            <Button variant="outline" size="sm">
+              <Edit className="mr-2 h-4 w-4" />
+              Edit
+            </Button>
+            <Button variant="outline" size="sm">
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </Button>
+            {space.ad_server === 'kevel' && space.external_id && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => refreshUsageData(space.id)}
+                disabled={refreshingUsage.includes(space.id)}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${refreshingUsage.includes(space.id) ? 'animate-spin' : ''}`} />
+                Refresh Usage
+              </Button>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   if (loading) {
     return <div>Loading...</div>;
   }
@@ -139,7 +324,7 @@ const Spaces = () => {
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Spaces</h2>
           <p className="text-muted-foreground">
-            Manage your available advertising spaces
+            Organized by ad server and usage status
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -179,6 +364,21 @@ const Spaces = () => {
                     <SelectItem value="video">Video</SelectItem>
                     <SelectItem value="native">Native</SelectItem>
                     <SelectItem value="popup">Popup</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid w-full items-center gap-1.5">
+                <Label htmlFor="ad_server">Ad Server</Label>
+                <Select value={formData.ad_server} onValueChange={(value) => setFormData({ ...formData, ad_server: value })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="kevel">🎯 Kevel</SelectItem>
+                    <SelectItem value="google">🟦 Google Ad Manager</SelectItem>
+                    <SelectItem value="criteo">🟧 Criteo</SelectItem>
+                    <SelectItem value="koddi">🟩 Koddi</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -267,41 +467,68 @@ const Spaces = () => {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredSpaces.map((space) => (
-            <Card key={space.id} className="transition-all duration-200 hover:shadow-md">
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="text-lg">{space.name}</CardTitle>
-                    <CardDescription>{space.type} • {space.size}</CardDescription>
+        <div className="space-y-8">
+          {Object.entries(spacesByAdServer).map(([adServer, categories]) => (
+            <div key={adServer} className="space-y-6">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">{getAdServerLogo(adServer)}</span>
+                <h3 className="text-2xl font-bold capitalize">{adServer}</h3>
+                <Badge variant="secondary">
+                  {categories.active.length + categories.past_used.length + categories.unused.length} spaces
+                </Badge>
+              </div>
+
+              {/* Active Spaces */}
+              {categories.active.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <TrendingUp className="w-5 h-5 text-green-600" />
+                    <h4 className="text-lg font-semibold text-green-600">
+                      Currently Used ({categories.active.length})
+                    </h4>
                   </div>
-                  <Badge className={getStatusColor(space.status)}>
-                    {space.status}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">
-                    <strong>Location:</strong> {space.location || 'Not specified'}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    <strong>Price:</strong> {space.base_price} {space.currency} ({space.price_model.toUpperCase()})
-                  </p>
-                  <div className="flex gap-2 pt-2">
-                    <Button variant="outline" size="sm">
-                      <Edit className="mr-2 h-4 w-4" />
-                      Edit
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
-                    </Button>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {categories.active.map((space) => (
+                      <SpaceCard key={space.id} space={space} />
+                    ))}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              )}
+
+              {/* Past Used Spaces */}
+              {categories.past_used.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Clock className="w-5 h-5 text-yellow-600" />
+                    <h4 className="text-lg font-semibold text-yellow-600">
+                      Used in the Past ({categories.past_used.length})
+                    </h4>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {categories.past_used.map((space) => (
+                      <SpaceCard key={space.id} space={space} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Unused Spaces */}
+              {categories.unused.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Target className="w-5 h-5 text-gray-400" />
+                    <h4 className="text-lg font-semibold text-muted-foreground">
+                      Unused ({categories.unused.length})
+                    </h4>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 opacity-75">
+                    {categories.unused.map((space) => (
+                      <SpaceCard key={space.id} space={space} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           ))}
         </div>
       )}

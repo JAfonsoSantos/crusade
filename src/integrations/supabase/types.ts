@@ -66,11 +66,18 @@ export type Database = {
       }
       ad_spaces: {
         Row: {
+          ad_server: string | null
           base_price: number | null
+          clicks: number | null
           company_id: string
           created_at: string
           currency: string | null
+          external_id: string | null
           id: string
+          impressions: number | null
+          is_active: boolean | null
+          last_click: string | null
+          last_impression: string | null
           location: string | null
           name: string
           price_model: string | null
@@ -78,13 +85,21 @@ export type Database = {
           status: string | null
           type: string
           updated_at: string
+          usage_status: string | null
         }
         Insert: {
+          ad_server?: string | null
           base_price?: number | null
+          clicks?: number | null
           company_id: string
           created_at?: string
           currency?: string | null
+          external_id?: string | null
           id?: string
+          impressions?: number | null
+          is_active?: boolean | null
+          last_click?: string | null
+          last_impression?: string | null
           location?: string | null
           name: string
           price_model?: string | null
@@ -92,13 +107,21 @@ export type Database = {
           status?: string | null
           type: string
           updated_at?: string
+          usage_status?: string | null
         }
         Update: {
+          ad_server?: string | null
           base_price?: number | null
+          clicks?: number | null
           company_id?: string
           created_at?: string
           currency?: string | null
+          external_id?: string | null
           id?: string
+          impressions?: number | null
+          is_active?: boolean | null
+          last_click?: string | null
+          last_impression?: string | null
           location?: string | null
           name?: string
           price_model?: string | null
@@ -106,6 +129,7 @@ export type Database = {
           status?: string | null
           type?: string
           updated_at?: string
+          usage_status?: string | null
         }
         Relationships: [
           {
