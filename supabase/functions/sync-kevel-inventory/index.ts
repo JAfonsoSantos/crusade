@@ -19,8 +19,19 @@ interface KevelAdSize {
   IsDeleted: boolean
 }
 
+interface KevelCampaign {
+  Id: number
+  Name: string
+  StartDate: string
+  EndDate: string
+  IsActive: boolean
+  IsDeleted: boolean
+  Price: number
+  AdvertiserId: number
+}
+
 interface KevelApiResponse {
-  items: KevelSite[] | KevelAdSize[]
+  items: KevelSite[] | KevelAdSize[] | KevelCampaign[]
 }
 
 Deno.serve(async (req) => {
@@ -77,16 +88,25 @@ Deno.serve(async (req) => {
       )
     }
 
-    console.log('Fetching sites from Kevel API...')
+    console.log('Fetching sites and campaigns from Kevel API...')
 
-    // First, just try to get sites - let's simplify to debug
-    const sitesResponse = await fetch('https://api.kevel.co/v1/site', {
-      method: 'GET',
-      headers: {
-        'X-Adzerk-ApiKey': apiKey,
-        'Content-Type': 'application/json',
-      },
-    })
+    // Fetch both sites and campaigns from Kevel Management API
+    const [sitesResponse, campaignsResponse] = await Promise.all([
+      fetch('https://api.kevel.co/v1/site', {
+        method: 'GET',
+        headers: {
+          'X-Adzerk-ApiKey': apiKey,
+          'Content-Type': 'application/json',
+        },
+      }),
+      fetch('https://api.kevel.co/v1/campaign', {
+        method: 'GET',
+        headers: {
+          'X-Adzerk-ApiKey': apiKey,
+          'Content-Type': 'application/json',
+        },
+      })
+    ])
 
     if (!sitesResponse.ok) {
       const errorText = await sitesResponse.text()
@@ -109,8 +129,32 @@ Deno.serve(async (req) => {
       )
     }
 
+    if (!campaignsResponse.ok) {
+      const errorText = await campaignsResponse.text()
+      console.error('Kevel Campaigns API error:', campaignsResponse.status, errorText)
+      
+      await supabase
+        .from('ad_server_integrations')
+        .update({ 
+          status: 'error',
+          last_sync: new Date().toISOString()
+        })
+        .eq('id', integrationId)
+
+      return new Response(
+        JSON.stringify({ 
+          error: 'Failed to fetch campaigns from Kevel API', 
+          details: `${campaignsResponse.status}: ${errorText}` 
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     const sitesData: { items: KevelSite[] } = await sitesResponse.json()
-    console.log(`Found ${sitesData.items?.length || 0} sites`)
+    const campaignsData: { items: KevelCampaign[] } = await campaignsResponse.json()
+    
+    let syncedCount = 0
+    let errorCount = 0
 
     // For now, let's create ad spaces with common sizes instead of fetching from API
     const commonAdSizes = [
@@ -121,13 +165,9 @@ Deno.serve(async (req) => {
       { Name: 'Mobile Banner', Width: 320, Height: 50 },
       { Name: 'Square', Width: 250, Height: 250 }
     ]
-    
-    console.log(`Using ${commonAdSizes.length} common ad sizes`)
 
-    let syncedCount = 0
-    let errorCount = 0
-
-    // Create ad spaces by combining sites with common ad sizes
+    // Sync Ad Spaces
+    console.log('Syncing ad spaces...')
     for (const site of sitesData.items || []) {
       console.log(`Processing site: ${site.Title} (ID: ${site.Id})`)
       
@@ -138,14 +178,13 @@ Deno.serve(async (req) => {
             type: 'display',
             size: `${adSize.Width}x${adSize.Height}`,
             location: site.Url || site.Title,
-            base_price: 2.50, // Default CPM
+            base_price: 2.50,
             price_model: 'cpm',
             currency: 'USD',
             status: 'available',
             company_id: integration.company_id,
           }
 
-          // Check if ad space already exists
           const { data: existingSpace } = await supabase
             .from('ad_spaces')
             .select('id')
@@ -154,7 +193,6 @@ Deno.serve(async (req) => {
             .single()
 
           if (existingSpace) {
-            // Update existing ad space
             const { error: updateError } = await supabase
               .from('ad_spaces')
               .update(adSpaceData)
@@ -167,7 +205,6 @@ Deno.serve(async (req) => {
               syncedCount++
             }
           } else {
-            // Insert new ad space
             const { error: insertError } = await supabase
               .from('ad_spaces')
               .insert(adSpaceData)
@@ -183,6 +220,66 @@ Deno.serve(async (req) => {
           console.error('Error processing ad size:', error)
           errorCount++
         }
+      }
+    }
+
+    // Sync Campaigns from Kevel
+    console.log('Syncing campaigns from Kevel...')
+    for (const kevelCampaign of campaignsData.items || []) {
+      if (kevelCampaign.IsDeleted) continue
+      
+      console.log(`Processing campaign: ${kevelCampaign.Name} (ID: ${kevelCampaign.Id})`)
+      
+      try {
+        const campaignData = {
+          name: kevelCampaign.Name,
+          description: `Imported from Kevel (ID: ${kevelCampaign.Id})`,
+          start_date: kevelCampaign.StartDate.split('T')[0], // Convert to date format
+          end_date: kevelCampaign.EndDate.split('T')[0],
+          budget: kevelCampaign.Price || 1000, // Default budget if not provided
+          currency: 'USD',
+          status: kevelCampaign.IsActive ? 'active' : 'paused',
+          company_id: integration.company_id,
+          created_by: integration.company_id, // Use company_id as fallback
+        }
+
+        // Check if campaign already exists (by name and company)
+        const { data: existingCampaign } = await supabase
+          .from('campaigns')
+          .select('id')
+          .eq('name', campaignData.name)
+          .eq('company_id', integration.company_id)
+          .single()
+
+        if (existingCampaign) {
+          // Update existing campaign
+          const { error: updateError } = await supabase
+            .from('campaigns')
+            .update(campaignData)
+            .eq('id', existingCampaign.id)
+
+          if (updateError) {
+            console.error('Error updating campaign:', updateError)
+            errorCount++
+          } else {
+            syncedCount++
+          }
+        } else {
+          // Insert new campaign
+          const { error: insertError } = await supabase
+            .from('campaigns')
+            .insert(campaignData)
+
+          if (insertError) {
+            console.error('Error inserting campaign:', insertError)
+            errorCount++
+          } else {
+            syncedCount++
+          }
+        }
+      } catch (error) {
+        console.error('Error processing campaign:', error)
+        errorCount++
       }
     }
 
@@ -202,7 +299,7 @@ Deno.serve(async (req) => {
         success: true, 
         synced: syncedCount, 
         errors: errorCount,
-        message: `Successfully synced ${syncedCount} ad spaces from Kevel`
+        message: `Successfully synced ${syncedCount} items (ad spaces + campaigns) from Kevel`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
