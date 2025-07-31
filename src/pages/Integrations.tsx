@@ -23,6 +23,8 @@ const Integrations = () => {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [configDialogOpen, setConfigDialogOpen] = useState(false);
+  const [selectedIntegration, setSelectedIntegration] = useState<Integration | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     provider: 'google_ad_manager',
@@ -140,6 +142,36 @@ const Integrations = () => {
     });
   };
 
+  const handleConfigure = (integration: Integration) => {
+    setSelectedIntegration(integration);
+    setConfigDialogOpen(true);
+  };
+
+  const handleUpdateApiKey = async (newApiKey: string) => {
+    if (!selectedIntegration) return;
+
+    const { error } = await supabase
+      .from('ad_server_integrations')
+      .update({ api_key_encrypted: newApiKey })
+      .eq('id', selectedIntegration.id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Could not update API key.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: "API key updated successfully!",
+      });
+      setConfigDialogOpen(false);
+      setSelectedIntegration(null);
+      fetchIntegrations();
+    }
+  };
+
   if (loading) {
     return <div>Loading...</div>;
   }
@@ -213,6 +245,43 @@ const Integrations = () => {
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* Configure Integration Dialog */}
+        <Dialog open={configDialogOpen} onOpenChange={setConfigDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Configure Integration</DialogTitle>
+              <DialogDescription>
+                Update API key for {selectedIntegration?.name}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="grid w-full items-center gap-1.5">
+                <Label htmlFor="new_api_key">New API Key</Label>
+                <Input
+                  id="new_api_key"
+                  type="password"
+                  placeholder="Enter your new API key"
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      const target = e.target as HTMLInputElement;
+                      handleUpdateApiKey(target.value);
+                    }
+                  }}
+                />
+              </div>
+              <Button 
+                className="w-full" 
+                onClick={() => {
+                  const input = document.getElementById('new_api_key') as HTMLInputElement;
+                  handleUpdateApiKey(input.value);
+                }}
+              >
+                Update API Key
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -245,7 +314,7 @@ const Integrations = () => {
                   {formatDate(integration.last_sync)}
                 </p>
                 <div className="flex gap-2 pt-2">
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" onClick={() => handleConfigure(integration)}>
                     <Settings className="mr-2 h-4 w-4" />
                     Configure
                   </Button>
