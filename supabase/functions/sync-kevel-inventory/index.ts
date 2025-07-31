@@ -158,9 +158,9 @@ Deno.serve(async (req) => {
     
     // Track detailed operations by category
     const operationDetails = {
-      campaigns: { created: 0, updated: 0, errors: [] as string[] },
-      ad_units: { created: 0, updated: 0, errors: [] as string[] },
-      sites: { created: 0, updated: 0, errors: [] as string[] }
+      campaigns: { created: 0, updated: 0, existing: 0, errors: [] as string[] },
+      ad_units: { created: 0, updated: 0, existing: 0, errors: [] as string[] },
+      sites: { created: 0, updated: 0, existing: 0, errors: [] as string[] }
     }
 
     // For now, let's create ad spaces with common sizes instead of fetching from API
@@ -202,6 +202,10 @@ Deno.serve(async (req) => {
           
           if (adUnitsResponse.ok) {
             const adUnitsData = await adUnitsResponse.json()
+            
+            // Count all existing ad units for this site
+            operationDetails.ad_units.existing += adUnitsData.items?.length || 0
+            
             const existingAdUnit = adUnitsData.items?.find((unit: any) => 
               unit.Name === adUnitName || 
               unit.Name.toLowerCase() === adUnitName.toLowerCase()
