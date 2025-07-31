@@ -379,7 +379,7 @@ const Integrations = () => {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {integrations.map((integration) => (
-          <Card key={integration.id}>
+          <Card key={integration.id} className={`${expandedDetails.has(integration.id) ? 'md:col-span-1 lg:col-span-2 xl:col-span-3' : ''} transition-all duration-300`}>
             <CardHeader>
               <div className="flex justify-between items-start">
                 <div>
@@ -438,45 +438,49 @@ const Integrations = () => {
 
                 {/* Sync Details Section */}
                 {expandedDetails.has(integration.id) && integration.configuration?.last_sync_details && (
-                  <Collapsible open={true} className="mt-4">
-                    <CollapsibleContent>
-                      <div className="space-y-3 p-3 bg-muted/50 rounded-lg">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-medium text-sm">Last Sync Details</h4>
-                          <span className="text-xs text-muted-foreground">
-                            {formatDate(integration.configuration.last_sync_details.timestamp)}
-                          </span>
+                  <div className="mt-4 border-t pt-4">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between mb-3 pb-2 border-b">
+                        <h4 className="font-semibold text-sm flex items-center gap-2">
+                          <Info className="h-4 w-4 text-primary" />
+                          Last Sync Details
+                        </h4>
+                        <span className="text-xs text-muted-foreground">
+                          {formatDate(integration.configuration.last_sync_details.timestamp)}
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-950/20 rounded-md">
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          <span className="text-sm font-medium">Synced: {integration.configuration.last_sync_details.synced}</span>
                         </div>
-                        
-                        <div className="grid grid-cols-2 gap-4 text-xs">
-                          <div className="flex items-center gap-1">
-                            <CheckCircle className="h-3 w-3 text-green-600" />
-                            <span>Synced: {integration.configuration.last_sync_details.synced}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <AlertCircle className="h-3 w-3 text-red-600" />
-                            <span>Errors: {integration.configuration.last_sync_details.errors}</span>
-                          </div>
+                        <div className="flex items-center gap-2 p-2 bg-red-50 dark:bg-red-950/20 rounded-md">
+                          <AlertCircle className="h-4 w-4 text-red-600" />
+                          <span className="text-sm font-medium">Errors: {integration.configuration.last_sync_details.errors}</span>
                         </div>
+                      </div>
 
-                        {/* Operations Details */}
-                        <div className="space-y-2">
+                      {/* Operations Details */}
+                      <div className="space-y-3">
+                        <h5 className="font-medium text-sm text-muted-foreground">Operations by Category</h5>
+                        <div className="grid gap-3">
                           {integration.configuration.last_sync_details.operations.campaigns && (
-                            <div className="p-2 bg-background rounded border">
-                              <div className="flex items-center gap-1 mb-1">
-                                <Info className="h-3 w-3 text-blue-600" />
-                                <span className="font-medium text-xs">Campaigns</span>
+                            <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-md border border-blue-200 dark:border-blue-800">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Info className="h-4 w-4 text-blue-600" />
+                                <span className="font-medium text-sm text-blue-900 dark:text-blue-100">Campaigns</span>
                               </div>
-                              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                              <div className="grid grid-cols-2 gap-3 text-sm text-blue-800 dark:text-blue-200">
                                 <span>Created: {integration.configuration.last_sync_details.operations.campaigns.created}</span>
                                 <span>Updated: {integration.configuration.last_sync_details.operations.campaigns.updated}</span>
                               </div>
                               {integration.configuration.last_sync_details.operations.campaigns.errors.length > 0 && (
-                                <div className="mt-1">
-                                  <span className="text-xs text-red-600">Errors:</span>
-                                  <ul className="text-xs text-red-600 ml-2">
+                                <div className="col-span-2 mt-2 pt-2 border-t border-blue-200 dark:border-blue-800">
+                                  <span className="text-sm font-medium text-red-600 dark:text-red-400">Errors:</span>
+                                  <ul className="text-sm text-red-600 dark:text-red-400 mt-1 space-y-1">
                                     {integration.configuration.last_sync_details.operations.campaigns.errors.map((error, idx) => (
-                                      <li key={idx}>• {error}</li>
+                                      <li key={idx} className="text-xs">• {error}</li>
                                     ))}
                                   </ul>
                                 </div>
@@ -485,21 +489,21 @@ const Integrations = () => {
                           )}
 
                           {integration.configuration.last_sync_details.operations.ad_units && (
-                            <div className="p-2 bg-background rounded border">
-                              <div className="flex items-center gap-1 mb-1">
-                                <Info className="h-3 w-3 text-purple-600" />
-                                <span className="font-medium text-xs">Ad Units</span>
+                            <div className="p-3 bg-purple-50 dark:bg-purple-950/20 rounded-md border border-purple-200 dark:border-purple-800">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Info className="h-4 w-4 text-purple-600" />
+                                <span className="font-medium text-sm text-purple-900 dark:text-purple-100">Ad Units</span>
                               </div>
-                              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                              <div className="grid grid-cols-2 gap-3 text-sm text-purple-800 dark:text-purple-200">
                                 <span>Created: {integration.configuration.last_sync_details.operations.ad_units.created}</span>
                                 <span>Updated: {integration.configuration.last_sync_details.operations.ad_units.updated}</span>
                               </div>
                               {integration.configuration.last_sync_details.operations.ad_units.errors.length > 0 && (
-                                <div className="mt-1">
-                                  <span className="text-xs text-red-600">Errors:</span>
-                                  <ul className="text-xs text-red-600 ml-2">
+                                <div className="col-span-2 mt-2 pt-2 border-t border-purple-200 dark:border-purple-800">
+                                  <span className="text-sm font-medium text-red-600 dark:text-red-400">Errors:</span>
+                                  <ul className="text-sm text-red-600 dark:text-red-400 mt-1 space-y-1">
                                     {integration.configuration.last_sync_details.operations.ad_units.errors.map((error, idx) => (
-                                      <li key={idx}>• {error}</li>
+                                      <li key={idx} className="text-xs">• {error}</li>
                                     ))}
                                   </ul>
                                 </div>
@@ -508,21 +512,21 @@ const Integrations = () => {
                           )}
 
                           {integration.configuration.last_sync_details.operations.sites && (
-                            <div className="p-2 bg-background rounded border">
-                              <div className="flex items-center gap-1 mb-1">
-                                <Info className="h-3 w-3 text-orange-600" />
-                                <span className="font-medium text-xs">Sites</span>
+                            <div className="p-3 bg-orange-50 dark:bg-orange-950/20 rounded-md border border-orange-200 dark:border-orange-800">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Info className="h-4 w-4 text-orange-600" />
+                                <span className="font-medium text-sm text-orange-900 dark:text-orange-100">Sites</span>
                               </div>
-                              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                              <div className="grid grid-cols-2 gap-3 text-sm text-orange-800 dark:text-orange-200">
                                 <span>Created: {integration.configuration.last_sync_details.operations.sites.created}</span>
                                 <span>Updated: {integration.configuration.last_sync_details.operations.sites.updated}</span>
                               </div>
                               {integration.configuration.last_sync_details.operations.sites.errors.length > 0 && (
-                                <div className="mt-1">
-                                  <span className="text-xs text-red-600">Errors:</span>
-                                  <ul className="text-xs text-red-600 ml-2">
+                                <div className="col-span-2 mt-2 pt-2 border-t border-orange-200 dark:border-orange-800">
+                                  <span className="text-sm font-medium text-red-600 dark:text-red-400">Errors:</span>
+                                  <ul className="text-sm text-red-600 dark:text-red-400 mt-1 space-y-1">
                                     {integration.configuration.last_sync_details.operations.sites.errors.map((error, idx) => (
-                                      <li key={idx}>• {error}</li>
+                                      <li key={idx} className="text-xs">• {error}</li>
                                     ))}
                                   </ul>
                                 </div>
@@ -531,8 +535,8 @@ const Integrations = () => {
                           )}
                         </div>
                       </div>
-                    </CollapsibleContent>
-                  </Collapsible>
+                    </div>
+                  </div>
                 )}
               </div>
             </CardContent>
