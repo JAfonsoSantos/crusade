@@ -10,6 +10,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Plus, Settings, Trash2, Wifi, WifiOff, RefreshCw, ChevronDown, ChevronRight, Eye, AlertCircle, CheckCircle, Info } from 'lucide-react';
+import kevelLogo from '@/assets/kevel-logo.png';
 
 interface Integration {
   id: string;
@@ -414,12 +415,15 @@ const Integrations = () => {
           <Card key={integration.id} className="transition-all duration-300 w-full">
             <CardHeader>
               <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle className="text-lg">{integration.name}</CardTitle>
-                  <CardDescription>
-                    {getProviderName(integration.provider)}
-                  </CardDescription>
-                </div>
+                 <div>
+                   <CardTitle className="text-lg">{integration.name}</CardTitle>
+                   <CardDescription className="flex items-center gap-2">
+                     {integration.provider === 'kevel' && (
+                       <img src={kevelLogo} alt="Kevel" className="w-4 h-4" />
+                     )}
+                     {getProviderName(integration.provider)}
+                   </CardDescription>
+                 </div>
                 <div className="flex items-center gap-2">
                   {integration.status === 'active' ? (
                     <Wifi className="h-4 w-4 text-green-600" />
