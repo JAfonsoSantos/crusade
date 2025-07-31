@@ -778,7 +778,7 @@ const Integrations = () => {
                             <div className="p-3 bg-green-50 dark:bg-green-950/20 rounded-md border border-green-200 dark:border-green-800">
                               <div className="flex items-center gap-2 mb-2">
                                 <Info className="h-4 w-4 text-green-600" />
-                                <span className="font-medium text-sm text-green-900 dark:text-green-100">Sites</span>
+                                <span className="font-medium text-sm text-green-900 dark:text-green-100">Ad Spaces</span>
                               </div>
                               <div className="grid grid-cols-3 gap-3 text-sm text-green-800 dark:text-green-200">
                                 <span>Existing: {integration.configuration.last_sync_details.operations.sites.existing || 0}</span>
@@ -863,7 +863,7 @@ const Integrations = () => {
                                   )}
                                   {sync.operations.sites && (
                                     <div>
-                                      Sites: {sync.operations.sites.existing || 0} existing, {sync.operations.sites.created} created, {sync.operations.sites.updated} updated
+                                      Ad Spaces: {sync.operations.sites.existing || 0} existing, {sync.operations.sites.created} created, {sync.operations.sites.updated} updated
                                     </div>
                                   )}
                                 </div>
