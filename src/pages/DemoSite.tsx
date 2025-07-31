@@ -90,7 +90,7 @@ const DemoSite = () => {
       {/* Top Banner Ad */}
       <div className="container mx-auto px-4 py-4">
         <div className="flex justify-center">
-          <KevelAd adUnitId={4} size="728x90" position="Header Banner" />
+          <KevelAd id={4} size="728x90" position="Header Banner" />
         </div>
       </div>
 
@@ -114,7 +114,7 @@ const DemoSite = () => {
 
             {/* Sidebar Ad */}
             <div className="flex justify-center">
-              <KevelAd adUnitId={5} size="300x250" position="Sidebar" />
+              <KevelAd id={5} size="300x250" position="Sidebar" />
             </div>
           </div>
 
@@ -127,7 +127,7 @@ const DemoSite = () => {
 
             {/* Mobile Banner Ad */}
             <div className="block lg:hidden mb-6">
-              <KevelAd adUnitId={23} size="320x50" position="Mobile Banner" />
+              <KevelAd id={23} size="320x50" position="Mobile Banner" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -179,7 +179,7 @@ const DemoSite = () => {
 
             {/* Bottom Banner Ad */}
             <div className="mt-8 flex justify-center">
-              <KevelAd adUnitId={4} size="728x90" position="Footer Banner" />
+              <KevelAd id={4} size="728x90" position="Footer Banner" />
             </div>
           </div>
         </div>

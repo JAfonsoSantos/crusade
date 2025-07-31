@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 
 interface KevelAdProps {
-  adUnitId: number;
+  id: number;
   size: string;
   position: string;
   networkId?: number;
@@ -36,7 +36,7 @@ interface KevelResponse {
 }
 
 const KevelAd = ({ 
-  adUnitId, 
+  id, 
   size, 
   position, 
   networkId = 11833, 
@@ -59,7 +59,7 @@ const KevelAd = ({
             {
               networkId: networkId,
               siteId: siteId,
-              divName: `kevel-ad-${adUnitId}`,
+              divName: `kevel-ad-${id}`,
               count: 1,
               adTypes: [4] // Leaderboard ad type
             }
@@ -86,7 +86,7 @@ const KevelAd = ({
         const data: KevelResponse = await response.json();
         console.log('Kevel response:', data);
         
-        const placementKey = `kevel-ad-${adUnitId}`;
+        const placementKey = `kevel-ad-${id}`;
         const decisions = data.decisions?.[placementKey];
         const decision = Array.isArray(decisions) ? decisions[0] : decisions;
         
@@ -115,12 +115,12 @@ const KevelAd = ({
     };
 
     fetchAd();
-  }, [adUnitId, networkId, siteId]);
+  }, [id, networkId, siteId]);
 
   // Handle click tracking
   const handleAdClick = (event: React.MouseEvent) => {
     // Let the click proceed naturally, Kevel handles tracking via clickUrl
-    console.log('Ad clicked:', adUnitId);
+    console.log('Ad clicked:', id);
   };
 
   const getContainerClasses = () => {
@@ -160,7 +160,7 @@ const KevelAd = ({
             {size} - {position}
           </div>
           <div className="text-xs text-muted-foreground/50 mt-1">
-            Unit ID: {adUnitId}
+            ID: {id}
           </div>
         </div>
       </div>
