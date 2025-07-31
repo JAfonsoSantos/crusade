@@ -470,6 +470,80 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Clean up campaigns that no longer exist in Kevel
+    console.log('Checking for campaigns to clean up...')
+    try {
+      // Get all campaigns that were imported from Kevel for this company
+      const { data: localCampaigns, error: localCampaignsError } = await supabase
+        .from('campaigns')
+        .select('id, name, description')
+        .eq('company_id', integration.company_id)
+        .like('description', '%Imported from Kevel%')
+
+      if (localCampaignsError) {
+        console.error('Error fetching local campaigns:', localCampaignsError)
+      } else if (localCampaigns && localCampaigns.length > 0) {
+        console.log(`Found ${localCampaigns.length} local campaigns imported from Kevel`)
+        
+        // Extract Kevel IDs from local campaigns
+        const localKevelIds = localCampaigns.map(campaign => {
+          const match = campaign.description?.match(/Imported from Kevel \(ID: (\d+)\)/)
+          return match ? parseInt(match[1]) : null
+        }).filter(id => id !== null)
+
+        // Get Kevel campaign IDs that still exist
+        const activeKevelIds = (campaignsData.items || [])
+          .filter(campaign => !campaign.IsDeleted)
+          .map(campaign => campaign.Id)
+
+        // Find campaigns that no longer exist in Kevel
+        const campaignsToDelete = localCampaigns.filter(campaign => {
+          const match = campaign.description?.match(/Imported from Kevel \(ID: (\d+)\)/)
+          const kevelId = match ? parseInt(match[1]) : null
+          return kevelId && !activeKevelIds.includes(kevelId)
+        })
+
+        console.log(`Found ${campaignsToDelete.length} campaigns to delete`)
+
+        // Delete campaigns that no longer exist in Kevel
+        for (const campaign of campaignsToDelete) {
+          try {
+            console.log(`Deleting campaign: ${campaign.name} (ID: ${campaign.id})`)
+            
+            // First delete any related campaign_ad_spaces
+            await supabase
+              .from('campaign_ad_spaces')
+              .delete()
+              .eq('campaign_id', campaign.id)
+
+            // Then delete the campaign
+            const { error: deleteError } = await supabase
+              .from('campaigns')
+              .delete()
+              .eq('id', campaign.id)
+
+            if (deleteError) {
+              console.error(`Error deleting campaign ${campaign.name}:`, deleteError)
+              operationDetails.campaigns.errors.push(`Failed to delete ${campaign.name}`)
+              errorCount++
+            } else {
+              console.log(`Successfully deleted campaign: ${campaign.name}`)
+              operationDetails.campaigns.deleted = (operationDetails.campaigns.deleted || 0) + 1
+              syncedCount++
+            }
+          } catch (error) {
+            console.error(`Error deleting campaign ${campaign.name}:`, error)
+            operationDetails.campaigns.errors.push(`Failed to delete ${campaign.name}: ${error.message}`)
+            errorCount++
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error during cleanup process:', error)
+      operationDetails.campaigns.errors.push(`Cleanup error: ${error.message}`)
+      errorCount++
+    }
+
     // Save sync history
     const syncEndTime = Date.now()
     const syncDuration = syncEndTime - syncStartTime
