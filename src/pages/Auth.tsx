@@ -20,6 +20,7 @@ const Auth = () => {
   const [resetEmail, setResetEmail] = useState('');
   const [emailExists, setEmailExists] = useState(false);
   const [checkingEmail, setCheckingEmail] = useState(false);
+  const [lastCheckedEmail, setLastCheckedEmail] = useState('');
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -52,9 +53,21 @@ const Auth = () => {
 
   // Check if email exists with debounce
   useEffect(() => {
-    if (!email || email.length < 3) {
+    // Reset states when email changes
+    if (email !== lastCheckedEmail) {
       setEmailExists(false);
       setCheckingEmail(false);
+    }
+
+    if (!email || email.length < 3) {
+      setCheckingEmail(false);
+      setEmailExists(false);
+      setLastCheckedEmail('');
+      return;
+    }
+
+    // Don't check if we already checked this email
+    if (email === lastCheckedEmail) {
       return;
     }
 
@@ -75,17 +88,17 @@ const Auth = () => {
         } else {
           setEmailExists(false);
         }
+        setLastCheckedEmail(email);
       } catch (error) {
         console.error('Error checking email:', error);
         setEmailExists(false);
-      } finally {
-        setCheckingEmail(false);
       }
+      // Note: NOT setting setCheckingEmail(false) here - keeps message visible
     };
 
     const timeoutId = setTimeout(checkEmailExists, 800);
     return () => clearTimeout(timeoutId);
-  }, [email]);
+  }, [email, lastCheckedEmail]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -294,7 +307,7 @@ const Auth = () => {
                     required
                   />
                 </div>
-                 {emailExists && (
+                 {emailExists && !checkingEmail && (
                    <div className="text-sm text-destructive mb-2">
                      Este email já está registado. Tenta fazer login.
                    </div>
@@ -309,7 +322,7 @@ const Auth = () => {
                    className="w-full" 
                    disabled={loading || emailExists || checkingEmail}
                  >
-                   {loading ? "A criar conta..." : emailExists ? "Email já registado" : "Criar Conta"}
+                   {loading ? "A criar conta..." : emailExists ? "Email já registado" : checkingEmail ? "A verificar..." : "Criar Conta"}
                  </Button>
               </form>
             </TabsContent>
