@@ -1,1 +1,4 @@
 project_id = "bzqjxkmkrzvsigimnwwc"
+
+[functions.sync-kevel-inventory]
+verify_jwt = false

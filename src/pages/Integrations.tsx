@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Settings, Trash2, Wifi, WifiOff } from 'lucide-react';
+import { Plus, Settings, Trash2, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 
 interface Integration {
   id: string;
@@ -25,6 +25,7 @@ const Integrations = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [selectedIntegration, setSelectedIntegration] = useState<Integration | null>(null);
+  const [syncing, setSyncing] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     provider: 'google_ad_manager',
@@ -172,6 +173,45 @@ const Integrations = () => {
     }
   };
 
+  const handleSync = async (integration: Integration) => {
+    if (integration.provider !== 'kevel') {
+      toast({
+        title: "Not Supported",
+        description: "Sync is currently only supported for Kevel integrations.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSyncing(integration.id);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-kevel-inventory', {
+        body: { integrationId: integration.id }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Sync Completed",
+        description: data.message || `Synced ${data.synced} ad spaces successfully!`,
+      });
+      
+      // Refresh integrations to show updated last_sync time
+      fetchIntegrations();
+      
+    } catch (error: any) {
+      console.error('Sync error:', error);
+      toast({
+        title: "Sync Failed",
+        description: error.message || "Could not sync with ad server.",
+        variant: "destructive",
+      });
+    } finally {
+      setSyncing(null);
+    }
+  };
+
   if (loading) {
     return <div>Loading...</div>;
   }
@@ -314,6 +354,15 @@ const Integrations = () => {
                   {formatDate(integration.last_sync)}
                 </p>
                 <div className="flex gap-2 pt-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handleSync(integration)}
+                    disabled={syncing === integration.id}
+                  >
+                    <RefreshCw className={`mr-2 h-4 w-4 ${syncing === integration.id ? 'animate-spin' : ''}`} />
+                    {syncing === integration.id ? 'Syncing...' : 'Sync Now'}
+                  </Button>
                   <Button variant="outline" size="sm" onClick={() => handleConfigure(integration)}>
                     <Settings className="mr-2 h-4 w-4" />
                     Configure
