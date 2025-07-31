@@ -66,7 +66,7 @@ const Campaigns = () => {
     const { data, error } = await supabase
       .from('ad_server_integrations')
       .select('*')
-      .eq('provider', 'kevel')
+      .in('provider', ['kevel', 'koddi', 'topsort'])
       .eq('status', 'active');
 
     if (error) {
@@ -421,7 +421,7 @@ const Campaigns = () => {
                   Edit
                 </Button>
                 {integrations
-                  .filter(i => ['kevel', 'koddi'].includes(i.provider) && i.status === 'active')
+                  .filter(i => ['kevel', 'koddi', 'topsort'].includes(i.provider) && i.status === 'active')
                   .map(integration => {
                     const platformConfig = integration.platform_config as any || {}
                     const campaignData = platformConfig.campaigns?.[campaign.id]

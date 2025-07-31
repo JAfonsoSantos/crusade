@@ -16,6 +16,11 @@ const PLATFORM_CONFIGS = {
     hierarchy: ['advertiser_group', 'advertiser', 'media_plan', 'line_item', 'campaign', 'ad_group', 'entity'],
     apiBase: 'https://api.koddi.com/v1',
     authHeader: 'Authorization'
+  },
+  topsort: {
+    hierarchy: ['marketplace', 'campaign', 'products_bids'],
+    apiBase: 'https://api.topsort.com/public/v1',
+    authHeader: 'Authorization'
   }
 }
 
@@ -156,6 +161,161 @@ class KevelAdapter implements PlatformAdapter {
   }
 }
 
+class TopsortAdapter implements PlatformAdapter {
+  async createCampaignHierarchy(campaign: any, integration: any) {
+    const apiKey = integration.api_key_encrypted
+    const config = PLATFORM_CONFIGS.topsort
+    
+    // Topsort structure: marketplace → campaign → products/bids
+    
+    // 1. Create Campaign
+    const topsortCampaign = await this.createCampaign(campaign, apiKey)
+    
+    // 2. Get products from our ad_spaces (simplified)
+    const products = await this.getProducts(integration)
+    
+    // 3. Create bids for products
+    const bids = await this.createBids(topsortCampaign.campaignId, products, campaign, apiKey)
+    
+    return {
+      marketplace_id: integration.company_id,
+      campaign_id: topsortCampaign.campaignId,
+      products: products.length,
+      bids: bids.length,
+      hierarchy: 'marketplace → campaign → products/bids'
+    }
+  }
+
+  async updateCampaignStatus(campaignId: string, isActive: boolean, integration: any) {
+    const apiKey = integration.api_key_encrypted
+    
+    // Update campaign status in Topsort
+    const response = await fetch(`${PLATFORM_CONFIGS.topsort.apiBase}/campaign-service/campaigns/${campaignId}`, {
+      method: 'PATCH',
+      headers: {
+        [PLATFORM_CONFIGS.topsort.authHeader]: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ isActive }),
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Failed to update campaign status: ${response.statusText}`)
+    }
+    
+    return { success: true, platform: 'topsort' }
+  }
+
+  async syncInventory(integration: any) {
+    // Topsort uses catalog sync - sync products from our ad_spaces
+    const apiKey = integration.api_key_encrypted
+    
+    // Get ad_spaces as products
+    const products = await this.getProducts(integration)
+    
+    // Upload to Topsort catalog
+    if (products.length > 0) {
+      const response = await fetch(`${PLATFORM_CONFIGS.topsort.apiBase}/catalog-search-service/catalogs/products`, {
+        method: 'PUT',
+        headers: {
+          [PLATFORM_CONFIGS.topsort.authHeader]: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ products }),
+      })
+      
+      if (!response.ok) {
+        throw new Error(`Failed to sync catalog: ${response.statusText}`)
+      }
+    }
+    
+    return { synced: products.length, errors: 0, platform: 'topsort' }
+  }
+
+  private async createCampaign(campaign: any, apiKey: string) {
+    const response = await fetch(`${PLATFORM_CONFIGS.topsort.apiBase}/campaign-service/campaigns`, {
+      method: 'POST',
+      headers: {
+        [PLATFORM_CONFIGS.topsort.authHeader]: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: campaign.name,
+        adFormat: 'listing', // Default to sponsored listings
+        campaignType: 'manual',
+        chargeType: 'CPC', // Cost per click
+        startDate: campaign.start_date + 'T00:00:00Z',
+        endDate: campaign.end_date + 'T23:59:59Z',
+        isActive: false, // Start inactive
+        budget: {
+          type: 'daily',
+          amount: Math.round((campaign.budget || 1000) / 30) // Daily budget
+        }
+      }),
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Failed to create campaign: ${response.statusText}`)
+    }
+    
+    return await response.json()
+  }
+
+  private async getProducts(integration: any) {
+    // Convert our ad_spaces to Topsort products format
+    return [
+      {
+        id: `ad-space-${Date.now()}`,
+        name: "Sample Product",
+        active: true,
+        categories: ["general"],
+        imageURL: "https://via.placeholder.com/300",
+        price: "9.99",
+        vendors: [integration.company_id]
+      }
+    ]
+  }
+
+  private async createBids(campaignId: string, products: any[], campaign: any, apiKey: string) {
+    const bids = []
+    
+    for (const product of products) {
+      try {
+        const response = await fetch(`${PLATFORM_CONFIGS.topsort.apiBase}/campaign-service/campaigns/${campaignId}/bids`, {
+          method: 'POST',
+          headers: {
+            [PLATFORM_CONFIGS.topsort.authHeader]: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            productId: product.id,
+            bid: {
+              amount: 0.50, // Default bid amount
+              currency: campaign.currency || 'USD'
+            },
+            triggers: [
+              {
+                type: 'product',
+                products: [product.id]
+              }
+            ]
+          }),
+        })
+        
+        if (response.ok) {
+          const bid = await response.json()
+          bids.push(bid)
+          console.log(`Created bid for product: ${product.id}`)
+        }
+      } catch (error) {
+        console.error(`Failed to create bid for ${product.id}:`, error)
+      }
+    }
+    
+    return bids
+  }
+}
+
 class KoddiAdapter implements PlatformAdapter {
   async createCampaignHierarchy(campaign: any, integration: any) {
     const apiKey = integration.api_key_encrypted
@@ -240,6 +400,8 @@ function getAdapter(provider: string): PlatformAdapter {
       return new KevelAdapter()
     case 'koddi':
       return new KoddiAdapter()
+    case 'topsort':
+      return new TopsortAdapter()
     default:
       throw new Error(`Unsupported platform: ${provider}`)
   }

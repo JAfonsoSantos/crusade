@@ -129,6 +129,8 @@ const Integrations = () => {
         return 'Kevel';
       case 'koddi':
         return 'Koddi';
+      case 'topsort':
+        return 'Topsort';
       default:
         return provider;
     }
@@ -176,10 +178,10 @@ const Integrations = () => {
   };
 
   const handleSync = async (integration: Integration) => {
-    if (!['kevel', 'koddi'].includes(integration.provider)) {
+    if (!['kevel', 'koddi', 'topsort'].includes(integration.provider)) {
       toast({
         title: "Not Supported",
-        description: "Sync is currently only supported for Kevel and Koddi integrations.",
+        description: "Sync is currently only supported for Kevel, Koddi, and Topsort integrations.",
         variant: "destructive",
       });
       return;
@@ -265,7 +267,7 @@ const Integrations = () => {
                     <SelectItem value="prebid">Prebid.js</SelectItem>
                     <SelectItem value="openx">OpenX</SelectItem>
                     <SelectItem value="kevel">Kevel</SelectItem>
-                    <SelectItem value="koddi">Koddi</SelectItem>
+                    <SelectItem value="topsort">Topsort</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
