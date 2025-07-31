@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Edit, Trash2, Megaphone, Calendar } from 'lucide-react';
+import { Plus, Edit, Trash2, Megaphone, Calendar, Upload } from 'lucide-react';
 
 interface Campaign {
   id: string;
@@ -27,6 +27,8 @@ const Campaigns = () => {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [pushingCampaign, setPushingCampaign] = useState<string | null>(null);
+  const [integrations, setIntegrations] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -39,6 +41,7 @@ const Campaigns = () => {
 
   useEffect(() => {
     fetchCampaigns();
+    fetchIntegrations();
   }, []);
 
   const fetchCampaigns = async () => {
@@ -57,6 +60,59 @@ const Campaigns = () => {
       setCampaigns(data || []);
     }
     setLoading(false);
+  };
+
+  const fetchIntegrations = async () => {
+    const { data, error } = await supabase
+      .from('ad_server_integrations')
+      .select('*')
+      .eq('provider', 'kevel')
+      .eq('status', 'active');
+
+    if (error) {
+      console.error('Error fetching integrations:', error);
+    } else {
+      setIntegrations(data || []);
+    }
+  };
+
+  const pushCampaignToKevel = async (campaignId: string) => {
+    if (integrations.length === 0) {
+      toast({
+        title: "No Integrations",
+        description: "Please set up a Kevel integration first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setPushingCampaign(campaignId);
+    try {
+      const { data, error } = await supabase.functions.invoke('push-campaign-to-kevel', {
+        body: {
+          campaignId,
+          integrationId: integrations[0].id, // Use first active Kevel integration
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Success",
+        description: data.message || "Campaign pushed to Kevel successfully!",
+      });
+    } catch (error) {
+      console.error('Push campaign error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to push campaign to Kevel.",
+        variant: "destructive",
+      });
+    } finally {
+      setPushingCampaign(null);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -267,6 +323,15 @@ const Campaigns = () => {
                   <Button variant="outline" size="sm">
                     <Edit className="mr-2 h-4 w-4" />
                     Edit
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => pushCampaignToKevel(campaign.id)}
+                    disabled={pushingCampaign === campaign.id || integrations.length === 0}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    {pushingCampaign === campaign.id ? 'Pushing...' : 'Push to Kevel'}
                   </Button>
                   <Button variant="outline" size="sm">
                     <Trash2 className="mr-2 h-4 w-4" />

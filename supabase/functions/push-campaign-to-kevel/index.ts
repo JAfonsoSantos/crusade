@@ -1,0 +1,197 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+interface CampaignData {
+  id: string
+  name: string
+  description?: string
+  start_date: string
+  end_date: string
+  budget?: number
+  currency: string
+  status: string
+  company_id: string
+}
+
+interface KevelCampaignRequest {
+  Name: string
+  AdvertiserId: number
+  StartDate: string
+  EndDate: string
+  IsActive: boolean
+  Price?: number
+}
+
+Deno.serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders })
+  }
+
+  try {
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+
+    const { campaignId, integrationId } = await req.json()
+
+    if (!campaignId || !integrationId) {
+      return new Response(
+        JSON.stringify({ error: 'Campaign ID and Integration ID are required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    console.log(`Pushing campaign ${campaignId} to integration ${integrationId}`)
+
+    // Get the integration details
+    const { data: integration, error: integrationError } = await supabase
+      .from('ad_server_integrations')
+      .select('*')
+      .eq('id', integrationId)
+      .single()
+
+    if (integrationError || !integration) {
+      console.error('Integration not found:', integrationError)
+      return new Response(
+        JSON.stringify({ error: 'Integration not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    if (integration.provider !== 'kevel') {
+      return new Response(
+        JSON.stringify({ error: 'This function only supports Kevel integrations' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const apiKey = integration.api_key_encrypted
+    if (!apiKey) {
+      console.error('No API key found for integration')
+      return new Response(
+        JSON.stringify({ error: 'No API key configured' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Get the campaign details
+    const { data: campaign, error: campaignError } = await supabase
+      .from('campaigns')
+      .select('*')
+      .eq('id', campaignId)
+      .single()
+
+    if (campaignError || !campaign) {
+      console.error('Campaign not found:', campaignError)
+      return new Response(
+        JSON.stringify({ error: 'Campaign not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    console.log(`Found campaign: ${campaign.name}`)
+
+    // First, we need to ensure we have an advertiser in Kevel
+    // For simplicity, we'll use a default advertiser ID or create one
+    let advertiserId = 1 // Default advertiser ID - in production, you'd want to manage this better
+
+    // Check if campaign already exists in Kevel (by checking if it has external metadata)
+    const campaignConfig = integration.configuration as any || {}
+    const existingKevelCampaignId = campaignConfig.campaigns?.[campaign.id]?.kevel_id
+
+    // Prepare campaign data for Kevel
+    const kevelCampaignData: KevelCampaignRequest = {
+      Name: campaign.name,
+      AdvertiserId: advertiserId,
+      StartDate: campaign.start_date + 'T00:00:00.000Z',
+      EndDate: campaign.end_date + 'T23:59:59.999Z',
+      IsActive: campaign.status === 'active',
+      Price: campaign.budget || 1000
+    }
+
+    console.log('Kevel campaign data:', kevelCampaignData)
+
+    let kevelResponse
+    let method = 'POST'
+    let endpoint = 'https://api.kevel.co/v1/campaign'
+
+    if (existingKevelCampaignId) {
+      // Update existing campaign
+      method = 'PUT'
+      endpoint = `https://api.kevel.co/v1/campaign/${existingKevelCampaignId}`
+      console.log(`Updating existing Kevel campaign ${existingKevelCampaignId}`)
+    } else {
+      console.log('Creating new Kevel campaign')
+    }
+
+    // Push to Kevel API
+    kevelResponse = await fetch(endpoint, {
+      method: method,
+      headers: {
+        'X-Adzerk-ApiKey': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(kevelCampaignData),
+    })
+
+    if (!kevelResponse.ok) {
+      const errorText = await kevelResponse.text()
+      console.error('Kevel API error:', kevelResponse.status, errorText)
+      return new Response(
+        JSON.stringify({ 
+          error: 'Failed to push campaign to Kevel', 
+          details: `${kevelResponse.status}: ${errorText}` 
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const kevelCampaign = await kevelResponse.json()
+    console.log('Kevel campaign response:', kevelCampaign)
+
+    // Update integration configuration with campaign mapping
+    const updatedConfig = {
+      ...campaignConfig,
+      campaigns: {
+        ...campaignConfig.campaigns,
+        [campaign.id]: {
+          kevel_id: kevelCampaign.Id,
+          pushed_at: new Date().toISOString(),
+          status: 'synced'
+        }
+      }
+    }
+
+    await supabase
+      .from('ad_server_integrations')
+      .update({ 
+        configuration: updatedConfig,
+        last_sync: new Date().toISOString()
+      })
+      .eq('id', integrationId)
+
+    console.log(`Campaign ${campaign.name} successfully pushed to Kevel with ID ${kevelCampaign.Id}`)
+
+    return new Response(
+      JSON.stringify({ 
+        success: true,
+        kevel_campaign_id: kevelCampaign.Id,
+        message: `Campaign "${campaign.name}" successfully ${existingKevelCampaignId ? 'updated in' : 'created in'} Kevel`
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+
+  } catch (error) {
+    console.error('Push campaign error:', error)
+    return new Response(
+      JSON.stringify({ error: 'Internal server error', details: error.message }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+})
