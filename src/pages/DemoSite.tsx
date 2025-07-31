@@ -127,7 +127,7 @@ const DemoSite = () => {
 
             {/* Mobile Banner Ad */}
             <div className="block lg:hidden mb-6">
-              <KevelAd id={23} size="320x50" position="Mobile Banner" />
+              <KevelAd id={23} size="320x50" position="Mobile Banner" adTypes={[5]} />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -179,7 +179,7 @@ const DemoSite = () => {
 
             {/* Bottom Banner Ad */}
             <div className="mt-8 flex justify-center">
-              <KevelAd id={4} size="728x90" position="Footer Banner" />
+              <KevelAd id={4} size="728x90" position="Footer Banner" adTypes={[5]} />
             </div>
           </div>
         </div>
