@@ -424,21 +424,9 @@ Deno.serve(async (req) => {
           .single()
 
         if (existingCampaign) {
-          // Campaign already exists - check if it needs updating
-          const { error: updateError } = await supabase
-            .from('campaigns')
-            .update(campaignData)
-            .eq('id', existingCampaign.id)
-
-          if (updateError) {
-            const errorMsg = `Error updating campaign: ${campaignData.name}`
-            operationDetails.campaigns.errors.push(errorMsg)
-            console.error('Error updating campaign:', updateError)
-            errorCount++
-          } else {
-            operationDetails.campaigns.existing++
-            syncedCount++
-          }
+          // Campaign already exists - count as existing
+          operationDetails.campaigns.existing++
+          syncedCount++
         } else {
           // Insert new campaign
           const { error: insertError } = await supabase
