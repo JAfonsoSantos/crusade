@@ -749,11 +749,136 @@ const Integrations = () => {
                               )}
                             </div>
                           )}
+
+                          {integration.configuration.last_sync_details.operations.ad_units && (
+                            <div className="p-3 bg-purple-50 dark:bg-purple-950/20 rounded-md border border-purple-200 dark:border-purple-800">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Info className="h-4 w-4 text-purple-600" />
+                                <span className="font-medium text-sm text-purple-900 dark:text-purple-100">Ad Units</span>
+                              </div>
+                              <div className="grid grid-cols-3 gap-3 text-sm text-purple-800 dark:text-purple-200">
+                                <span>Existing: {integration.configuration.last_sync_details.operations.ad_units.existing || 0}</span>
+                                <span>Created: {integration.configuration.last_sync_details.operations.ad_units.created}</span>
+                                <span>Updated: {integration.configuration.last_sync_details.operations.ad_units.updated}</span>
+                              </div>
+                              {integration.configuration.last_sync_details.operations.ad_units.errors.length > 0 && (
+                                <div className="col-span-2 mt-2 pt-2 border-t border-purple-200 dark:border-purple-800">
+                                  <span className="text-sm font-medium text-red-600 dark:text-red-400">Errors:</span>
+                                  <ul className="text-sm text-red-600 dark:text-red-400 mt-1 space-y-1">
+                                    {integration.configuration.last_sync_details.operations.ad_units.errors.map((error, idx) => (
+                                      <li key={idx} className="text-xs">• {error}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {integration.configuration.last_sync_details.operations.sites && (
+                            <div className="p-3 bg-green-50 dark:bg-green-950/20 rounded-md border border-green-200 dark:border-green-800">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Info className="h-4 w-4 text-green-600" />
+                                <span className="font-medium text-sm text-green-900 dark:text-green-100">Sites</span>
+                              </div>
+                              <div className="grid grid-cols-3 gap-3 text-sm text-green-800 dark:text-green-200">
+                                <span>Existing: {integration.configuration.last_sync_details.operations.sites.existing || 0}</span>
+                                <span>Created: {integration.configuration.last_sync_details.operations.sites.created}</span>
+                                <span>Updated: {integration.configuration.last_sync_details.operations.sites.updated}</span>
+                              </div>
+                              {integration.configuration.last_sync_details.operations.sites.errors.length > 0 && (
+                                <div className="col-span-2 mt-2 pt-2 border-t border-green-200 dark:border-green-800">
+                                  <span className="text-sm font-medium text-red-600 dark:text-red-400">Errors:</span>
+                                  <ul className="text-sm text-red-600 dark:text-red-400 mt-1 space-y-1">
+                                    {integration.configuration.last_sync_details.operations.sites.errors.map((error, idx) => (
+                                      <li key={idx} className="text-xs">• {error}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
                   </div>
                 )}
+
+                {/* Sync History Section */}
+                <Collapsible 
+                  open={expandedSyncHistory[integration.id]} 
+                  onOpenChange={() => toggleSyncHistory(integration.id)}
+                >
+                  <CollapsibleTrigger asChild>
+                    <Button variant="outline" size="sm" className="w-full mt-2">
+                      {expandedSyncHistory[integration.id] ? (
+                        <ChevronDown className="mr-2 h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="mr-2 h-4 w-4" />
+                      )}
+                      Sync History
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-2 mt-2">
+                    <div className="border rounded-md p-3 bg-muted/30">
+                      {syncHistory[integration.id] ? (
+                        syncHistory[integration.id].length > 0 ? (
+                          syncHistory[integration.id].map((sync, idx) => (
+                            <div key={idx} className="py-2 border-b last:border-b-0">
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-sm font-medium">
+                                  {formatDate(sync.sync_timestamp)}
+                                </span>
+                                <div className="flex gap-2">
+                                  <Badge variant={sync.errors_count > 0 ? "destructive" : "secondary"} className="text-xs">
+                                    {sync.synced_count} synced, {sync.errors_count} errors
+                                  </Badge>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 w-6 p-0"
+                                    onClick={() => setExpandedSyncDetails(prev => ({
+                                      ...prev,
+                                      [`${integration.id}-${idx}`]: !prev[`${integration.id}-${idx}`]
+                                    }))}
+                                  >
+                                    {expandedSyncDetails[`${integration.id}-${idx}`] ? (
+                                      <ChevronDown className="h-3 w-3" />
+                                    ) : (
+                                      <ChevronRight className="h-3 w-3" />
+                                    )}
+                                  </Button>
+                                </div>
+                              </div>
+                              {expandedSyncDetails[`${integration.id}-${idx}`] && sync.operations && (
+                                <div className="text-xs text-muted-foreground mt-2 space-y-1">
+                                  {sync.operations.campaigns && (
+                                    <div>
+                                      Campaigns: {sync.operations.campaigns.existing || 0} existing, {sync.operations.campaigns.created} created, {sync.operations.campaigns.updated} updated
+                                    </div>
+                                  )}
+                                  {sync.operations.ad_units && (
+                                    <div>
+                                      Ad Units: {sync.operations.ad_units.existing || 0} existing, {sync.operations.ad_units.created} created, {sync.operations.ad_units.updated} updated
+                                    </div>
+                                  )}
+                                  {sync.operations.sites && (
+                                    <div>
+                                      Sites: {sync.operations.sites.existing || 0} existing, {sync.operations.sites.created} created, {sync.operations.sites.updated} updated
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-sm text-muted-foreground">No sync history available</p>
+                        )
+                      ) : (
+                        <p className="text-sm text-muted-foreground">Loading history...</p>
+                      )}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
               </div>
             </CardContent>
           </Card>

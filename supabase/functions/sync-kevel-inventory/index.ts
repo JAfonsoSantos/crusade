@@ -35,6 +35,8 @@ interface KevelApiResponse {
 }
 
 Deno.serve(async (req) => {
+  const syncStartTime = Date.now();
+  
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
