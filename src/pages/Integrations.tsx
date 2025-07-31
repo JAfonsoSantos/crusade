@@ -471,7 +471,8 @@ const Integrations = () => {
                                 <Info className="h-4 w-4 text-blue-600" />
                                 <span className="font-medium text-sm text-blue-900 dark:text-blue-100">Campaigns</span>
                               </div>
-                              <div className="grid grid-cols-2 gap-3 text-sm text-blue-800 dark:text-blue-200">
+                              <div className="grid grid-cols-3 gap-3 text-sm text-blue-800 dark:text-blue-200">
+                                <span>Existing: {(integration.configuration.last_sync_details.operations.campaigns.created + integration.configuration.last_sync_details.operations.campaigns.updated) || 0}</span>
                                 <span>Created: {integration.configuration.last_sync_details.operations.campaigns.created}</span>
                                 <span>Updated: {integration.configuration.last_sync_details.operations.campaigns.updated}</span>
                               </div>
@@ -494,7 +495,8 @@ const Integrations = () => {
                                 <Info className="h-4 w-4 text-purple-600" />
                                 <span className="font-medium text-sm text-purple-900 dark:text-purple-100">Ad Units</span>
                               </div>
-                              <div className="grid grid-cols-2 gap-3 text-sm text-purple-800 dark:text-purple-200">
+                              <div className="grid grid-cols-3 gap-3 text-sm text-purple-800 dark:text-purple-200">
+                                <span>Existing: {(integration.configuration.last_sync_details.operations.ad_units.created + integration.configuration.last_sync_details.operations.ad_units.updated) || 0}</span>
                                 <span>Created: {integration.configuration.last_sync_details.operations.ad_units.created}</span>
                                 <span>Updated: {integration.configuration.last_sync_details.operations.ad_units.updated}</span>
                               </div>
@@ -517,7 +519,8 @@ const Integrations = () => {
                                 <Info className="h-4 w-4 text-orange-600" />
                                 <span className="font-medium text-sm text-orange-900 dark:text-orange-100">Sites</span>
                               </div>
-                              <div className="grid grid-cols-2 gap-3 text-sm text-orange-800 dark:text-orange-200">
+                              <div className="grid grid-cols-3 gap-3 text-sm text-orange-800 dark:text-orange-200">
+                                <span>Existing: {(integration.configuration.last_sync_details.operations.sites.created + integration.configuration.last_sync_details.operations.sites.updated) || 0}</span>
                                 <span>Created: {integration.configuration.last_sync_details.operations.sites.created}</span>
                                 <span>Updated: {integration.configuration.last_sync_details.operations.sites.updated}</span>
                               </div>
