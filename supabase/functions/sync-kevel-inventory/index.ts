@@ -485,22 +485,33 @@ Deno.serve(async (req) => {
       } else if (localCampaigns && localCampaigns.length > 0) {
         console.log(`Found ${localCampaigns.length} local campaigns imported from Kevel`)
         
-        // Extract Kevel IDs from local campaigns
-        const localKevelIds = localCampaigns.map(campaign => {
-          const match = campaign.description?.match(/Imported from Kevel \(ID: (\d+)\)/)
-          return match ? parseInt(match[1]) : null
-        }).filter(id => id !== null)
-
-        // Get Kevel campaign IDs that still exist
+        // Get ALL Kevel campaign IDs (both active and deleted)
+        const allKevelCampaignIds = (campaignsData.items || []).map(campaign => campaign.Id)
+        console.log('All Kevel campaign IDs from API:', allKevelCampaignIds)
+        
+        // Get only active (non-deleted) Kevel campaign IDs
         const activeKevelIds = (campaignsData.items || [])
           .filter(campaign => !campaign.IsDeleted)
           .map(campaign => campaign.Id)
+        console.log('Active Kevel campaign IDs:', activeKevelIds)
 
-        // Find campaigns that no longer exist in Kevel
+        // Find campaigns that no longer exist in Kevel OR are marked as deleted
         const campaignsToDelete = localCampaigns.filter(campaign => {
           const match = campaign.description?.match(/Imported from Kevel \(ID: (\d+)\)/)
           const kevelId = match ? parseInt(match[1]) : null
-          return kevelId && !activeKevelIds.includes(kevelId)
+          
+          if (!kevelId) {
+            console.log(`No Kevel ID found in description for campaign: ${campaign.name}`)
+            return false
+          }
+          
+          const existsInKevel = allKevelCampaignIds.includes(kevelId)
+          const isActiveInKevel = activeKevelIds.includes(kevelId)
+          
+          console.log(`Campaign ${campaign.name} (Kevel ID: ${kevelId}): exists=${existsInKevel}, active=${isActiveInKevel}`)
+          
+          // Delete if it doesn't exist in Kevel at all OR if it exists but is marked as deleted
+          return !existsInKevel || !isActiveInKevel
         })
 
         console.log(`Found ${campaignsToDelete.length} campaigns to delete`)
