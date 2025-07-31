@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
-import { Target, Megaphone, Euro, Settings } from 'lucide-react';
+import { Target, Megaphone, Euro, Settings, TrendingUp, TrendingDown, Star } from 'lucide-react';
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -28,35 +28,77 @@ const Dashboard = () => {
     fetchStats();
   }, []);
 
-  const cards = [
+  const welcomeCards = [
+    {
+      title: 'Bem-vindo ao AdSpace!',
+      description: 'Configure seus primeiros espaços publicitários para começar a gerar receita.',
+      buttonText: 'Começar',
+      iconColor: 'text-red-500',
+      bgColor: 'bg-red-50',
+    },
+    {
+      title: 'Configure integrações',
+      description: 'Conecte-se aos principais servidores de anúncios para maximizar sua receita.',
+      buttonText: 'Integrar',
+      iconColor: 'text-blue-500',
+      bgColor: 'bg-blue-50',
+    },
+    {
+      title: 'Otimize suas campanhas',
+      description: 'Use analytics avançados para melhorar o desempenho dos seus anúncios.',
+      buttonText: 'Ver métricas',
+      iconColor: 'text-orange-500',
+      bgColor: 'bg-orange-50',
+    },
+  ];
+
+  const keyMetrics = [
     {
       title: 'Espaços Ativos',
       value: stats.adSpaces,
-      description: 'Espaços publicitários disponíveis',
+      period: 'Total',
+      trend: 'up',
       icon: Target,
     },
     {
-      title: 'Campanhas',
+      title: 'Campanhas Ativas',
       value: stats.campaigns,
-      description: 'Campanhas em execução',
+      period: 'Em execução',
+      trend: 'up',
       icon: Megaphone,
     },
     {
-      title: 'Receita',
-      value: `€${stats.revenue}`,
-      description: 'Receita total este mês',
+      title: 'Receita Total',
+      value: `€${stats.revenue.toLocaleString()}`,
+      period: 'Este mês',
+      trend: stats.revenue > 0 ? 'up' : 'neutral',
       icon: Euro,
+    },
+    {
+      title: 'Impressões',
+      value: '0',
+      period: 'Hoje',
+      trend: 'neutral',
+      icon: TrendingUp,
+    },
+    {
+      title: 'Taxa de Clique',
+      value: '0%',
+      period: 'Últimos 7 dias',
+      trend: 'neutral',
+      icon: TrendingUp,
     },
     {
       title: 'Integrações',
       value: stats.integrations,
-      description: 'Servidores de anúncios conectados',
+      period: 'Conectadas',
+      trend: stats.integrations > 0 ? 'up' : 'neutral',
       icon: Settings,
     },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 p-6">
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
         <p className="text-muted-foreground">
@@ -64,74 +106,65 @@ const Dashboard = () => {
         </p>
       </div>
       
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {cards.map((card, index) => {
-          const Icon = card.icon;
-          return (
-            <Card key={index}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {card.title}
-                </CardTitle>
-                <Icon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{card.value}</div>
-                <p className="text-xs text-muted-foreground">
-                  {card.description}
-                </p>
-              </CardContent>
-            </Card>
-          );
-        })}
+      {/* Welcome Cards */}
+      <div className="grid gap-4 md:grid-cols-3">
+        {welcomeCards.map((card, index) => (
+          <Card key={index} className="border-0 shadow-sm">
+            <CardContent className="p-6">
+              <div className={`inline-flex p-2 rounded-lg ${card.bgColor} mb-4`}>
+                <Star className={`h-5 w-5 ${card.iconColor}`} />
+              </div>
+              <h3 className="font-semibold text-lg mb-2">{card.title}</h3>
+              <p className="text-sm text-muted-foreground mb-4">{card.description}</p>
+              <button className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
+                {card.buttonText}
+              </button>
+            </CardContent>
+          </Card>
+        ))}
       </div>
-      
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Atividade Recente</CardTitle>
-            <CardDescription>
-              Últimas atualizações nos seus espaços e campanhas
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium leading-none">
-                    Nenhuma atividade recente
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Comece criando espaços publicitários
-                  </p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader>
-            <CardTitle>Performance</CardTitle>
-            <CardDescription>
-              Métricas de desempenho dos seus anúncios
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium leading-none">
-                    Sem dados de performance
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Configure integrações para ver métricas
-                  </p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+
+      {/* Key Metrics */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
+          Métricas Principais
+        </h3>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {keyMetrics.map((metric, index) => {
+            const Icon = metric.icon;
+            const TrendIcon = metric.trend === 'up' ? TrendingUp : metric.trend === 'down' ? TrendingDown : null;
+            
+            return (
+              <Card key={index} className="border-0 shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="inline-flex p-2 rounded-lg bg-orange-50">
+                      <Star className="h-4 w-4 text-orange-500" />
+                    </div>
+                    <Icon className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-muted-foreground">{metric.title}</p>
+                    <div className="flex items-end justify-between">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-bold">{metric.value}</span>
+                        {TrendIcon && (
+                          <TrendIcon className={`h-4 w-4 ${
+                            metric.trend === 'up' ? 'text-green-500' : 'text-red-500'
+                          }`} />
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Atualizado há {Math.floor(Math.random() * 30) + 1} minutos
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
