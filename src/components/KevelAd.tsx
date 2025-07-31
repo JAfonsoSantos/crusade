@@ -62,7 +62,7 @@ const KevelAd = ({
               adUnitId: adUnitId,
               divName: `kevel-ad-${adUnitId}`,
               count: 1,
-              adTypes: [5] // Banner ad type
+              adTypes: [4] // Leaderboard ad type
             }
           ],
           user: {
