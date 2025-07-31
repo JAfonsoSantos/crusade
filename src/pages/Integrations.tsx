@@ -584,6 +584,10 @@ const Integrations = () => {
                    
                    {/* Action buttons on the right */}
                    <div className="flex items-center gap-1 ml-2">
+                     <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleConfigure(integration)}>
+                       <Settings className="h-4 w-4" />
+                     </Button>
+                     
                      {integration.status === 'active' && (
                        <AlertDialog>
                          <AlertDialogTrigger asChild>
@@ -636,10 +640,6 @@ const Integrations = () => {
                    >
                      <RefreshCw className={`mr-2 h-4 w-4 ${syncing === integration.id ? 'animate-spin' : ''}`} />
                      {syncing === integration.id ? 'Syncing...' : 'Sync Now'}
-                   </Button>
-                   <Button variant="outline" size="sm" onClick={() => handleConfigure(integration)}>
-                     <Settings className="mr-2 h-4 w-4" />
-                     Configure
                    </Button>
                    {integration.configuration?.last_sync_details && (
                      <Button 
