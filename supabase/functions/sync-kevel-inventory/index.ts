@@ -9,17 +9,18 @@ interface KevelSite {
   Id: number
   Title: string
   Url: string
-  AdTypes: Array<{
-    Id: number
-    Name: string
-    Width: number
-    Height: number
-    IsDeleted: boolean
-  }>
+}
+
+interface KevelAdSize {
+  Id: number
+  Name: string
+  Width: number
+  Height: number
+  IsDeleted: boolean
 }
 
 interface KevelApiResponse {
-  items: KevelSite[]
+  items: KevelSite[] | KevelAdSize[]
 }
 
 Deno.serve(async (req) => {
@@ -76,22 +77,30 @@ Deno.serve(async (req) => {
       )
     }
 
-    console.log('Fetching sites from Kevel API...')
+    console.log('Fetching sites and ad sizes from Kevel API...')
 
-    // Fetch sites from Kevel Management API
-    const kevelResponse = await fetch('https://api.kevel.co/v1/site', {
-      method: 'GET',
-      headers: {
-        'X-Adzerk-ApiKey': apiKey,
-        'Content-Type': 'application/json',
-      },
-    })
+    // Fetch both sites and ad sizes from Kevel Management API
+    const [sitesResponse, adSizesResponse] = await Promise.all([
+      fetch('https://api.kevel.co/v1/site', {
+        method: 'GET',
+        headers: {
+          'X-Adzerk-ApiKey': apiKey,
+          'Content-Type': 'application/json',
+        },
+      }),
+      fetch('https://api.kevel.co/v1/creative/template', {
+        method: 'GET',
+        headers: {
+          'X-Adzerk-ApiKey': apiKey,
+          'Content-Type': 'application/json',
+        },
+      })
+    ])
 
-    if (!kevelResponse.ok) {
-      const errorText = await kevelResponse.text()
-      console.error('Kevel API error:', kevelResponse.status, errorText)
+    if (!sitesResponse.ok) {
+      const errorText = await sitesResponse.text()
+      console.error('Kevel Sites API error:', sitesResponse.status, errorText)
       
-      // Update integration status to error
       await supabase
         .from('ad_server_integrations')
         .update({ 
@@ -102,32 +111,54 @@ Deno.serve(async (req) => {
 
       return new Response(
         JSON.stringify({ 
-          error: 'Failed to fetch from Kevel API', 
-          details: `${kevelResponse.status}: ${errorText}` 
+          error: 'Failed to fetch sites from Kevel API', 
+          details: `${sitesResponse.status}: ${errorText}` 
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    const sitesData: KevelApiResponse = await kevelResponse.json()
-    console.log(`Found ${sitesData.items?.length || 0} sites`)
+    if (!adSizesResponse.ok) {
+      const errorText = await adSizesResponse.text()
+      console.error('Kevel Ad Sizes API error:', adSizesResponse.status, errorText)
+      
+      await supabase
+        .from('ad_server_integrations')
+        .update({ 
+          status: 'error',
+          last_sync: new Date().toISOString()
+        })
+        .eq('id', integrationId)
+
+      return new Response(
+        JSON.stringify({ 
+          error: 'Failed to fetch ad sizes from Kevel API', 
+          details: `${adSizesResponse.status}: ${errorText}` 
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const sitesData: { items: KevelSite[] } = await sitesResponse.json()
+    const adSizesData: { items: KevelAdSize[] } = await adSizesResponse.json()
+    
+    console.log(`Found ${sitesData.items?.length || 0} sites and ${adSizesData.items?.length || 0} ad sizes`)
 
     let syncedCount = 0
     let errorCount = 0
 
-    // Process each site and its ad types
+    // Create ad spaces by combining sites with ad sizes
     for (const site of sitesData.items || []) {
       console.log(`Processing site: ${site.Title} (ID: ${site.Id})`)
       
-      // Process each ad type as a separate ad space
-      for (const adType of site.AdTypes || []) {
-        if (adType.IsDeleted) continue
+      for (const adSize of adSizesData.items || []) {
+        if (adSize.IsDeleted) continue
 
         try {
           const adSpaceData = {
-            name: `${site.Title} - ${adType.Name}`,
+            name: `${site.Title} - ${adSize.Name}`,
             type: 'display',
-            size: `${adType.Width}x${adType.Height}`,
+            size: `${adSize.Width}x${adSize.Height}`,
             location: site.Url || site.Title,
             base_price: 2.50, // Default CPM
             price_model: 'cpm',
@@ -171,7 +202,7 @@ Deno.serve(async (req) => {
             }
           }
         } catch (error) {
-          console.error('Error processing ad type:', error)
+          console.error('Error processing ad size:', error)
           errorCount++
         }
       }
