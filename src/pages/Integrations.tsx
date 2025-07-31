@@ -122,6 +122,8 @@ const Integrations = () => {
         return 'Prebid.js';
       case 'openx':
         return 'OpenX';
+      case 'kevel':
+        return 'Kevel';
       default:
         return provider;
     }
@@ -188,6 +190,7 @@ const Integrations = () => {
                     <SelectItem value="amazon_publisher_services">Amazon Publisher Services</SelectItem>
                     <SelectItem value="prebid">Prebid.js</SelectItem>
                     <SelectItem value="openx">OpenX</SelectItem>
+                    <SelectItem value="kevel">Kevel</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
