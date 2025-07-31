@@ -47,31 +47,59 @@ Deno.serve(async (req) => {
     )
 
     const { integrationId } = await req.json()
-
-    if (!integrationId) {
-      return new Response(
-        JSON.stringify({ error: 'Integration ID is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    console.log(`Starting sync for integration: ${integrationId}`)
-    const syncStartTime = Date.now()
-
-    // Get the integration details
+    
+    // Check if integration exists and is active
     const { data: integration, error: integrationError } = await supabase
       .from('ad_server_integrations')
       .select('*')
       .eq('id', integrationId)
       .single()
-
+    
     if (integrationError || !integration) {
       console.error('Integration not found:', integrationError)
       return new Response(
         JSON.stringify({ error: 'Integration not found' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { 
+          status: 404, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
       )
     }
+    
+    // Check if integration is paused
+    if (integration.status === 'paused') {
+      console.log(`Integration ${integrationId} is paused, skipping sync`)
+      return new Response(
+        JSON.stringify({ 
+          message: 'Integration is paused, sync skipped',
+          synced: 0,
+          errors: 0,
+          operations: {}
+        }),
+        { 
+          status: 200, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+    
+    // Check if integration is active
+    if (integration.status !== 'active') {
+      console.log(`Integration ${integrationId} is not active (status: ${integration.status}), skipping sync`)
+      return new Response(
+        JSON.stringify({ 
+          error: `Integration is ${integration.status}, cannot sync`,
+          synced: 0,
+          errors: 1,
+          operations: {}
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
 
     if (integration.provider !== 'kevel') {
       return new Response(

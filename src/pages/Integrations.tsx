@@ -332,6 +332,15 @@ const Integrations = () => {
   };
 
   const handleSync = async (integration: Integration) => {
+    if (integration.status === 'paused') {
+      toast({
+        title: "Cannot Sync",
+        description: "This integration is paused. Resume it first to sync.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     if (!['kevel', 'koddi', 'topsort'].includes(integration.provider)) {
       toast({
         title: "Not Supported",
@@ -636,10 +645,11 @@ const Integrations = () => {
                      variant="outline" 
                      size="sm" 
                      onClick={() => handleSync(integration)}
-                     disabled={syncing === integration.id}
+                     disabled={syncing === integration.id || integration.status === 'paused'}
                    >
                      <RefreshCw className={`mr-2 h-4 w-4 ${syncing === integration.id ? 'animate-spin' : ''}`} />
-                     {syncing === integration.id ? 'Syncing...' : 'Sync Now'}
+                     {syncing === integration.id ? 'Syncing...' : 
+                      integration.status === 'paused' ? 'Paused' : 'Sync Now'}
                    </Button>
                    {integration.configuration?.last_sync_details && (
                      <Button 
