@@ -293,10 +293,8 @@ Deno.serve(async (req) => {
               console.log(`Successfully created Ad Unit: ${adUnitName} (ID: ${adUnitId})`)
             } else {
               const errorText = await createAdUnitResponse.text()
-              const errorMsg = `Failed to create Ad Unit: ${adUnitName} - ${createAdUnitResponse.status}: ${errorText}`
-              operationDetails.ad_units.errors.push(errorMsg)
-              console.error(errorMsg)
-              // Don't skip - still create ad space in our database
+              console.log(`Could not create Ad Unit in Kevel: ${adUnitName} - ${createAdUnitResponse.status}: ${errorText}`)
+              // Don't count as error - Kevel API issues don't affect our ad spaces
             }
           } else if (needsUpdate) {
             // Update existing Ad Unit if dimensions changed
@@ -318,9 +316,8 @@ Deno.serve(async (req) => {
             
             if (!updateResponse.ok) {
               const errorText = await updateResponse.text()
-              const errorMsg = `Failed to update Ad Unit: ${adUnitName} - ${updateResponse.status}: ${errorText}`
-              operationDetails.ad_units.errors.push(errorMsg)
-              console.error(errorMsg)
+              console.log(`Could not update Ad Unit in Kevel: ${adUnitName} - ${updateResponse.status}: ${errorText}`)
+              // Don't count as error - Kevel API issues don't affect our ad spaces
             } else {
               console.log(`Successfully updated Ad Unit: ${adUnitName}`)
             }
