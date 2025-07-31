@@ -209,21 +209,13 @@ const Integrations = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-foreground">Integrations</h1>
-        <div className="flex gap-3">
-          <Button
-            onClick={() => cleanupKevelData()}
-            variant="outline"
-            className="text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
-          >
-            Clean Kevel Data
-          </Button>
-          <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                New Integration
-              </Button>
-            </DialogTrigger>
+        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              New Integration
+            </Button>
+          </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
                 <DialogTitle>New Integration</DialogTitle>
@@ -274,8 +266,7 @@ const Integrations = () => {
                 </Button>
               </form>
             </DialogContent>
-          </Dialog>
-        </div>
+        </Dialog>
       </div>
 
       {/* Delete Integration Dialog */}
