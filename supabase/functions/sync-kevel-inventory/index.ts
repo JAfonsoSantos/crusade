@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
           'Content-Type': 'application/json',
         },
       }),
-      fetch('https://api.kevel.co/v1/creative/template', {
+      fetch('https://api.kevel.co/v1/creative/creativetype', {
         method: 'GET',
         headers: {
           'X-Adzerk-ApiKey': apiKey,
