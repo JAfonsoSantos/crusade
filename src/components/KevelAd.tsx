@@ -68,8 +68,7 @@ const KevelAd = ({
           user: {
             key: `demo-user-${Date.now()}`
           },
-          keywords: ["demo", "retail", "ecommerce"],
-          url: window.location.href
+          keywords: ["demo", "retail", "ecommerce"]
         };
 
         console.log('Kevel request:', requestBody);
