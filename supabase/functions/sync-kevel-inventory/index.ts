@@ -185,13 +185,16 @@ Deno.serve(async (req) => {
           
           console.log(`Checking for existing Ad Unit: ${adUnitName}`)
           
-          // Check if Ad Unit already exists in Kevel
-          const adUnitsResponse = await fetch(`https://api.kevel.co/v1/site/${site.Id}/zone`, {
-            method: 'GET',
+          // Check if Ad Unit already exists in Kevel using zone/list endpoint
+          const adUnitsResponse = await fetch(`https://api.kevel.co/v1/zone/list`, {
+            method: 'POST',
             headers: {
               'X-Adzerk-ApiKey': apiKey,
               'Content-Type': 'application/json',
             },
+            body: JSON.stringify({
+              SiteId: site.Id
+            })
           })
           
           let adUnitId = null
@@ -218,6 +221,9 @@ Deno.serve(async (req) => {
             }
           } else {
             console.log(`Could not fetch existing ad units for site ${site.Id}: ${adUnitsResponse.status}`)
+            // Skip creating ad unit if we can't verify existing ones to avoid duplicates
+            console.log(`Skipping ad unit creation for ${adUnitName} due to API access issues`)
+            continue
           }
           
           // Only create Ad Unit in Kevel if it doesn't exist
