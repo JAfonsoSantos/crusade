@@ -409,9 +409,9 @@ const Integrations = () => {
         </Dialog>
       </div>
 
-      <div className={`grid gap-4 ${expandedDetails.size > 0 ? 'grid-cols-1' : 'md:grid-cols-2 lg:grid-cols-3'}`}>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {integrations.map((integration) => (
-          <Card key={integration.id} className="transition-all duration-300 min-h-fit">
+          <Card key={integration.id} className={`${expandedDetails.has(integration.id) ? 'col-span-full' : ''} transition-all duration-300 min-h-[400px]`}>
             <CardHeader>
               <div className="flex justify-between items-start">
                 <div>
