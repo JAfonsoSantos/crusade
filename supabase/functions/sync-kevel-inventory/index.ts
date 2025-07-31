@@ -155,6 +155,13 @@ Deno.serve(async (req) => {
     
     let syncedCount = 0
     let errorCount = 0
+    
+    // Track detailed operations by category
+    const operationDetails = {
+      campaigns: { created: 0, updated: 0, errors: [] as string[] },
+      ad_units: { created: 0, updated: 0, errors: [] as string[] },
+      sites: { created: 0, updated: 0, errors: [] as string[] }
+    }
 
     // For now, let's create ad spaces with common sizes instead of fetching from API
     const commonAdSizes = [
@@ -217,9 +224,12 @@ Deno.serve(async (req) => {
             if (createAdUnitResponse.ok) {
               const newAdUnit = await createAdUnitResponse.json()
               adUnitId = newAdUnit.Id
+              operationDetails.ad_units.created++
               console.log(`Created Ad Unit in Kevel: ${adUnitName} (ID: ${adUnitId})`)
             } else {
-              console.error(`Failed to create Ad Unit in Kevel: ${adUnitName}`)
+              const errorMsg = `Failed to create Ad Unit: ${adUnitName}`
+              operationDetails.ad_units.errors.push(errorMsg)
+              console.error(errorMsg)
             }
           }
 
@@ -250,9 +260,12 @@ Deno.serve(async (req) => {
               .eq('id', existingSpace.id)
 
             if (updateError) {
+              const errorMsg = `Error updating ad space: ${adSpaceData.name}`
+              operationDetails.sites.errors.push(errorMsg)
               console.error('Error updating ad space:', updateError)
               errorCount++
             } else {
+              operationDetails.sites.updated++
               syncedCount++
             }
           } else {
@@ -261,13 +274,18 @@ Deno.serve(async (req) => {
               .insert(adSpaceData)
 
             if (insertError) {
+              const errorMsg = `Error inserting ad space: ${adSpaceData.name}`
+              operationDetails.sites.errors.push(errorMsg)
               console.error('Error inserting ad space:', insertError)
               errorCount++
             } else {
+              operationDetails.sites.created++
               syncedCount++
             }
           }
         } catch (error) {
+          const errorMsg = `Error processing ad space for ${site.Title} - ${adSize.Name}: ${error.message}`
+          operationDetails.sites.errors.push(errorMsg)
           console.error('Error processing ad size:', error)
           errorCount++
         }
@@ -310,9 +328,12 @@ Deno.serve(async (req) => {
             .eq('id', existingCampaign.id)
 
           if (updateError) {
+            const errorMsg = `Error updating campaign: ${campaignData.name}`
+            operationDetails.campaigns.errors.push(errorMsg)
             console.error('Error updating campaign:', updateError)
             errorCount++
           } else {
+            operationDetails.campaigns.updated++
             syncedCount++
           }
         } else {
@@ -322,13 +343,18 @@ Deno.serve(async (req) => {
             .insert(campaignData)
 
           if (insertError) {
+            const errorMsg = `Error inserting campaign: ${campaignData.name}`
+            operationDetails.campaigns.errors.push(errorMsg)
             console.error('Error inserting campaign:', insertError)
             errorCount++
           } else {
+            operationDetails.campaigns.created++
             syncedCount++
           }
         }
       } catch (error) {
+        const errorMsg = `Error processing campaign ${kevelCampaign.Name}: ${error.message}`
+        operationDetails.campaigns.errors.push(errorMsg)
         console.error('Error processing campaign:', error)
         errorCount++
       }
@@ -350,7 +376,8 @@ Deno.serve(async (req) => {
         success: true, 
         synced: syncedCount, 
         errors: errorCount,
-        message: `Successfully synced ${syncedCount} items (ad spaces + campaigns) from Kevel`
+        operations: operationDetails,
+        message: `Successfully synced ${syncedCount} items from Kevel${errorCount > 0 ? ` with ${errorCount} errors` : ''}`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )

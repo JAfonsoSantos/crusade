@@ -6,9 +6,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Settings, Trash2, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { Plus, Settings, Trash2, Wifi, WifiOff, RefreshCw, ChevronDown, ChevronRight, Eye, AlertCircle, CheckCircle, Info } from 'lucide-react';
 
 interface Integration {
   id: string;
@@ -17,6 +18,18 @@ interface Integration {
   status: string;
   last_sync: string;
   created_at: string;
+  configuration?: any;
+}
+
+interface SyncDetails {
+  timestamp: string;
+  synced: number;
+  errors: number;
+  operations: {
+    campaigns?: { created: number; updated: number; errors: string[] };
+    ad_units?: { created: number; updated: number; errors: string[] };
+    sites?: { created: number; updated: number; errors: string[] };
+  };
 }
 
 const Integrations = () => {
@@ -26,6 +39,7 @@ const Integrations = () => {
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [selectedIntegration, setSelectedIntegration] = useState<Integration | null>(null);
   const [syncing, setSyncing] = useState<string | null>(null);
+  const [expandedDetails, setExpandedDetails] = useState<Set<string>>(new Set());
   const [formData, setFormData] = useState({
     name: '',
     provider: 'google_ad_manager',
@@ -50,7 +64,7 @@ const Integrations = () => {
         variant: "destructive",
       });
     } else {
-      setIntegrations(data || []);
+      setIntegrations((data || []) as Integration[]);
     }
     setLoading(false);
   };
@@ -196,12 +210,36 @@ const Integrations = () => {
 
       if (error) throw error;
 
+      // Parse the detailed response
+      const syncDetails: SyncDetails = {
+        timestamp: new Date().toISOString(),
+        synced: data.synced || 0,
+        errors: data.errors || 0,
+        operations: {
+          campaigns: data.operations?.campaigns || { created: 0, updated: 0, errors: [] },
+          ad_units: data.operations?.ad_units || { created: 0, updated: 0, errors: [] },
+          sites: data.operations?.sites || { created: 0, updated: 0, errors: [] }
+        }
+      };
+
+      // Update integration with sync details
+      await supabase
+        .from('ad_server_integrations')
+        .update({ 
+          configuration: { 
+            ...integration.configuration,
+            last_sync_details: syncDetails 
+          } as any
+        })
+        .eq('id', integration.id);
+
       toast({
         title: "Sync Completed",
-        description: data.message || `Synced ${data.synced} ad spaces successfully!`,
+        description: `Successfully synced ${data.synced} items. ${data.errors > 0 ? `${data.errors} errors occurred.` : 'No errors.'}`,
+        variant: data.errors > 0 ? "destructive" : "default",
       });
       
-      // Refresh integrations to show updated last_sync time
+      // Refresh integrations to show updated details
       fetchIntegrations();
       
     } catch (error: any) {
@@ -214,6 +252,16 @@ const Integrations = () => {
     } finally {
       setSyncing(null);
     }
+  };
+
+  const toggleDetails = (integrationId: string) => {
+    const newExpanded = new Set(expandedDetails);
+    if (newExpanded.has(integrationId)) {
+      newExpanded.delete(integrationId);
+    } else {
+      newExpanded.add(integrationId);
+    }
+    setExpandedDetails(newExpanded);
   };
 
   if (loading) {
@@ -376,7 +424,116 @@ const Integrations = () => {
                     <Trash2 className="mr-2 h-4 w-4" />
                     Remove
                   </Button>
+                  {integration.configuration?.last_sync_details && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => toggleDetails(integration.id)}
+                    >
+                      <Eye className="mr-2 h-4 w-4" />
+                      See Details
+                    </Button>
+                  )}
                 </div>
+
+                {/* Sync Details Section */}
+                {expandedDetails.has(integration.id) && integration.configuration?.last_sync_details && (
+                  <Collapsible open={true} className="mt-4">
+                    <CollapsibleContent>
+                      <div className="space-y-3 p-3 bg-muted/50 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium text-sm">Last Sync Details</h4>
+                          <span className="text-xs text-muted-foreground">
+                            {formatDate(integration.configuration.last_sync_details.timestamp)}
+                          </span>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4 text-xs">
+                          <div className="flex items-center gap-1">
+                            <CheckCircle className="h-3 w-3 text-green-600" />
+                            <span>Synced: {integration.configuration.last_sync_details.synced}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3 text-red-600" />
+                            <span>Errors: {integration.configuration.last_sync_details.errors}</span>
+                          </div>
+                        </div>
+
+                        {/* Operations Details */}
+                        <div className="space-y-2">
+                          {integration.configuration.last_sync_details.operations.campaigns && (
+                            <div className="p-2 bg-background rounded border">
+                              <div className="flex items-center gap-1 mb-1">
+                                <Info className="h-3 w-3 text-blue-600" />
+                                <span className="font-medium text-xs">Campaigns</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                                <span>Created: {integration.configuration.last_sync_details.operations.campaigns.created}</span>
+                                <span>Updated: {integration.configuration.last_sync_details.operations.campaigns.updated}</span>
+                              </div>
+                              {integration.configuration.last_sync_details.operations.campaigns.errors.length > 0 && (
+                                <div className="mt-1">
+                                  <span className="text-xs text-red-600">Errors:</span>
+                                  <ul className="text-xs text-red-600 ml-2">
+                                    {integration.configuration.last_sync_details.operations.campaigns.errors.map((error, idx) => (
+                                      <li key={idx}>• {error}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {integration.configuration.last_sync_details.operations.ad_units && (
+                            <div className="p-2 bg-background rounded border">
+                              <div className="flex items-center gap-1 mb-1">
+                                <Info className="h-3 w-3 text-purple-600" />
+                                <span className="font-medium text-xs">Ad Units</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                                <span>Created: {integration.configuration.last_sync_details.operations.ad_units.created}</span>
+                                <span>Updated: {integration.configuration.last_sync_details.operations.ad_units.updated}</span>
+                              </div>
+                              {integration.configuration.last_sync_details.operations.ad_units.errors.length > 0 && (
+                                <div className="mt-1">
+                                  <span className="text-xs text-red-600">Errors:</span>
+                                  <ul className="text-xs text-red-600 ml-2">
+                                    {integration.configuration.last_sync_details.operations.ad_units.errors.map((error, idx) => (
+                                      <li key={idx}>• {error}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {integration.configuration.last_sync_details.operations.sites && (
+                            <div className="p-2 bg-background rounded border">
+                              <div className="flex items-center gap-1 mb-1">
+                                <Info className="h-3 w-3 text-orange-600" />
+                                <span className="font-medium text-xs">Sites</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                                <span>Created: {integration.configuration.last_sync_details.operations.sites.created}</span>
+                                <span>Updated: {integration.configuration.last_sync_details.operations.sites.updated}</span>
+                              </div>
+                              {integration.configuration.last_sync_details.operations.sites.errors.length > 0 && (
+                                <div className="mt-1">
+                                  <span className="text-xs text-red-600">Errors:</span>
+                                  <ul className="text-xs text-red-600 ml-2">
+                                    {integration.configuration.last_sync_details.operations.sites.errors.map((error, idx) => (
+                                      <li key={idx}>• {error}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -389,12 +546,14 @@ const Integrations = () => {
             <Settings className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No integrations</h3>
             <p className="text-muted-foreground text-center mb-4">
-              Set up integrations with ad servers to automatically sync data.
+              Set up integrations with ad servers to automatically sync data and manage campaigns.
             </p>
-            <Button onClick={() => setDialogOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              First Integration
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={() => setDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add First Integration
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
