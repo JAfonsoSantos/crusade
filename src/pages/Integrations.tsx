@@ -11,6 +11,12 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Plus, Settings, Trash2, Wifi, WifiOff, RefreshCw, ChevronDown, ChevronRight, Eye, AlertCircle, CheckCircle, Info } from 'lucide-react';
 import kevelLogo from '@/assets/kevel-logo.png';
+import koddiLogo from '@/assets/koddi-logo.png';
+import topsortLogo from '@/assets/topsort-logo.png';
+import googleLogo from '@/assets/google-logo.png';
+import criteoLogo from '@/assets/criteo-logo.png';
+import citrusadLogo from '@/assets/citrusad-logo.png';
+import molokoLogo from '@/assets/moloko-logo.png';
 
 interface Integration {
   id: string;
@@ -46,7 +52,7 @@ const Integrations = () => {
   const [expandedSyncDetails, setExpandedSyncDetails] = useState<{[key: string]: boolean}>({});
   const [formData, setFormData] = useState({
     name: '',
-    provider: 'google_ad_manager',
+    provider: 'kevel',
     api_key: '',
   });
   const { toast } = useToast();
@@ -152,7 +158,7 @@ const Integrations = () => {
       setDialogOpen(false);
       setFormData({
         name: '',
-        provider: 'google_ad_manager',
+        provider: 'kevel',
         api_key: '',
       });
       fetchIntegrations();
@@ -174,22 +180,49 @@ const Integrations = () => {
 
   const getProviderName = (provider: string) => {
     switch (provider) {
-      case 'google_ad_manager':
-        return 'Google Ad Manager';
-      case 'amazon_publisher_services':
-        return 'Amazon Publisher Services';
-      case 'prebid':
-        return 'Prebid.js';
-      case 'openx':
-        return 'OpenX';
       case 'kevel':
         return 'Kevel';
       case 'koddi':
         return 'Koddi';
       case 'topsort':
         return 'Topsort';
+      case 'google_ad_manager':
+        return 'Google Ad Manager';
+      case 'criteo':
+        return 'Criteo';
+      case 'citrusad':
+        return 'CitrusAd';
+      case 'moloko':
+        return 'Moloko';
+      case 'amazon_publisher_services':
+        return 'Amazon Publisher Services';
+      case 'prebid':
+        return 'Prebid.js';
+      case 'openx':
+        return 'OpenX';
       default:
         return provider;
+    }
+  };
+
+  const getProviderLogo = (provider: string) => {
+    switch (provider) {
+      case 'kevel':
+        return kevelLogo;
+      case 'koddi':
+        return koddiLogo;
+      case 'topsort':
+        return topsortLogo;
+      case 'google_ad_manager':
+        return googleLogo;
+      case 'criteo':
+        return criteoLogo;
+      case 'citrusad':
+        return citrusadLogo;
+      case 'moloko':
+        return molokoLogo;
+      default:
+        return null;
     }
   };
 
@@ -342,13 +375,52 @@ const Integrations = () => {
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="google_ad_manager">Google Ad Manager</SelectItem>
+                  <SelectContent className="bg-background border shadow-lg z-50">
+                    <SelectItem value="kevel" className="flex items-center gap-2">
+                      <div className="flex items-center gap-2">
+                        <img src={kevelLogo} alt="Kevel" className="w-4 h-4" />
+                        Kevel
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="koddi" className="flex items-center gap-2">
+                      <div className="flex items-center gap-2">
+                        <img src={koddiLogo} alt="Koddi" className="w-4 h-4" />
+                        Koddi
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="topsort" className="flex items-center gap-2">
+                      <div className="flex items-center gap-2">
+                        <img src={topsortLogo} alt="Topsort" className="w-4 h-4" />
+                        Topsort
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="google_ad_manager" className="flex items-center gap-2">
+                      <div className="flex items-center gap-2">
+                        <img src={googleLogo} alt="Google" className="w-4 h-4" />
+                        Google Ad Manager
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="criteo" className="flex items-center gap-2">
+                      <div className="flex items-center gap-2">
+                        <img src={criteoLogo} alt="Criteo" className="w-4 h-4" />
+                        Criteo
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="citrusad" className="flex items-center gap-2">
+                      <div className="flex items-center gap-2">
+                        <img src={citrusadLogo} alt="CitrusAd" className="w-4 h-4" />
+                        CitrusAd
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="moloko" className="flex items-center gap-2">
+                      <div className="flex items-center gap-2">
+                        <img src={molokoLogo} alt="Moloko" className="w-4 h-4" />
+                        Moloko
+                      </div>
+                    </SelectItem>
                     <SelectItem value="amazon_publisher_services">Amazon Publisher Services</SelectItem>
                     <SelectItem value="prebid">Prebid.js</SelectItem>
                     <SelectItem value="openx">OpenX</SelectItem>
-                    <SelectItem value="kevel">Kevel</SelectItem>
-                    <SelectItem value="topsort">Topsort</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -418,8 +490,8 @@ const Integrations = () => {
                  <div>
                    <CardTitle className="text-lg">{integration.name}</CardTitle>
                    <CardDescription className="flex items-center gap-2">
-                     {integration.provider === 'kevel' && (
-                       <img src={kevelLogo} alt="Kevel" className="w-4 h-4" />
+                     {getProviderLogo(integration.provider) && (
+                       <img src={getProviderLogo(integration.provider)} alt={getProviderName(integration.provider)} className="w-4 h-4" />
                      )}
                      {getProviderName(integration.provider)}
                    </CardDescription>
