@@ -79,7 +79,8 @@ const Campaigns = () => {
   const pushCampaignToKevel = async (campaignId: string, integrationId: string) => {
     setPushingCampaigns(prev => new Set([...prev, campaignId]));
     try {
-      const { data, error } = await supabase.functions.invoke('push-campaign-to-kevel', {
+      // Use universal campaign push for both Kevel and Koddi
+      const { data, error } = await supabase.functions.invoke('universal-campaign-push', {
         body: {
           campaignId,
           integrationId,
@@ -92,16 +93,16 @@ const Campaigns = () => {
 
       toast({
         title: "Success",
-        description: data.message || "Campaign pushed to Kevel successfully!",
+        description: data.message || `Campaign pushed to ${data.platform} successfully!`,
       });
       
-      // Refresh integrations to get updated config
+      // Refresh integrations to get updated platform_config
       await fetchIntegrations();
     } catch (error) {
       console.error('Push campaign error:', error);
       toast({
         title: "Error",
-        description: "Failed to push campaign to Kevel.",
+        description: "Failed to push campaign to ad platform.",
         variant: "destructive",
       });
     } finally {
@@ -379,35 +380,35 @@ const Campaigns = () => {
                 </div>
               </div>
 
-              {/* Kevel Integration Status */}
+              {/* Universal Platform Integration Status */}
               {integrations.map(integration => {
-                const campaignConfig = integration.configuration as any || {}
-                const kevelData = campaignConfig.campaigns?.[campaign.id]
+                const platformConfig = integration.platform_config as any || {}
+                const campaignData = platformConfig.campaigns?.[campaign.id]
                 
-                if (!kevelData) return null
+                if (!campaignData) return null
                 
                 return (
                   <div key={integration.id} className="bg-muted/50 rounded-lg p-3 mb-4">
                     <div className="flex items-center gap-2 mb-2">
                       <Badge variant="outline" className="text-xs">
-                        Kevel Integration
+                        {integration.provider.charAt(0).toUpperCase() + integration.provider.slice(1)} Integration
                       </Badge>
-                      <Badge variant={kevelData.status === 'synced' ? 'default' : 'secondary'}>
-                        {kevelData.status}
+                      <Badge variant={campaignData.status === 'synced' ? 'default' : 'secondary'}>
+                        {campaignData.status}
                       </Badge>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
                       <div>
-                        <span className="text-muted-foreground">Campaign ID:</span>
-                        <p className="font-mono">{kevelData.kevel_id}</p>
+                        <span className="text-muted-foreground">Platform ID:</span>
+                        <p className="font-mono">{campaignData.platform_id}</p>
                       </div>
                       <div>
-                        <span className="text-muted-foreground">Flights Created:</span>
-                        <p>{kevelData.flights_created || 0}</p>
+                        <span className="text-muted-foreground">Hierarchy:</span>
+                        <p className="text-xs">{campaignData.hierarchy}</p>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Last Sync:</span>
-                        <p>{kevelData.pushed_at ? formatDate(kevelData.pushed_at) : 'Never'}</p>
+                        <p>{campaignData.created_at ? formatDate(campaignData.created_at) : 'Never'}</p>
                       </div>
                     </div>
                   </div>
@@ -420,11 +421,11 @@ const Campaigns = () => {
                   Edit
                 </Button>
                 {integrations
-                  .filter(i => i.provider === 'kevel' && i.status === 'active')
+                  .filter(i => ['kevel', 'koddi'].includes(i.provider) && i.status === 'active')
                   .map(integration => {
-                    const campaignConfig = integration.configuration as any || {}
-                    const kevelData = campaignConfig.campaigns?.[campaign.id]
-                    const isInKevel = !!kevelData?.kevel_id
+                    const platformConfig = integration.platform_config as any || {}
+                    const campaignData = platformConfig.campaigns?.[campaign.id]
+                    const isInPlatform = !!campaignData?.platform_id
                     
                     return (
                       <div key={integration.id} className="flex gap-2">
@@ -442,12 +443,12 @@ const Campaigns = () => {
                           ) : (
                             <>
                               <ExternalLink className="h-4 w-4 mr-2" />
-                              {isInKevel ? 'Update in Kevel' : 'Push to Kevel'}
+                              {isInPlatform ? `Update in ${integration.provider}` : `Push to ${integration.provider}`}
                             </>
                           )}
                         </Button>
                         
-                        {isInKevel && (
+                        {isInPlatform && (
                           <Button
                             variant="secondary"
                             size="sm"
@@ -457,12 +458,12 @@ const Campaigns = () => {
                             {campaign.status === 'active' ? (
                               <>
                                 <PauseCircle className="h-4 w-4 mr-2" />
-                                Pause in Kevel
+                                Pause in {integration.provider}
                               </>
                             ) : (
                               <>
                                 <PlayCircle className="h-4 w-4 mr-2" />
-                                Activate in Kevel
+                                Activate in {integration.provider}
                               </>
                             )}
                           </Button>

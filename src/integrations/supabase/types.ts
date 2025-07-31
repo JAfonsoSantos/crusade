@@ -23,6 +23,7 @@ export type Database = {
           id: string
           last_sync: string | null
           name: string
+          platform_config: Json | null
           provider: string
           status: string | null
           updated_at: string
@@ -35,6 +36,7 @@ export type Database = {
           id?: string
           last_sync?: string | null
           name: string
+          platform_config?: Json | null
           provider: string
           status?: string | null
           updated_at?: string
@@ -47,6 +49,7 @@ export type Database = {
           id?: string
           last_sync?: string | null
           name?: string
+          platform_config?: Json | null
           provider?: string
           status?: string | null
           updated_at?: string
@@ -244,6 +247,56 @@ export type Database = {
           website?: string | null
         }
         Relationships: []
+      }
+      platform_mappings: {
+        Row: {
+          created_at: string
+          id: string
+          integration_id: string
+          local_entity_id: string
+          local_entity_type: string
+          metadata: Json | null
+          platform_entity_id: string
+          platform_entity_type: string
+          platform_parent_id: string | null
+          platform_parent_type: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          integration_id: string
+          local_entity_id: string
+          local_entity_type: string
+          metadata?: Json | null
+          platform_entity_id: string
+          platform_entity_type: string
+          platform_parent_id?: string | null
+          platform_parent_type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          integration_id?: string
+          local_entity_id?: string
+          local_entity_type?: string
+          metadata?: Json | null
+          platform_entity_id?: string
+          platform_entity_type?: string
+          platform_parent_id?: string | null
+          platform_parent_type?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_mappings_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "ad_server_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {

@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.auto-sync-kevel]
 verify_jwt = false
+
+[functions.universal-campaign-push]
+verify_jwt = false
