@@ -89,26 +89,24 @@ Deno.serve(async (req) => {
       console.log(`Deleted ${deletedCount.sync_history} sync history records`)
     }
 
-    // Step 3: Find and delete campaigns that were created specifically for this integration
-    // We'll check platform_config to see if campaigns are linked to this integration
-    console.log('Finding campaigns linked to this integration...')
+    // Step 3: Find and delete campaigns that were imported from this integration
+    console.log('Finding campaigns imported from this integration...')
     const { data: linkedCampaigns, error: campaignsError } = await supabase
       .from('campaigns')
-      .select('id, name')
+      .select('id, name, description')
       .eq('company_id', integration.company_id)
-      .not('platform_config', 'is', null)
     
     if (!campaignsError && linkedCampaigns) {
+      // Find campaigns that were imported from this specific integration provider
       const campaignsToDelete = linkedCampaigns.filter(campaign => {
-        // Check if campaign has platform_config that references this integration
-        const platformConfig = campaign.platform_config
-        return platformConfig && 
-               typeof platformConfig === 'object' && 
-               platformConfig.integration_id === integrationId
+        // Check if campaign description indicates it was imported from this provider
+        const description = campaign.description || ''
+        const providerName = integration.provider.toLowerCase()
+        return description.toLowerCase().includes(`imported from ${providerName}`)
       })
 
       if (campaignsToDelete.length > 0) {
-        console.log(`Deleting ${campaignsToDelete.length} campaigns linked to integration...`)
+        console.log(`Deleting ${campaignsToDelete.length} campaigns imported from ${integration.provider}...`)
         
         // Delete campaign_ad_spaces first (foreign key constraint)
         for (const campaign of campaignsToDelete) {
@@ -138,20 +136,58 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Step 4: Find and delete ad spaces that were created specifically for this integration
-    console.log('Finding ad spaces linked to this integration...')
+    // Step 4: Find and delete ad spaces that were imported from this integration
+    console.log('Finding ad spaces imported from this integration...')
     const { data: linkedAdSpaces, error: adSpacesError } = await supabase
       .from('ad_spaces')
-      .select('id, name')
+      .select('id, name, location')
       .eq('company_id', integration.company_id)
     
     if (!adSpacesError && linkedAdSpaces) {
-      // For ad spaces, we need to be more careful - only delete those that are ONLY used by this integration
-      // We'll check if they have platform_config or metadata that ties them exclusively to this integration
-      
-      // For now, we'll be conservative and not auto-delete ad spaces unless they have specific metadata
-      // This prevents accidentally deleting ad spaces that might be used by multiple integrations
-      console.log('Ad spaces deletion skipped for safety - manual review recommended')
+      // Find ad spaces that were imported from this specific provider
+      const adSpacesToDelete = linkedAdSpaces.filter(adSpace => {
+        // Check if ad space was created for this provider integration
+        // Kevel ad spaces typically have "kevel.co" in the location
+        const location = adSpace.location || ''
+        const providerName = integration.provider.toLowerCase()
+        
+        if (providerName === 'kevel') {
+          return location.toLowerCase().includes('kevel.co')
+        }
+        
+        // For other providers, we can add similar logic
+        return false
+      })
+
+      if (adSpacesToDelete.length > 0) {
+        console.log(`Deleting ${adSpacesToDelete.length} ad spaces imported from ${integration.provider}...`)
+        
+        // Delete campaign_ad_spaces that reference these ad spaces first
+        for (const adSpace of adSpacesToDelete) {
+          const { error: campaignAdSpacesError } = await supabase
+            .from('campaign_ad_spaces')
+            .delete()
+            .eq('ad_space_id', adSpace.id)
+          
+          if (campaignAdSpacesError) {
+            console.error(`Error deleting campaign ad spaces for ad space ${adSpace.id}:`, campaignAdSpacesError)
+          }
+        }
+
+        // Then delete the ad spaces
+        const adSpaceIds = adSpacesToDelete.map(as => as.id)
+        const { error: deleteAdSpacesError } = await supabase
+          .from('ad_spaces')
+          .delete()
+          .in('id', adSpaceIds)
+        
+        if (deleteAdSpacesError) {
+          console.error('Error deleting ad spaces:', deleteAdSpacesError)
+        } else {
+          deletedCount.ad_spaces = adSpacesToDelete.length
+          console.log(`Deleted ${deletedCount.ad_spaces} ad spaces`)
+        }
+      }
     }
 
     // Step 5: Finally, delete the integration itself
