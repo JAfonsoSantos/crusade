@@ -205,9 +205,12 @@ Deno.serve(async (req) => {
     ]
 
     // Sync Ad Spaces and create Ad Units in Kevel
+    // Kevel Hierarchy: NETWORK (You) → ADVERTISER → CAMPAIGN → FLIGHT → AD
+    // Sites represent platforms (iOS, Android, Web) - where ads appear
+    // Ad Units are specific placements within sites
     console.log('Syncing ad spaces and creating Ad Units in Kevel...')
     for (const site of sitesData.items || []) {
-      console.log(`Processing site: ${site.Title} (ID: ${site.Id})`)
+      console.log(`Processing site: ${site.Title} (ID: ${site.Id}) - Platform level in Kevel hierarchy`)
       
       // Count existing ad units for this site (only once per site)
       let siteAdUnitsCountedAlready = false
@@ -325,14 +328,16 @@ Deno.serve(async (req) => {
             console.log(`Ad Unit already exists and is up to date: ${adUnitName}`)
           }
 
-          // Create/update ad space in our database
+          // Create/update ad space in our database (Crusade inventory)
+          // This maps Kevel's Ad Units to our unified ad_spaces table
+          // Format: "Platform - AdSize" (e.g., "iOS - Banner", "Web - Leaderboard")
           console.log(`Creating/updating ad space in Crusade database: ${adUnitName}`)
           const adSpaceData = {
-            name: adUnitName,
+            name: adUnitName, // Follows Kevel naming: Site.Title - AdSize.Name
             type: 'display',
-            size: `${adSize.Width}x${adSize.Height}`,
-            location: site.Url || site.Title,
-            base_price: 2.50,
+            size: `${adSize.Width}x${adSize.Height}`, // Standard IAB sizes
+            location: site.Url || site.Title, // Platform identifier (iOS, Android, Web)
+            base_price: 2.50, // Default CPM price
             price_model: 'cpm',
             currency: 'USD',
             status: 'available',
