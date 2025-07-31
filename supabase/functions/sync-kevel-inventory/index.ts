@@ -426,9 +426,26 @@ Deno.serve(async (req) => {
           .single()
 
         if (existingCampaign) {
-          // Campaign already exists - count as existing
-          operationDetails.campaigns.existing++
-          syncedCount++
+          // Update existing campaign with latest status from Kevel
+          const { error: updateError } = await supabase
+            .from('campaigns')
+            .update({
+              status: kevelCampaign.IsActive ? 'active' : 'paused',
+              budget: kevelCampaign.Price || 1000,
+              start_date: startDate,
+              end_date: endDate
+            })
+            .eq('id', existingCampaign.id)
+
+          if (updateError) {
+            const errorMsg = `Error updating campaign: ${campaignData.name}`
+            operationDetails.campaigns.errors.push(errorMsg)
+            console.error('Error updating campaign:', updateError)
+            errorCount++
+          } else {
+            operationDetails.campaigns.updated++
+            syncedCount++
+          }
         } else {
           // Insert new campaign
           const { error: insertError } = await supabase
