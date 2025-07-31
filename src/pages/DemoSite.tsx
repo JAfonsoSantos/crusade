@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Search, ShoppingCart, Star, Heart } from "lucide-react";
+import KevelAd from "@/components/KevelAd";
 
 // Mock product data for the demo retailer site
 const products = [
@@ -48,28 +49,6 @@ const products = [
   }
 ];
 
-// Ad Banner Component (placeholder for Kevel integration)
-const AdBanner = ({ size, position }: { size: string; position: string }) => {
-  return (
-    <div className={`bg-gradient-to-r from-primary/20 to-secondary/20 border-2 border-dashed border-muted-foreground/30 rounded-lg flex items-center justify-center ${
-      size === "728x90" ? "h-[90px]" : 
-      size === "300x250" ? "h-[250px] w-[300px]" :
-      size === "320x50" ? "h-[50px]" : "h-[200px]"
-    }`}>
-      <div className="text-center">
-        <div className="text-sm font-medium text-muted-foreground">
-          Kevel Ad Space
-        </div>
-        <div className="text-xs text-muted-foreground/70">
-          {size} - {position}
-        </div>
-        <div className="text-xs text-muted-foreground/50 mt-1">
-          Campaign will appear here
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const DemoSite = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -111,7 +90,7 @@ const DemoSite = () => {
       {/* Top Banner Ad */}
       <div className="container mx-auto px-4 py-4">
         <div className="flex justify-center">
-          <AdBanner size="728x90" position="Header Banner" />
+          <KevelAd adUnitId={4} size="728x90" position="Header Banner" />
         </div>
       </div>
 
@@ -135,7 +114,7 @@ const DemoSite = () => {
 
             {/* Sidebar Ad */}
             <div className="flex justify-center">
-              <AdBanner size="300x250" position="Sidebar" />
+              <KevelAd adUnitId={5} size="300x250" position="Sidebar" />
             </div>
           </div>
 
@@ -148,7 +127,7 @@ const DemoSite = () => {
 
             {/* Mobile Banner Ad */}
             <div className="block lg:hidden mb-6">
-              <AdBanner size="320x50" position="Mobile Banner" />
+              <KevelAd adUnitId={23} size="320x50" position="Mobile Banner" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -200,7 +179,7 @@ const DemoSite = () => {
 
             {/* Bottom Banner Ad */}
             <div className="mt-8 flex justify-center">
-              <AdBanner size="728x90" position="Footer Banner" />
+              <KevelAd adUnitId={4} size="728x90" position="Footer Banner" />
             </div>
           </div>
         </div>
