@@ -87,34 +87,286 @@ const Integrations = () => {
     setLoading(false);
   };
 
-  const cleanupKevelData = async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('cleanup-kevel-data')
-      
-      if (error) {
-        toast({
-          title: "Error",
-          description: "Failed to cleanup Kevel data",
-          variant: "destructive",
-        });
-        console.error('Cleanup error:', error)
-        return
-      }
+  const fetchSyncHistory = async (integrationId: string) => {
+    if (syncHistory[integrationId]) return; // Already loaded
+    
+    const { data, error } = await supabase
+      .from('integration_sync_history')
+      .select('*')
+      .eq('integration_id', integrationId)
+      .order('sync_timestamp', { ascending: false })
+      .limit(10);
 
+    if (!error && data) {
+      setSyncHistory(prev => ({
+        ...prev,
+        [integrationId]: data
+      }));
+    }
+  };
+
+  const toggleSyncHistory = (integrationId: string) => {
+    setExpandedSyncHistory(prev => ({
+      ...prev,
+      [integrationId]: !prev[integrationId]
+    }));
+    
+    if (!expandedSyncHistory[integrationId]) {
+      fetchSyncHistory(integrationId);
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString('pt-PT', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active':
+        return 'bg-green-100 text-green-800';
+      case 'paused':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'inactive':
+        return 'bg-gray-100 text-gray-800';
+      case 'error':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getProviderName = (provider: string) => {
+    switch (provider) {
+      case 'kevel':
+        return 'Kevel';
+      case 'koddi':
+        return 'Koddi';
+      case 'topsort':
+        return 'Topsort';
+      case 'google_ad_manager':
+        return 'Google Ad Manager';
+      case 'criteo':
+        return 'Criteo';
+      case 'citrusad':
+        return 'CitrusAd';
+      case 'moloko':
+        return 'Moloko';
+      case 'amazon_publisher_services':
+        return 'Amazon Publisher Services';
+      case 'prebid':
+        return 'Prebid.js';
+      case 'openx':
+        return 'OpenX';
+      default:
+        return provider;
+    }
+  };
+
+  const getProviderLogo = (provider: string) => {
+    switch (provider) {
+      case 'kevel':
+        return kevelLogo;
+      case 'koddi':
+        return koddiLogo;
+      case 'topsort':
+        return topsortLogo;
+      case 'google_ad_manager':
+        return googleLogo;
+      case 'criteo':
+        return criteoLogo;
+      case 'citrusad':
+        return citrusadLogo;
+      case 'moloko':
+        return molokoLogo;
+      default:
+        return null;
+    }
+  };
+
+  const handleConfigure = (integration: Integration) => {
+    setSelectedIntegration(integration);
+    setConfigFormData({
+      name: integration.name,
+      api_key: ''
+    });
+    setConfigDialogOpen(true);
+  };
+
+  const handleUpdateIntegration = async () => {
+    if (!selectedIntegration) return;
+
+    const updateData: any = {};
+    
+    if (configFormData.name && configFormData.name !== selectedIntegration.name) {
+      updateData.name = configFormData.name;
+    }
+    
+    if (configFormData.api_key) {
+      updateData.api_key_encrypted = configFormData.api_key;
+    }
+
+    if (Object.keys(updateData).length === 0) {
       toast({
-        title: "Success",
-        description: data.message,
+        title: "No changes",
+        description: "No changes were made.",
+        variant: "default",
       });
-      console.log('Cleanup result:', data.deleted)
-    } catch (error) {
+      setConfigDialogOpen(false);
+      return;
+    }
+
+    const { error } = await supabase
+      .from('ad_server_integrations')
+      .update(updateData)
+      .eq('id', selectedIntegration.id);
+
+    if (error) {
       toast({
         title: "Error",
-        description: "Failed to cleanup Kevel data",
+        description: "Could not update integration.",
         variant: "destructive",
       });
-      console.error('Cleanup error:', error)
+    } else {
+      toast({
+        title: "Success",
+        description: "Integration updated successfully!",
+      });
+      setConfigDialogOpen(false);
+      setSelectedIntegration(null);
+      setConfigFormData({ name: '', api_key: '' });
+      fetchIntegrations();
     }
-  }
+  };
+
+  const handlePauseIntegration = async (integration: Integration) => {
+    const { error } = await supabase
+      .from('ad_server_integrations')
+      .update({ status: 'paused' })
+      .eq('id', integration.id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Could not pause integration.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: "Integration paused successfully!",
+      });
+      fetchIntegrations();
+    }
+  };
+
+  const handleResumeIntegration = async (integration: Integration) => {
+    const { error } = await supabase
+      .from('ad_server_integrations')
+      .update({ status: 'active' })
+      .eq('id', integration.id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Could not resume integration.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: "Integration resumed successfully!",
+      });
+      fetchIntegrations();
+    }
+  };
+
+  const handleSync = async (integration: Integration) => {
+    if (integration.status === 'paused') {
+      toast({
+        title: "Cannot Sync",
+        description: "This integration is paused. Resume it first to sync.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!['kevel', 'koddi', 'topsort'].includes(integration.provider)) {
+      toast({
+        title: "Not Supported",
+        description: "Sync is currently only supported for Kevel, Koddi, and Topsort integrations.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSyncing(integration.id);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-kevel-inventory', {
+        body: { integrationId: integration.id }
+      });
+
+      if (error) throw error;
+
+      // Parse the detailed response
+      const syncDetails: SyncDetails = {
+        timestamp: new Date().toISOString(),
+        synced: data.synced || 0,
+        errors: data.errors || 0,
+        operations: {
+          campaigns: data.operations?.campaigns || { created: 0, updated: 0, existing: 0, errors: [] },
+          ad_units: data.operations?.ad_units || { created: 0, updated: 0, existing: 0, errors: [] },
+          sites: data.operations?.sites || { created: 0, updated: 0, existing: 0, errors: [] }
+        }
+      };
+
+      // Update integration with sync details
+      await supabase
+        .from('ad_server_integrations')
+        .update({ 
+          configuration: { 
+            ...integration.configuration,
+            last_sync_details: syncDetails 
+          } as any
+        })
+        .eq('id', integration.id);
+
+      toast({
+        title: "Sync Completed",
+        description: `Successfully synced ${data.synced} items. ${data.errors > 0 ? `${data.errors} errors occurred.` : 'No errors.'}`,
+        variant: data.errors > 0 ? "destructive" : "default",
+      });
+      
+      // Refresh integrations to show updated details
+      fetchIntegrations();
+      
+    } catch (error: any) {
+      console.error('Sync error:', error);
+      toast({
+        title: "Sync Failed",
+        description: error.message || "Could not sync with ad server.",
+        variant: "destructive",
+      });
+    } finally {
+      setSyncing(null);
+    }
+  };
+
+  const toggleDetails = (integrationId: string) => {
+    const newExpanded = new Set(expandedDetails);
+    if (newExpanded.has(integrationId)) {
+      newExpanded.delete(integrationId);
+    } else {
+      newExpanded.add(integrationId);
+    }
+    setExpandedDetails(newExpanded);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -269,6 +521,45 @@ const Integrations = () => {
         </Dialog>
       </div>
 
+      {/* Configure Integration Dialog */}
+      <Dialog open={configDialogOpen} onOpenChange={setConfigDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Configure Integration</DialogTitle>
+            <DialogDescription>
+              Update settings for {selectedIntegration?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid w-full items-center gap-1.5">
+              <Label htmlFor="integration_name">Integration Name</Label>
+              <Input
+                id="integration_name"
+                value={configFormData.name}
+                onChange={(e) => setConfigFormData(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Enter integration name"
+              />
+            </div>
+            <div className="grid w-full items-center gap-1.5">
+              <Label htmlFor="new_api_key">New API Key (optional)</Label>
+              <Input
+                id="new_api_key"
+                type="password"
+                value={configFormData.api_key}
+                onChange={(e) => setConfigFormData(prev => ({ ...prev, api_key: e.target.value }))}
+                placeholder="Enter new API key (leave empty to keep current)"
+              />
+            </div>
+            <Button 
+              className="w-full" 
+              onClick={handleUpdateIntegration}
+            >
+              Update Integration
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Delete Integration Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
@@ -318,7 +609,10 @@ const Integrations = () => {
                  <div>
                    <CardTitle className="text-lg">{integration.name}</CardTitle>
                    <CardDescription className="flex items-center gap-2">
-                     {integration.provider}
+                     {getProviderLogo(integration.provider) && (
+                       <img src={getProviderLogo(integration.provider)} alt={getProviderName(integration.provider)} className="w-4 h-4" />
+                     )}
+                     {getProviderName(integration.provider)}
                    </CardDescription>
                  </div>
                  <div className="flex items-center gap-2">
@@ -327,12 +621,46 @@ const Integrations = () => {
                    ) : (
                      <WifiOff className="h-4 w-4 text-red-600" />
                    )}
-                   <Badge variant={integration.status === 'active' ? 'default' : 'secondary'}>
+                   <Badge className={getStatusColor(integration.status)}>
                      {integration.status}
                    </Badge>
                    
-                   {/* Action buttons */}
+                   {/* Action buttons on the right */}
                    <div className="flex items-center gap-1 ml-2">
+                     <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleConfigure(integration)}>
+                       <Settings className="h-4 w-4" />
+                     </Button>
+                     
+                     {integration.status === 'active' && (
+                       <AlertDialog>
+                         <AlertDialogTrigger asChild>
+                           <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                             <Pause className="h-4 w-4" />
+                           </Button>
+                         </AlertDialogTrigger>
+                         <AlertDialogContent>
+                           <AlertDialogHeader>
+                             <AlertDialogTitle>Pause Integration</AlertDialogTitle>
+                             <AlertDialogDescription>
+                               Are you sure you want to pause "{integration.name}"? This will stop all sync operations until resumed.
+                             </AlertDialogDescription>
+                           </AlertDialogHeader>
+                           <AlertDialogFooter>
+                             <AlertDialogCancel>Cancel</AlertDialogCancel>
+                             <AlertDialogAction onClick={() => handlePauseIntegration(integration)}>
+                               Pause Integration
+                             </AlertDialogAction>
+                           </AlertDialogFooter>
+                         </AlertDialogContent>
+                       </AlertDialog>
+                     )}
+                     
+                     {integration.status === 'paused' && (
+                       <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleResumeIntegration(integration)}>
+                         <Play className="h-4 w-4" />
+                       </Button>
+                     )}
+                     
                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleDeleteIntegration(integration)}>
                        <Trash2 className="h-4 w-4" />
                      </Button>
@@ -340,6 +668,94 @@ const Integrations = () => {
                  </div>
                </div>
             </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  <strong>Last Sync:</strong><br />
+                  {formatDate(integration.last_sync)}
+                </p>
+                 <div className="flex gap-2 pt-2">
+                   <Button 
+                     variant="outline" 
+                     size="sm" 
+                     onClick={() => handleSync(integration)}
+                     disabled={syncing === integration.id || integration.status === 'paused'}
+                   >
+                     <RefreshCw className={`mr-2 h-4 w-4 ${syncing === integration.id ? 'animate-spin' : ''}`} />
+                     {syncing === integration.id ? 'Syncing...' : 
+                      integration.status === 'paused' ? 'Paused' : 'Sync Now'}
+                   </Button>
+                   {integration.configuration?.last_sync_details && (
+                     <Button 
+                       variant="outline" 
+                       size="sm" 
+                       onClick={() => toggleDetails(integration.id)}
+                     >
+                       <Eye className="mr-2 h-4 w-4" />
+                       See Details
+                     </Button>
+                   )}
+                 </div>
+
+                {/* Sync Details Section */}
+                {expandedDetails.has(integration.id) && integration.configuration?.last_sync_details && (
+                  <div className="mt-4 border-t pt-4">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between mb-3 pb-2 border-b">
+                        <h4 className="font-semibold text-sm flex items-center gap-2">
+                          <Info className="h-4 w-4 text-primary" />
+                          Last Sync Details
+                        </h4>
+                        <span className="text-xs text-muted-foreground">
+                          {formatDate(integration.configuration.last_sync_details.timestamp)}
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-950/20 rounded-md">
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          <span className="text-sm font-medium">Synced: {integration.configuration.last_sync_details.synced}</span>
+                        </div>
+                        <div className="flex items-center gap-2 p-2 bg-red-50 dark:bg-red-950/20 rounded-md">
+                          <AlertCircle className="h-4 w-4 text-red-600" />
+                          <span className="text-sm font-medium">Errors: {integration.configuration.last_sync_details.errors}</span>
+                        </div>
+                      </div>
+
+                      {/* Operations Details */}
+                      <div className="space-y-3">
+                        <h5 className="font-medium text-sm text-muted-foreground">Operations by Category</h5>
+                        <div className="grid gap-3">
+                          {integration.configuration.last_sync_details.operations.campaigns && (
+                            <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-md border border-blue-200 dark:border-blue-800">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Info className="h-4 w-4 text-blue-600" />
+                                <span className="font-medium text-sm text-blue-900 dark:text-blue-100">Campaigns</span>
+                              </div>
+                              <div className="grid grid-cols-3 gap-3 text-sm text-blue-800 dark:text-blue-200">
+                                <span>Existing: {integration.configuration.last_sync_details.operations.campaigns.existing || 0}</span>
+                                <span>Created: {integration.configuration.last_sync_details.operations.campaigns.created}</span>
+                                <span>Updated: {integration.configuration.last_sync_details.operations.campaigns.updated}</span>
+                              </div>
+                              {integration.configuration.last_sync_details.operations.campaigns.errors.length > 0 && (
+                                <div className="col-span-2 mt-2 pt-2 border-t border-blue-200 dark:border-blue-800">
+                                  <span className="text-sm font-medium text-red-600 dark:text-red-400">Errors:</span>
+                                  <ul className="text-sm text-red-600 dark:text-red-400 mt-1 space-y-1">
+                                    {integration.configuration.last_sync_details.operations.campaigns.errors.map((error, idx) => (
+                                      <li key={idx} className="text-xs">• {error}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
           </Card>
         ))}
       </div>
