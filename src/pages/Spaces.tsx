@@ -56,7 +56,7 @@ const Spaces = () => {
     const { data, error } = await supabase
       .from('ad_spaces')
       .select('*')
-      .order('usage_status', { ascending: true })
+      .order('usage_status', { ascending: false })
       .order('impressions', { ascending: false });
 
     if (error) {
