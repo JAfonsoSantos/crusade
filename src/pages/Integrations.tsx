@@ -562,7 +562,7 @@ const Integrations = () => {
         {integrations.map((integration) => (
           <Card key={integration.id} className="transition-all duration-300 w-full">
             <CardHeader>
-              <div className="flex justify-between items-start">
+               <div className="flex justify-between items-start">
                  <div>
                    <CardTitle className="text-lg">{integration.name}</CardTitle>
                    <CardDescription className="flex items-center gap-2">
@@ -572,17 +572,54 @@ const Integrations = () => {
                      {getProviderName(integration.provider)}
                    </CardDescription>
                  </div>
-                <div className="flex items-center gap-2">
-                  {integration.status === 'active' ? (
-                    <Wifi className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <WifiOff className="h-4 w-4 text-red-600" />
-                  )}
-                  <Badge className={getStatusColor(integration.status)}>
-                    {integration.status}
-                  </Badge>
-                </div>
-              </div>
+                 <div className="flex items-center gap-2">
+                   {integration.status === 'active' ? (
+                     <Wifi className="h-4 w-4 text-green-600" />
+                   ) : (
+                     <WifiOff className="h-4 w-4 text-red-600" />
+                   )}
+                   <Badge className={getStatusColor(integration.status)}>
+                     {integration.status}
+                   </Badge>
+                   
+                   {/* Action buttons on the right */}
+                   <div className="flex items-center gap-1 ml-2">
+                     {integration.status === 'active' && (
+                       <AlertDialog>
+                         <AlertDialogTrigger asChild>
+                           <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                             <Pause className="h-4 w-4" />
+                           </Button>
+                         </AlertDialogTrigger>
+                         <AlertDialogContent>
+                           <AlertDialogHeader>
+                             <AlertDialogTitle>Pause Integration</AlertDialogTitle>
+                             <AlertDialogDescription>
+                               Are you sure you want to pause "{integration.name}"? This will stop all sync operations until resumed.
+                             </AlertDialogDescription>
+                           </AlertDialogHeader>
+                           <AlertDialogFooter>
+                             <AlertDialogCancel>Cancel</AlertDialogCancel>
+                             <AlertDialogAction onClick={() => handlePauseIntegration(integration)}>
+                               Pause Integration
+                             </AlertDialogAction>
+                           </AlertDialogFooter>
+                         </AlertDialogContent>
+                       </AlertDialog>
+                     )}
+                     
+                     {integration.status === 'paused' && (
+                       <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleResumeIntegration(integration)}>
+                         <Play className="h-4 w-4" />
+                       </Button>
+                     )}
+                     
+                     <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                       <Trash2 className="h-4 w-4" />
+                     </Button>
+                   </div>
+                 </div>
+               </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
@@ -590,68 +627,31 @@ const Integrations = () => {
                   <strong>Last Sync:</strong><br />
                   {formatDate(integration.last_sync)}
                 </p>
-                <div className="flex gap-2 pt-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => handleSync(integration)}
-                    disabled={syncing === integration.id}
-                  >
-                    <RefreshCw className={`mr-2 h-4 w-4 ${syncing === integration.id ? 'animate-spin' : ''}`} />
-                    {syncing === integration.id ? 'Syncing...' : 'Sync Now'}
-                  </Button>
+                 <div className="flex gap-2 pt-2">
+                   <Button 
+                     variant="outline" 
+                     size="sm" 
+                     onClick={() => handleSync(integration)}
+                     disabled={syncing === integration.id}
+                   >
+                     <RefreshCw className={`mr-2 h-4 w-4 ${syncing === integration.id ? 'animate-spin' : ''}`} />
+                     {syncing === integration.id ? 'Syncing...' : 'Sync Now'}
+                   </Button>
                    <Button variant="outline" size="sm" onClick={() => handleConfigure(integration)}>
                      <Settings className="mr-2 h-4 w-4" />
                      Configure
                    </Button>
-                   
-                   {integration.status === 'active' && (
-                     <AlertDialog>
-                       <AlertDialogTrigger asChild>
-                         <Button variant="outline" size="sm">
-                           <Pause className="mr-2 h-4 w-4" />
-                           Pause
-                         </Button>
-                       </AlertDialogTrigger>
-                       <AlertDialogContent>
-                         <AlertDialogHeader>
-                           <AlertDialogTitle>Pause Integration</AlertDialogTitle>
-                           <AlertDialogDescription>
-                             Are you sure you want to pause "{integration.name}"? This will stop all sync operations until resumed.
-                           </AlertDialogDescription>
-                         </AlertDialogHeader>
-                         <AlertDialogFooter>
-                           <AlertDialogCancel>Cancel</AlertDialogCancel>
-                           <AlertDialogAction onClick={() => handlePauseIntegration(integration)}>
-                             Pause Integration
-                           </AlertDialogAction>
-                         </AlertDialogFooter>
-                       </AlertDialogContent>
-                     </AlertDialog>
-                   )}
-                   
-                   {integration.status === 'paused' && (
-                     <Button variant="outline" size="sm" onClick={() => handleResumeIntegration(integration)}>
-                       <Play className="mr-2 h-4 w-4" />
-                       Resume
+                   {integration.configuration?.last_sync_details && (
+                     <Button 
+                       variant="outline" 
+                       size="sm" 
+                       onClick={() => toggleDetails(integration.id)}
+                     >
+                       <Eye className="mr-2 h-4 w-4" />
+                       See Details
                      </Button>
                    )}
-                   
-                   <Button variant="outline" size="sm">
-                     <Trash2 className="mr-2 h-4 w-4" />
-                     Remove
-                   </Button>
-                  {integration.configuration?.last_sync_details && (
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => toggleDetails(integration.id)}
-                    >
-                      <Eye className="mr-2 h-4 w-4" />
-                      See Details
-                    </Button>
-                  )}
-                </div>
+                 </div>
 
                 {/* Sync Details Section */}
                 {expandedDetails.has(integration.id) && integration.configuration?.last_sync_details && (
