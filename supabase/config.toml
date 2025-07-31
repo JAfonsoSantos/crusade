@@ -2,3 +2,12 @@ project_id = "bzqjxkmkrzvsigimnwwc"
 
 [functions.sync-kevel-inventory]
 verify_jwt = false
+
+[functions.push-campaign-to-kevel]
+verify_jwt = false
+
+[functions.toggle-campaign-kevel]
+verify_jwt = false
+
+[functions.auto-sync-kevel]
+verify_jwt = false
