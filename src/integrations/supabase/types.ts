@@ -148,6 +148,7 @@ export type Database = {
           campaign_id: string
           created_at: string
           end_date: string | null
+          flight_id: string | null
           id: string
           start_date: string | null
         }
@@ -157,6 +158,7 @@ export type Database = {
           campaign_id: string
           created_at?: string
           end_date?: string | null
+          flight_id?: string | null
           id?: string
           start_date?: string | null
         }
@@ -166,6 +168,7 @@ export type Database = {
           campaign_id?: string
           created_at?: string
           end_date?: string | null
+          flight_id?: string | null
           id?: string
           start_date?: string | null
         }
@@ -182,6 +185,13 @@ export type Database = {
             columns: ["campaign_id"]
             isOneToOne: false
             referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_campaign_ad_spaces_flight"
+            columns: ["flight_id"]
+            isOneToOne: false
+            referencedRelation: "flights"
             referencedColumns: ["id"]
           },
         ]
@@ -269,6 +279,72 @@ export type Database = {
           status?: string | null
           updated_at?: string
           website?: string | null
+        }
+        Relationships: []
+      }
+      flights: {
+        Row: {
+          ad_server: string | null
+          budget: number | null
+          campaign_id: string
+          clicks: number | null
+          conversions: number | null
+          created_at: string
+          currency: string | null
+          description: string | null
+          end_date: string
+          external_id: string | null
+          id: string
+          impressions: number | null
+          name: string
+          priority: number | null
+          spend: number | null
+          start_date: string
+          status: string | null
+          targeting_criteria: Json | null
+          updated_at: string
+        }
+        Insert: {
+          ad_server?: string | null
+          budget?: number | null
+          campaign_id: string
+          clicks?: number | null
+          conversions?: number | null
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          end_date: string
+          external_id?: string | null
+          id?: string
+          impressions?: number | null
+          name: string
+          priority?: number | null
+          spend?: number | null
+          start_date: string
+          status?: string | null
+          targeting_criteria?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          ad_server?: string | null
+          budget?: number | null
+          campaign_id?: string
+          clicks?: number | null
+          conversions?: number | null
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          end_date?: string
+          external_id?: string | null
+          id?: string
+          impressions?: number | null
+          name?: string
+          priority?: number | null
+          spend?: number | null
+          start_date?: string
+          status?: string | null
+          targeting_criteria?: Json | null
+          updated_at?: string
         }
         Relationships: []
       }

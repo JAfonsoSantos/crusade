@@ -7,9 +7,32 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Edit, Trash2, Megaphone, Calendar, Upload, ExternalLink, Loader2, PlayCircle, PauseCircle, RefreshCw } from 'lucide-react';
+import { Plus, Edit, Trash2, Megaphone, Calendar, Upload, ExternalLink, Loader2, PlayCircle, PauseCircle, RefreshCw, ChevronDown, ChevronRight, Target, Eye, MousePointer, TrendingUp } from 'lucide-react';
+
+interface Flight {
+  id: string;
+  campaign_id: string;
+  name: string;
+  description?: string;
+  start_date: string;
+  end_date: string;
+  budget?: number;
+  currency: string;
+  status: string;
+  priority: number;
+  targeting_criteria: any;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  spend: number;
+  external_id?: string;
+  ad_server: string;
+  created_at: string;
+  updated_at: string;
+}
 
 interface Campaign {
   id: string;
@@ -21,6 +44,7 @@ interface Campaign {
   currency: string;
   status: string;
   created_at: string;
+  flights?: Flight[];
 }
 
 const Campaigns = () => {
@@ -28,6 +52,9 @@ const Campaigns = () => {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [flightDialogOpen, setFlightDialogOpen] = useState(false);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
+  const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
   const [pushingCampaigns, setPushingCampaigns] = useState<Set<string>>(new Set());
   const [integrations, setIntegrations] = useState<any[]>([]);
   const [formData, setFormData] = useState({
@@ -38,6 +65,16 @@ const Campaigns = () => {
     budget: '',
     currency: 'EUR',
   });
+  const [flightFormData, setFlightFormData] = useState({
+    name: '',
+    description: '',
+    start_date: '',
+    end_date: '',
+    budget: '',
+    currency: 'EUR',
+    priority: '1',
+    ad_server: 'kevel',
+  });
   const { toast } = useToast();
 
   useEffect(() => {
@@ -46,20 +83,38 @@ const Campaigns = () => {
   }, []);
 
   const fetchCampaigns = async () => {
-    const { data, error } = await supabase
+    const { data: campaignsData, error: campaignsError } = await supabase
       .from('campaigns')
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) {
+    if (campaignsError) {
       toast({
         title: "Error",
         description: "Could not load campaigns.",
         variant: "destructive",
       });
-    } else {
-      setCampaigns(data || []);
+      setLoading(false);
+      return;
     }
+
+    // Fetch flights for each campaign
+    const campaignsWithFlights = await Promise.all(
+      (campaignsData || []).map(async (campaign) => {
+        const { data: flightsData } = await supabase
+          .from('flights')
+          .select('*')
+          .eq('campaign_id', campaign.id)
+          .order('priority', { ascending: true });
+        
+        return {
+          ...campaign,
+          flights: flightsData || []
+        };
+      })
+    );
+
+    setCampaigns(campaignsWithFlights);
     setLoading(false);
   };
 
@@ -74,107 +129,6 @@ const Campaigns = () => {
       console.error('Error fetching integrations:', error);
     } else {
       setIntegrations(data || []);
-    }
-  };
-
-  const pushCampaignToKevel = async (campaignId: string, integrationId: string) => {
-    setPushingCampaigns(prev => new Set([...prev, campaignId]));
-    try {
-      // Use universal campaign push for both Kevel and Koddi
-      const { data, error } = await supabase.functions.invoke('universal-campaign-push', {
-        body: {
-          campaignId,
-          integrationId,
-        },
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      toast({
-        title: "Success",
-        description: data.message || `Campaign pushed to ${data.platform} successfully!`,
-      });
-      
-      // Refresh integrations to get updated platform_config
-      await fetchIntegrations();
-    } catch (error) {
-      console.error('Push campaign error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to push campaign to ad platform.",
-        variant: "destructive",
-      });
-    } finally {
-      setPushingCampaigns(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(campaignId);
-        return newSet;
-      });
-    }
-  };
-
-  const toggleCampaignInKevel = async (campaignId: string, integrationId: string, activate: boolean) => {
-    setPushingCampaigns(prev => new Set([...prev, campaignId]));
-    try {
-      const { data, error } = await supabase.functions.invoke('toggle-campaign-kevel', {
-        body: {
-          campaignId,
-          integrationId,
-          activate,
-        },
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      toast({
-        title: "Success",
-        description: `Campaign ${activate ? 'activated' : 'paused'} in Kevel successfully!`,
-      });
-    } catch (error) {
-      console.error('Toggle campaign error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to toggle campaign in Kevel.",
-        variant: "destructive",
-      });
-    } finally {
-      setPushingCampaigns(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(campaignId);
-        return newSet;
-      });
-    }
-  };
-
-  const syncAllIntegrations = async () => {
-    setSyncing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('auto-sync-kevel');
-
-      if (error) {
-        throw error;
-      }
-
-      toast({
-        title: "Sync Complete",
-        description: data.message || `Synced ${data.total_synced} items from ${data.integrations_processed} integrations`,
-      });
-      
-      // Refresh integrations and campaigns to show updated data
-      await Promise.all([fetchIntegrations(), fetchCampaigns()]);
-    } catch (error) {
-      console.error('Sync error:', error);
-      toast({
-        title: "Sync Failed",
-        description: "Failed to sync with ad platforms. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setSyncing(false);
     }
   };
 
@@ -228,6 +182,100 @@ const Campaigns = () => {
     }
   };
 
+  const handleFlightSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const { error } = await supabase.from('flights').insert({
+      ...flightFormData,
+      campaign_id: selectedCampaignId,
+      budget: flightFormData.budget ? parseFloat(flightFormData.budget) : null,
+      priority: parseInt(flightFormData.priority),
+    });
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Could not create flight.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: "Flight created successfully!",
+      });
+      setFlightDialogOpen(false);
+      setFlightFormData({
+        name: '',
+        description: '',
+        start_date: '',
+        end_date: '',
+        budget: '',
+        currency: 'EUR',
+        priority: '1',
+        ad_server: 'kevel',
+      });
+      fetchCampaigns();
+    }
+  };
+
+  const toggleCampaignExpansion = (campaignId: string) => {
+    setExpandedCampaigns(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(campaignId)) {
+        newSet.delete(campaignId);
+      } else {
+        newSet.add(campaignId);
+      }
+      return newSet;
+    });
+  };
+
+  const formatNumber = (num: number) => {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1) + 'M';
+    }
+    if (num >= 1000) {
+      return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toString();
+  };
+
+  const calculateCampaignTotals = (flights: Flight[]) => {
+    return flights.reduce((totals, flight) => ({
+      impressions: totals.impressions + flight.impressions,
+      clicks: totals.clicks + flight.clicks,
+      conversions: totals.conversions + flight.conversions,
+      spend: totals.spend + flight.spend,
+    }), { impressions: 0, clicks: 0, conversions: 0, spend: 0 });
+  };
+
+  const syncAllIntegrations = async () => {
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('auto-sync-kevel');
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Sync Complete",
+        description: data.message || `Synced ${data.total_synced} items from ${data.integrations_processed} integrations`,
+      });
+      
+      await Promise.all([fetchIntegrations(), fetchCampaigns()]);
+    } catch (error) {
+      console.error('Sync error:', error);
+      toast({
+        title: "Sync Failed",
+        description: "Failed to sync with ad platforms. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active':
@@ -255,9 +303,9 @@ const Campaigns = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Campaigns</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Campaigns & Flights</h2>
           <p className="text-muted-foreground">
-            Manage your advertising campaigns
+            Manage your advertising campaigns and their flights
           </p>
         </div>
         <div className="flex gap-2">
@@ -376,158 +424,309 @@ const Campaigns = () => {
         </div>
       </div>
 
-      <div className="space-y-4">
-        {campaigns.map((campaign) => (
-          <Card key={campaign.id} className="w-full">
-            <CardHeader>
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle className="text-lg font-semibold">
-                    {campaign.name}
-                  </CardTitle>
-                  {campaign.description && (
-                    <p className="text-muted-foreground mt-1">
-                      {campaign.description}
-                    </p>
-                  )}
-                </div>
-                <Badge 
-                  variant={
-                    campaign.status === 'active' ? 'default' : 
-                    campaign.status === 'paused' ? 'secondary' : 
-                    'outline'
-                  }
-                  className={getStatusColor(campaign.status)}
-                >
-                  {campaign.status}
-                </Badge>
+      {/* Flight Creation Dialog */}
+      <Dialog open={flightDialogOpen} onOpenChange={setFlightDialogOpen}>
+        <DialogContent className="sm:max-w-[525px]">
+          <DialogHeader>
+            <DialogTitle>Create New Flight</DialogTitle>
+            <DialogDescription>
+              Add a new flight to the campaign
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleFlightSubmit} className="space-y-4">
+            <div className="grid w-full items-center gap-1.5">
+              <Label htmlFor="flight_name">Flight Name</Label>
+              <Input
+                id="flight_name"
+                value={flightFormData.name}
+                onChange={(e) => setFlightFormData({ ...flightFormData, name: e.target.value })}
+                placeholder="Ex: Homepage Banner Flight"
+                required
+              />
+            </div>
+            
+            <div className="grid w-full items-center gap-1.5">
+              <Label htmlFor="flight_description">Description</Label>
+              <Textarea
+                id="flight_description"
+                value={flightFormData.description}
+                onChange={(e) => setFlightFormData({ ...flightFormData, description: e.target.value })}
+                placeholder="Flight description..."
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-2">
+              <div className="grid w-full items-center gap-1.5">
+                <Label htmlFor="flight_start_date">Start Date</Label>
+                <Input
+                  id="flight_start_date"
+                  type="date"
+                  value={flightFormData.start_date}
+                  onChange={(e) => setFlightFormData({ ...flightFormData, start_date: e.target.value })}
+                  required
+                />
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Start Date</p>
-                  <p className="font-medium">{formatDate(campaign.start_date)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">End Date</p>
-                  <p className="font-medium">{formatDate(campaign.end_date)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Budget</p>
-                  <p className="font-medium">
-                    {campaign.budget ? 
-                      `${campaign.currency} ${campaign.budget.toLocaleString()}` : 
-                      'Not set'
-                    }
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Created</p>
-                  <p className="font-medium">{formatDate(campaign.created_at)}</p>
-                </div>
-              </div>
-
-              {/* Universal Platform Integration Status */}
-              {integrations.map(integration => {
-                const platformConfig = integration.platform_config as any || {}
-                const campaignData = platformConfig.campaigns?.[campaign.id]
-                
-                if (!campaignData) return null
-                
-                return (
-                  <div key={integration.id} className="bg-muted/50 rounded-lg p-3 mb-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge variant="outline" className="text-xs">
-                        {integration.provider.charAt(0).toUpperCase() + integration.provider.slice(1)} Integration
-                      </Badge>
-                      <Badge variant={campaignData.status === 'synced' ? 'default' : 'secondary'}>
-                        {campaignData.status}
-                      </Badge>
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Platform ID:</span>
-                        <p className="font-mono">{campaignData.platform_id}</p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Hierarchy:</span>
-                        <p className="text-xs">{campaignData.hierarchy}</p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Last Sync:</span>
-                        <p>{campaignData.created_at ? formatDate(campaignData.created_at) : 'Never'}</p>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
               
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm">
-                  <Edit className="h-4 w-4 mr-2" />
-                  Edit
-                </Button>
-                {integrations
-                  .filter(i => ['kevel', 'koddi', 'topsort'].includes(i.provider) && i.status === 'active')
-                  .map(integration => {
-                    const platformConfig = integration.platform_config as any || {}
-                    const campaignData = platformConfig.campaigns?.[campaign.id]
-                    const isInPlatform = !!campaignData?.platform_id
-                    
-                    return (
-                      <div key={integration.id} className="flex gap-2">
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={() => pushCampaignToKevel(campaign.id, integration.id)}
-                          disabled={pushingCampaigns.has(campaign.id)}
-                        >
-                          {pushingCampaigns.has(campaign.id) ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Pushing...
-                            </>
-                          ) : (
-                            <>
-                              <ExternalLink className="h-4 w-4 mr-2" />
-                              {isInPlatform ? `Update in ${integration.provider}` : `Push to ${integration.provider}`}
-                            </>
-                          )}
-                        </Button>
-                        
-                        {isInPlatform && (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => toggleCampaignInKevel(campaign.id, integration.id, campaign.status !== 'active')}
-                            disabled={pushingCampaigns.has(campaign.id)}
-                          >
-                            {campaign.status === 'active' ? (
-                              <>
-                                <PauseCircle className="h-4 w-4 mr-2" />
-                                Pause in {integration.provider}
-                              </>
-                            ) : (
-                              <>
-                                <PlayCircle className="h-4 w-4 mr-2" />
-                                Activate in {integration.provider}
-                              </>
-                            )}
-                          </Button>
-                        )}
-                      </div>
-                    )
-                  })
-                }
-                <Button variant="destructive" size="sm">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete
-                </Button>
+              <div className="grid w-full items-center gap-1.5">
+                <Label htmlFor="flight_end_date">End Date</Label>
+                <Input
+                  id="flight_end_date"
+                  type="date"
+                  value={flightFormData.end_date}
+                  onChange={(e) => setFlightFormData({ ...flightFormData, end_date: e.target.value })}
+                  required
+                />
               </div>
-            </CardContent>
-          </Card>
-        ))}
+            </div>
+            
+            <div className="grid grid-cols-3 gap-2">
+              <div className="grid w-full items-center gap-1.5">
+                <Label htmlFor="flight_budget">Budget</Label>
+                <Input
+                  id="flight_budget"
+                  type="number"
+                  step="0.01"
+                  value={flightFormData.budget}
+                  onChange={(e) => setFlightFormData({ ...flightFormData, budget: e.target.value })}
+                  placeholder="0.00"
+                />
+              </div>
+              
+              <div className="grid w-full items-center gap-1.5">
+                <Label htmlFor="flight_priority">Priority</Label>
+                <Input
+                  id="flight_priority"
+                  type="number"
+                  value={flightFormData.priority}
+                  onChange={(e) => setFlightFormData({ ...flightFormData, priority: e.target.value })}
+                  min="1"
+                  max="10"
+                />
+              </div>
+              
+              <div className="grid w-full items-center gap-1.5">
+                <Label htmlFor="flight_ad_server">Ad Server</Label>
+                <Select value={flightFormData.ad_server} onValueChange={(value) => setFlightFormData({ ...flightFormData, ad_server: value })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="kevel">🎯 Kevel</SelectItem>
+                    <SelectItem value="google">🟦 Google</SelectItem>
+                    <SelectItem value="criteo">🟧 Criteo</SelectItem>
+                    <SelectItem value="koddi">🟩 Koddi</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <Button type="submit" className="w-full">
+              Create Flight
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <div className="space-y-4">
+        {campaigns.map((campaign) => {
+          const totals = calculateCampaignTotals(campaign.flights || []);
+          const isExpanded = expandedCampaigns.has(campaign.id);
+          
+          return (
+            <Card key={campaign.id} className="w-full">
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <CollapsibleTrigger 
+                        onClick={() => toggleCampaignExpansion(campaign.id)}
+                        className="flex items-center gap-1 hover:bg-muted/50 rounded p-1"
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
+                      </CollapsibleTrigger>
+                      <CardTitle className="text-lg font-semibold">
+                        {campaign.name}
+                      </CardTitle>
+                      <Badge variant="secondary" className="text-xs">
+                        {campaign.flights?.length || 0} flights
+                      </Badge>
+                    </div>
+                    {campaign.description && (
+                      <p className="text-muted-foreground mt-1 ml-7">
+                        {campaign.description}
+                      </p>
+                    )}
+                  </div>
+                  <Badge 
+                    variant={
+                      campaign.status === 'active' ? 'default' : 
+                      campaign.status === 'paused' ? 'secondary' : 
+                      'outline'
+                    }
+                    className={getStatusColor(campaign.status)}
+                  >
+                    {campaign.status}
+                  </Badge>
+                </div>
+              </CardHeader>
+              
+              <CardContent>
+                {/* Campaign Overview */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Budget</p>
+                    <p className="font-medium">
+                      {campaign.budget ? 
+                        `${campaign.currency} ${campaign.budget.toLocaleString()}` : 
+                        'Not set'
+                      }
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Campaign Period</p>
+                    <p className="font-medium text-xs">
+                      {formatDate(campaign.start_date)} - {formatDate(campaign.end_date)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Impressions</p>
+                    <p className="font-medium">{formatNumber(totals.impressions)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Clicks</p>
+                    <p className="font-medium">{formatNumber(totals.clicks)}</p>
+                  </div>
+                </div>
+
+                {/* Campaign Actions */}
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      setSelectedCampaignId(campaign.id);
+                      setFlightDialogOpen(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Flight
+                  </Button>
+                  <Button variant="outline" size="sm">
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit Campaign
+                  </Button>
+                </div>
+
+                {/* Flights Section */}
+                <Collapsible open={isExpanded}>
+                  <CollapsibleContent className="space-y-3">
+                    {campaign.flights && campaign.flights.length > 0 ? (
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-semibold text-muted-foreground">Flights</h4>
+                        {campaign.flights.map((flight) => (
+                          <div key={flight.id} className="bg-muted/30 rounded-lg p-4 ml-4 border-l-2 border-primary/20">
+                            <div className="flex justify-between items-start mb-3">
+                              <div>
+                                <h5 className="font-medium">{flight.name}</h5>
+                                {flight.description && (
+                                  <p className="text-sm text-muted-foreground">{flight.description}</p>
+                                )}
+                              </div>
+                              <div className="flex gap-2">
+                                <Badge variant="outline" className={getStatusColor(flight.status)}>
+                                  {flight.status}
+                                </Badge>
+                                <Badge variant="secondary" className="text-xs">
+                                  Priority {flight.priority}
+                                </Badge>
+                              </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                              <div>
+                                <span className="text-muted-foreground">Period:</span>
+                                <p className="text-xs">{formatDate(flight.start_date)} - {formatDate(flight.end_date)}</p>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Budget:</span>
+                                <p>{flight.budget ? `${flight.currency} ${flight.budget.toLocaleString()}` : 'No budget'}</p>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Ad Server:</span>
+                                <p>{flight.ad_server}</p>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Spend:</span>
+                                <p>{flight.spend ? `${flight.currency} ${flight.spend.toLocaleString()}` : '€0'}</p>
+                              </div>
+                            </div>
+                            
+                            {/* Flight Performance */}
+                            {(flight.impressions > 0 || flight.clicks > 0) && (
+                              <div className="mt-3 p-3 bg-background/50 rounded">
+                                <h6 className="text-xs font-medium text-muted-foreground mb-2">Performance</h6>
+                                <div className="grid grid-cols-3 gap-4 text-sm">
+                                  <div className="flex items-center gap-1">
+                                    <Eye className="w-3 h-3 text-blue-600" />
+                                    <span>{formatNumber(flight.impressions)} impressions</span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <MousePointer className="w-3 h-3 text-green-600" />
+                                    <span>{formatNumber(flight.clicks)} clicks</span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <TrendingUp className="w-3 h-3 text-purple-600" />
+                                    <span>{formatNumber(flight.conversions)} conversions</span>
+                                  </div>
+                                </div>
+                                {flight.clicks > 0 && flight.impressions > 0 && (
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    CTR: {((flight.clicks / flight.impressions) * 100).toFixed(2)}%
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            
+                            <div className="flex gap-2 mt-3">
+                              <Button variant="outline" size="sm">
+                                <Edit className="h-4 w-4 mr-1" />
+                                Edit
+                              </Button>
+                              <Button variant="outline" size="sm">
+                                <Target className="h-4 w-4 mr-1" />
+                                Assign Spaces
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 bg-muted/30 rounded-lg ml-4">
+                        <Target className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                        <p className="text-sm text-muted-foreground mb-3">No flights in this campaign</p>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            setSelectedCampaignId(campaign.id);
+                            setFlightDialogOpen(true);
+                          }}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Create First Flight
+                        </Button>
+                      </div>
+                    )}
+                  </CollapsibleContent>
+                </Collapsible>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {campaigns.length === 0 && (
