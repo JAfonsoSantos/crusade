@@ -46,7 +46,7 @@ const Layout = () => {
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Spaces', href: '/ad-spaces', icon: Target },
+    { name: 'Spaces', href: '/spaces', icon: Target },
     { name: 'Campaigns', href: '/campaigns', icon: Megaphone },
     { name: 'Integrations', href: '/integrations', icon: Settings },
   ];
@@ -70,7 +70,7 @@ const Layout = () => {
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-14 items-center">
           <div className="mr-4 flex">
-            <h1 className="text-lg font-semibold">AdSpace CRM</h1>
+            <h1 className="text-lg font-semibold">Crusade CRM</h1>
           </div>
           
           <nav className="flex items-center space-x-6 text-sm font-medium">

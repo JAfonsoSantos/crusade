@@ -7,7 +7,7 @@ import { LayoutDashboard, Target, Megaphone, Settings, TrendingUp, Users, Buildi
 
 const Index = () => {
   const [stats, setStats] = useState({
-    adSpaces: 0,
+    spaces: 0,
     campaigns: 0,
     integrations: 0,
     revenue: 0
@@ -35,14 +35,14 @@ const Index = () => {
       }
 
       // Fetch statistics in parallel
-      const [adSpacesResult, campaignsResult, integrationsResult] = await Promise.all([
+      const [spacesResult, campaignsResult, integrationsResult] = await Promise.all([
         supabase.from('ad_spaces').select('id', { count: 'exact' }).eq('company_id', profile.company_id),
         supabase.from('campaigns').select('id', { count: 'exact' }).eq('company_id', profile.company_id),
         supabase.from('ad_server_integrations').select('id', { count: 'exact' }).eq('company_id', profile.company_id)
       ]);
 
       setStats({
-        adSpaces: adSpacesResult.count || 0,
+        spaces: spacesResult.count || 0,
         campaigns: campaignsResult.count || 0,
         integrations: integrationsResult.count || 0,
         revenue: 0 // TODO: Calculate from real data
@@ -63,22 +63,22 @@ const Index = () => {
       color: 'bg-blue-500'
     },
     {
-      title: 'Nova Campanha',
+      title: 'New Campaign',
       description: 'Create advertising campaign',
       icon: Megaphone,
       action: () => navigate('/campaigns'),
       color: 'bg-green-500'
     },
     {
-      title: 'Adicionar Integração',
+      title: 'Add Integration',
       description: 'Connect ad server',
       icon: Settings,
       action: () => navigate('/integrations'),
       color: 'bg-purple-500'
     },
     {
-      title: 'Ver Dashboard',
-      description: 'Análises e relatórios',
+      title: 'View Dashboard',
+      description: 'Analytics and reports',
       icon: LayoutDashboard,
       action: () => navigate('/dashboard'),
       color: 'bg-orange-500'
@@ -91,7 +91,7 @@ const Index = () => {
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
           <p className="text-muted-foreground">
-            A carregar dados...
+            Loading data...
           </p>
         </div>
       </div>
@@ -103,7 +103,7 @@ const Index = () => {
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
         <p className="text-muted-foreground">
-          Bem-vindo ao seu painel de controlo AdSpace CRM
+          Welcome to your Crusade CRM control panel
         </p>
       </div>
       
@@ -115,7 +115,7 @@ const Index = () => {
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.adSpaces}</div>
+            <div className="text-2xl font-bold">{stats.spaces}</div>
             <p className="text-xs text-muted-foreground">
               Available advertising spaces
             </p>
@@ -137,13 +137,13 @@ const Index = () => {
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Receita</CardTitle>
+            <CardTitle className="text-sm font-medium">Revenue</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">€{stats.revenue}</div>
             <p className="text-xs text-muted-foreground">
-              Receita total este mês
+              Total revenue this month
             </p>
           </CardContent>
         </Card>
@@ -164,7 +164,7 @@ const Index = () => {
 
       {/* Quick Actions */}
       <div>
-        <h3 className="text-lg font-semibold mb-4">Ações Rápidas</h3>
+        <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {quickActions.map((action, index) => {
             const Icon = action.icon;
@@ -191,38 +191,38 @@ const Index = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5" />
-              Primeiros Passos
+              Getting Started
             </CardTitle>
             <CardDescription>
-              Configure o seu sistema de gestão publicitária
+              Configure your advertising management system
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <h4 className="font-medium">1. Configurar Integrações</h4>
+              <h4 className="font-medium">1. Configure Integrations</h4>
               <p className="text-sm text-muted-foreground">
-                Conecte plataformas como Kevel, Koddi ou Topsort para gerir campanhas.
+                Connect platforms like Kevel, Koddi or Topsort to manage campaigns.
               </p>
               <Button variant="outline" size="sm" onClick={() => navigate('/integrations')}>
-                Configurar Integrações
+                Configure Integrations
               </Button>
             </div>
             <div className="space-y-2">
-              <h4 className="font-medium">2. Criar Espaços Publicitários</h4>
+              <h4 className="font-medium">2. Create Ad Spaces</h4>
               <p className="text-sm text-muted-foreground">
-                Defina os espaços onde os anúncios serão exibidos.
+                Define the spaces where ads will be displayed.
               </p>
-              <Button variant="outline" size="sm" onClick={() => navigate('/ad-spaces')}>
-                Criar Espaços
+              <Button variant="outline" size="sm" onClick={() => navigate('/spaces')}>
+                Create Spaces
               </Button>
             </div>
             <div className="space-y-2">
-              <h4 className="font-medium">3. Lançar Campanhas</h4>
+              <h4 className="font-medium">3. Launch Campaigns</h4>
               <p className="text-sm text-muted-foreground">
-                Crie e gerencie campanhas publicitárias através das plataformas integradas.
+                Create and manage advertising campaigns through integrated platforms.
               </p>
               <Button variant="outline" size="sm" onClick={() => navigate('/campaigns')}>
-                Criar Campanha
+                Create Campaign
               </Button>
             </div>
           </CardContent>

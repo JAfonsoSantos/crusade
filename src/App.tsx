@@ -7,7 +7,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
-import AdSpaces from "./pages/AdSpaces";
+import Spaces from "./pages/Spaces";
 import Campaigns from "./pages/Campaigns";
 import Integrations from "./pages/Integrations";
 import PersonalSettings from "./pages/PersonalSettings";
@@ -29,7 +29,7 @@ const App = () => (
           <Route path="/" element={<Layout />}>
             <Route index element={<Index />} />
             <Route path="dashboard" element={<Dashboard />} />
-            <Route path="ad-spaces" element={<AdSpaces />} />
+            <Route path="spaces" element={<Spaces />} />
             <Route path="campaigns" element={<Campaigns />} />
             <Route path="integrations" element={<Integrations />} />
             <Route path="personal-settings" element={<PersonalSettings />} />

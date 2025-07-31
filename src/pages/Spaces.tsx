@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Plus, Edit, Trash2, Target } from 'lucide-react';
 
-interface AdSpace {
+interface Space {
   id: string;
   name: string;
   type: string;
@@ -24,8 +24,8 @@ interface AdSpace {
   created_at: string;
 }
 
-const AdSpaces = () => {
-  const [adSpaces, setAdSpaces] = useState<AdSpace[]>([]);
+const Spaces = () => {
+  const [spaces, setSpaces] = useState<Space[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
@@ -40,10 +40,10 @@ const AdSpaces = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchAdSpaces();
+    fetchSpaces();
   }, []);
 
-  const fetchAdSpaces = async () => {
+  const fetchSpaces = async () => {
     const { data, error } = await supabase
       .from('ad_spaces')
       .select('*')
@@ -52,11 +52,11 @@ const AdSpaces = () => {
     if (error) {
       toast({
         title: "Error",
-        description: "Could not load ad spaces.",
+        description: "Could not load spaces.",
         variant: "destructive",
       });
     } else {
-      setAdSpaces(data || []);
+      setSpaces(data || []);
     }
     setLoading(false);
   };
@@ -88,13 +88,13 @@ const AdSpaces = () => {
     if (error) {
       toast({
         title: "Error",
-        description: "Could not create ad space.",
+        description: "Could not create space.",
         variant: "destructive",
       });
     } else {
       toast({
         title: "Success",
-        description: "Ad space created successfully!",
+        description: "Space created successfully!",
       });
       setDialogOpen(false);
       setFormData({
@@ -106,7 +106,7 @@ const AdSpaces = () => {
         currency: 'EUR',
         price_model: 'cpm',
       });
-      fetchAdSpaces();
+      fetchSpaces();
     }
   };
 
@@ -131,7 +131,7 @@ const AdSpaces = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Ad Spaces</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Spaces</h2>
           <p className="text-muted-foreground">
             Manage your available advertising spaces
           </p>
@@ -235,7 +235,7 @@ const AdSpaces = () => {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {adSpaces.map((space) => (
+        {spaces.map((space) => (
           <Card key={space.id}>
             <CardHeader>
               <div className="flex justify-between items-start">
@@ -272,13 +272,13 @@ const AdSpaces = () => {
         ))}
       </div>
 
-      {adSpaces.length === 0 && (
+      {spaces.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-8">
             <Target className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No ad spaces</h3>
+            <h3 className="text-lg font-semibold mb-2">No spaces</h3>
             <p className="text-muted-foreground text-center mb-4">
-              Start by creating your first ad space to begin generating revenue.
+              Start by creating your first space to begin generating revenue.
             </p>
             <Button onClick={() => setDialogOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
@@ -291,4 +291,4 @@ const AdSpaces = () => {
   );
 };
 
-export default AdSpaces;
+export default Spaces;

@@ -5,7 +5,7 @@ import { Target, Megaphone, Euro, Settings, TrendingUp, TrendingDown, Star } fro
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
-    adSpaces: 0,
+    spaces: 0,
     campaigns: 0,
     revenue: 0,
     integrations: 0,
@@ -13,12 +13,12 @@ const Dashboard = () => {
 
   useEffect(() => {
     const fetchStats = async () => {
-      const { data: adSpaces } = await supabase.from('ad_spaces').select('id', { count: 'exact' });
+      const { data: spaces } = await supabase.from('ad_spaces').select('id', { count: 'exact' });
       const { data: campaigns } = await supabase.from('campaigns').select('id', { count: 'exact' });
       const { data: integrations } = await supabase.from('ad_server_integrations').select('id', { count: 'exact' });
       
       setStats({
-        adSpaces: adSpaces?.length || 0,
+        spaces: spaces?.length || 0,
         campaigns: campaigns?.length || 0,
         revenue: 0, // Calculate from actual data later
         integrations: integrations?.length || 0,
@@ -30,7 +30,7 @@ const Dashboard = () => {
 
   const welcomeCards = [
     {
-      title: 'Welcome to AdSpace!',
+      title: 'Welcome to Crusade!',
       description: 'Set up your first ad spaces to start generating revenue.',
       buttonText: 'Get Started',
       iconColor: 'text-red-500',
@@ -55,7 +55,7 @@ const Dashboard = () => {
   const keyMetrics = [
     {
       title: 'Active Spaces',
-      value: stats.adSpaces,
+      value: stats.spaces,
       period: 'Total',
       trend: 'up',
       icon: Target,
