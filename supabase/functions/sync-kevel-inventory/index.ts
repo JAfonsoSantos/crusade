@@ -240,7 +240,7 @@ Deno.serve(async (req) => {
           currency: 'USD',
           status: kevelCampaign.IsActive ? 'active' : 'paused',
           company_id: integration.company_id,
-          created_by: integration.company_id, // Use company_id as fallback
+          // Don't set created_by for synced campaigns - it requires a valid user ID
         }
 
         // Check if campaign already exists (by name and company)
