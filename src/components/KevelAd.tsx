@@ -179,9 +179,130 @@ const KevelAd = ({
     }
   };
 
+  // Render debug icon for all states
+  const DebugIcon = () => (
+    <Dialog>
+      <DialogTrigger asChild>
+        <button 
+          className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity bg-black/80 text-white p-1 rounded-md hover:bg-black/90"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Settings className="h-3 w-3" />
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Kevel Ad Debug Info - {position}</DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-6">
+          {/* Editable Parameters */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold">Request Parameters</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="networkId">Network ID</Label>
+                <Input
+                  id="networkId"
+                  value={debugNetworkId}
+                  onChange={(e) => setDebugNetworkId(Number(e.target.value))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="siteId">Site ID</Label>
+                <Input
+                  id="siteId"
+                  value={debugSiteId}
+                  onChange={(e) => setDebugSiteId(Number(e.target.value))}
+                />
+              </div>
+              <div className="col-span-2">
+                <Label htmlFor="adTypes">Ad Types (comma-separated)</Label>
+                <Input
+                  id="adTypes"
+                  value={debugAdTypes}
+                  onChange={(e) => setDebugAdTypes(e.target.value)}
+                  placeholder="4,5,6"
+                />
+              </div>
+            </div>
+            <Button onClick={handleRefreshAd} className="w-full">
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Refresh Ad with New Parameters
+            </Button>
+          </div>
+
+          {/* Current Ad Info */}
+          <div className="space-y-2">
+            <h3 className="text-lg font-semibold">Current Ad Info</h3>
+            <div className="flex gap-2 flex-wrap">
+              <Badge variant="outline">ID: {adId}</Badge>
+              <Badge variant="outline">Size: {size}</Badge>
+              <Badge variant="outline">Position: {position}</Badge>
+              <Badge variant={loading ? "secondary" : error || !adContent ? "destructive" : "default"}>
+                Status: {loading ? "Loading" : error ? "Error" : !adContent ? "No Ad" : "Loaded"}
+              </Badge>
+            </div>
+          </div>
+
+          {/* Error Details */}
+          {error && (
+            <div className="space-y-2">
+              <h3 className="text-lg font-semibold text-destructive">Error Details</h3>
+              <div className="bg-destructive/10 p-3 rounded-md">
+                <pre className="text-xs text-destructive">{error}</pre>
+              </div>
+            </div>
+          )}
+
+          {/* Last Request */}
+          {lastRequest && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Last Request</h3>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => copyToClipboard(JSON.stringify(lastRequest, null, 2))}
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copy
+                </Button>
+              </div>
+              <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
+                {JSON.stringify(lastRequest, null, 2)}
+              </pre>
+            </div>
+          )}
+
+          {/* Last Response */}
+          {lastResponse && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Last Response</h3>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => copyToClipboard(JSON.stringify(lastResponse, null, 2))}
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copy
+                </Button>
+              </div>
+              <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
+                {JSON.stringify(lastResponse, null, 2)}
+              </pre>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+
   if (loading) {
     return (
-      <div className={`${getContainerClasses()} bg-muted animate-pulse flex items-center justify-center`}>
+      <div className={`${getContainerClasses()} bg-muted animate-pulse flex items-center justify-center relative group`}>
+        <DebugIcon />
         <div className="text-center">
           <div className="text-sm text-muted-foreground">Loading ad...</div>
           <div className="text-xs text-muted-foreground/70">{size} - {position}</div>
@@ -192,7 +313,8 @@ const KevelAd = ({
 
   if (error || !adContent) {
     return (
-      <div className={`${getContainerClasses()} bg-gradient-to-r from-primary/10 to-secondary/10 border-2 border-dashed border-muted-foreground/30 flex items-center justify-center`}>
+      <div className={`${getContainerClasses()} bg-gradient-to-r from-primary/10 to-secondary/10 border-2 border-dashed border-muted-foreground/30 flex items-center justify-center relative group`}>
+        <DebugIcon />
         <div className="text-center">
           <div className="text-sm font-medium text-muted-foreground">
             {error ? 'Ad Load Error' : 'No Ad Available'}
@@ -215,110 +337,7 @@ const KevelAd = ({
       onClick={handleAdClick}
       style={{ cursor: adContent.includes('href=') ? 'pointer' : 'default' }}
     >
-      {/* Debug Icon - Only visible on successful ad render */}
-      <Dialog>
-        <DialogTrigger asChild>
-          <button 
-            className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity bg-black/80 text-white p-1 rounded-md hover:bg-black/90"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Settings className="h-3 w-3" />
-          </button>
-        </DialogTrigger>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Kevel Ad Debug Info - {position}</DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-6">
-            {/* Editable Parameters */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Request Parameters</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="networkId">Network ID</Label>
-                  <Input
-                    id="networkId"
-                    value={debugNetworkId}
-                    onChange={(e) => setDebugNetworkId(Number(e.target.value))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="siteId">Site ID</Label>
-                  <Input
-                    id="siteId"
-                    value={debugSiteId}
-                    onChange={(e) => setDebugSiteId(Number(e.target.value))}
-                  />
-                </div>
-                <div className="col-span-2">
-                  <Label htmlFor="adTypes">Ad Types (comma-separated)</Label>
-                  <Input
-                    id="adTypes"
-                    value={debugAdTypes}
-                    onChange={(e) => setDebugAdTypes(e.target.value)}
-                    placeholder="4,5,6"
-                  />
-                </div>
-              </div>
-              <Button onClick={handleRefreshAd} className="w-full">
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Refresh Ad with New Parameters
-              </Button>
-            </div>
-
-            {/* Current Ad Info */}
-            <div className="space-y-2">
-              <h3 className="text-lg font-semibold">Current Ad Info</h3>
-              <div className="flex gap-2 flex-wrap">
-                <Badge variant="outline">ID: {adId}</Badge>
-                <Badge variant="outline">Size: {size}</Badge>
-                <Badge variant="outline">Position: {position}</Badge>
-              </div>
-            </div>
-
-            {/* Last Request */}
-            {lastRequest && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Last Request</h3>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => copyToClipboard(JSON.stringify(lastRequest, null, 2))}
-                  >
-                    <Copy className="mr-2 h-4 w-4" />
-                    Copy
-                  </Button>
-                </div>
-                <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
-                  {JSON.stringify(lastRequest, null, 2)}
-                </pre>
-              </div>
-            )}
-
-            {/* Last Response */}
-            {lastResponse && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Last Response</h3>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => copyToClipboard(JSON.stringify(lastResponse, null, 2))}
-                  >
-                    <Copy className="mr-2 h-4 w-4" />
-                    Copy
-                  </Button>
-                </div>
-                <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
-                  {JSON.stringify(lastResponse, null, 2)}
-                </pre>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <DebugIcon />
 
       {/* Ad Content */}
       <div 
