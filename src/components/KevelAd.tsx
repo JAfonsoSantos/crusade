@@ -48,7 +48,7 @@ const KevelAd = ({
   const adRef = useRef<HTMLDivElement>(null);
   const impressionFired = useRef(false);
   
-  // Generate unique ID based on position and size
+  // Generate unique ID based on position and size to ensure proper Kevel placement tracking
   const adId = `${position.toLowerCase().replace(/\s+/g, '-')}-${size}`;
 
   useEffect(() => {
