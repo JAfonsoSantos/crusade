@@ -180,8 +180,10 @@ Deno.serve(async (req) => {
       
       for (const adSize of commonAdSizes) {
         try {
-          // First, create Ad Unit in Kevel if it doesn't exist
+          // First, check if Ad Unit already exists in Kevel with exact match
           const adUnitName = `${site.Title} - ${adSize.Name}`
+          
+          console.log(`Checking for existing Ad Unit: ${adUnitName}`)
           
           // Check if Ad Unit already exists in Kevel
           const adUnitsResponse = await fetch(`https://api.kevel.co/v1/site/${site.Id}/zone`, {
@@ -193,19 +195,34 @@ Deno.serve(async (req) => {
           })
           
           let adUnitId = null
+          let needsUpdate = false
+          
           if (adUnitsResponse.ok) {
             const adUnitsData = await adUnitsResponse.json()
-            const existingAdUnit = adUnitsData.items?.find((unit: any) => unit.Name === adUnitName)
+            const existingAdUnit = adUnitsData.items?.find((unit: any) => 
+              unit.Name === adUnitName || 
+              unit.Name.toLowerCase() === adUnitName.toLowerCase()
+            )
             
             if (existingAdUnit) {
               adUnitId = existingAdUnit.Id
               console.log(`Found existing Ad Unit: ${adUnitName} (ID: ${adUnitId})`)
+              
+              // Check if dimensions need updating
+              if (existingAdUnit.Width !== adSize.Width || existingAdUnit.Height !== adSize.Height) {
+                needsUpdate = true
+                console.log(`Ad Unit dimensions need updating: ${existingAdUnit.Width}x${existingAdUnit.Height} -> ${adSize.Width}x${adSize.Height}`)
+              }
+              
+              operationDetails.ad_units.updated++ // Count as processed
             }
+          } else {
+            console.log(`Could not fetch existing ad units for site ${site.Id}: ${adUnitsResponse.status}`)
           }
           
-          // Create Ad Unit in Kevel if it doesn't exist
+          // Only create Ad Unit in Kevel if it doesn't exist
           if (!adUnitId) {
-            console.log(`Creating Ad Unit in Kevel: ${adUnitName}`)
+            console.log(`Creating new Ad Unit in Kevel: ${adUnitName}`)
             const createAdUnitResponse = await fetch(`https://api.kevel.co/v1/site/${site.Id}/zone`, {
               method: 'POST',
               headers: {
@@ -225,12 +242,42 @@ Deno.serve(async (req) => {
               const newAdUnit = await createAdUnitResponse.json()
               adUnitId = newAdUnit.Id
               operationDetails.ad_units.created++
-              console.log(`Created Ad Unit in Kevel: ${adUnitName} (ID: ${adUnitId})`)
+              console.log(`Successfully created Ad Unit: ${adUnitName} (ID: ${adUnitId})`)
             } else {
-              const errorMsg = `Failed to create Ad Unit: ${adUnitName}`
+              const errorText = await createAdUnitResponse.text()
+              const errorMsg = `Failed to create Ad Unit: ${adUnitName} - ${createAdUnitResponse.status}: ${errorText}`
               operationDetails.ad_units.errors.push(errorMsg)
               console.error(errorMsg)
+              continue // Skip to next ad size if creation failed
             }
+          } else if (needsUpdate) {
+            // Update existing Ad Unit if dimensions changed
+            console.log(`Updating Ad Unit dimensions: ${adUnitName}`)
+            const updateResponse = await fetch(`https://api.kevel.co/v1/zone/${adUnitId}`, {
+              method: 'PUT',
+              headers: {
+                'X-Adzerk-ApiKey': apiKey,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                Name: adUnitName,
+                SiteId: site.Id,
+                IsDeleted: false,
+                Width: adSize.Width,
+                Height: adSize.Height
+              }),
+            })
+            
+            if (!updateResponse.ok) {
+              const errorText = await updateResponse.text()
+              const errorMsg = `Failed to update Ad Unit: ${adUnitName} - ${updateResponse.status}: ${errorText}`
+              operationDetails.ad_units.errors.push(errorMsg)
+              console.error(errorMsg)
+            } else {
+              console.log(`Successfully updated Ad Unit: ${adUnitName}`)
+            }
+          } else {
+            console.log(`Ad Unit already exists and is up to date: ${adUnitName}`)
           }
 
           // Create/update ad space in our database
