@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Edit, Trash2, Megaphone, Calendar, Upload, ExternalLink, Loader2, PlayCircle, PauseCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, Megaphone, Calendar, Upload, ExternalLink, Loader2, PlayCircle, PauseCircle, RefreshCw } from 'lucide-react';
 
 interface Campaign {
   id: string;
@@ -26,6 +26,7 @@ interface Campaign {
 const Campaigns = () => {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [pushingCampaigns, setPushingCampaigns] = useState<Set<string>>(new Set());
   const [integrations, setIntegrations] = useState<any[]>([]);
@@ -149,6 +150,34 @@ const Campaigns = () => {
     }
   };
 
+  const syncAllIntegrations = async () => {
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('auto-sync-kevel');
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Sync Complete",
+        description: data.message || `Synced ${data.total_synced} items from ${data.integrations_processed} integrations`,
+      });
+      
+      // Refresh integrations and campaigns to show updated data
+      await Promise.all([fetchIntegrations(), fetchCampaigns()]);
+    } catch (error) {
+      console.error('Sync error:', error);
+      toast({
+        title: "Sync Failed",
+        description: "Failed to sync with ad platforms. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -231,101 +260,120 @@ const Campaigns = () => {
             Manage your advertising campaigns
           </p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              New Campaign
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Create New Campaign</DialogTitle>
-              <DialogDescription>
-                Set up a new advertising campaign
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="name">Campaign Name</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Ex: Summer 2024 Campaign"
-                  required
-                />
-              </div>
-              
-              <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Campaign description..."
-                />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-2">
-                <div className="grid w-full items-center gap-1.5">
-                  <Label htmlFor="start_date">Start Date</Label>
-                  <Input
-                    id="start_date"
-                    type="date"
-                    value={formData.start_date}
-                    onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                    required
-                  />
-                </div>
-                
-                <div className="grid w-full items-center gap-1.5">
-                  <Label htmlFor="end_date">End Date</Label>
-                  <Input
-                    id="end_date"
-                    type="date"
-                    value={formData.end_date}
-                    onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                    required
-                  />
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-2">
-                <div className="grid w-full items-center gap-1.5">
-                  <Label htmlFor="budget">Budget</Label>
-                  <Input
-                    id="budget"
-                    type="number"
-                    step="0.01"
-                    value={formData.budget}
-                    onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
-                    placeholder="0.00"
-                    required
-                  />
-                </div>
-                
-                <div className="grid w-full items-center gap-1.5">
-                  <Label htmlFor="currency">Currency</Label>
-                  <Select value={formData.currency} onValueChange={(value) => setFormData({ ...formData, currency: value })}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="EUR">EUR</SelectItem>
-                      <SelectItem value="USD">USD</SelectItem>
-                      <SelectItem value="GBP">GBP</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              
-              <Button type="submit" className="w-full">
-                Create Campaign
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={syncAllIntegrations}
+            disabled={syncing}
+          >
+            {syncing ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Syncing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Sync with Platforms
+              </>
+            )}
+          </Button>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                New Campaign
               </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Create New Campaign</DialogTitle>
+                <DialogDescription>
+                  Set up a new advertising campaign
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid w-full items-center gap-1.5">
+                  <Label htmlFor="name">Campaign Name</Label>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="Ex: Summer 2024 Campaign"
+                    required
+                  />
+                </div>
+                
+                <div className="grid w-full items-center gap-1.5">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Campaign description..."
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="grid w-full items-center gap-1.5">
+                    <Label htmlFor="start_date">Start Date</Label>
+                    <Input
+                      id="start_date"
+                      type="date"
+                      value={formData.start_date}
+                      onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                      required
+                    />
+                  </div>
+                  
+                  <div className="grid w-full items-center gap-1.5">
+                    <Label htmlFor="end_date">End Date</Label>
+                    <Input
+                      id="end_date"
+                      type="date"
+                      value={formData.end_date}
+                      onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="grid w-full items-center gap-1.5">
+                    <Label htmlFor="budget">Budget</Label>
+                    <Input
+                      id="budget"
+                      type="number"
+                      step="0.01"
+                      value={formData.budget}
+                      onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
+                      placeholder="0.00"
+                      required
+                    />
+                  </div>
+                  
+                  <div className="grid w-full items-center gap-1.5">
+                    <Label htmlFor="currency">Currency</Label>
+                    <Select value={formData.currency} onValueChange={(value) => setFormData({ ...formData, currency: value })}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="EUR">EUR</SelectItem>
+                        <SelectItem value="USD">USD</SelectItem>
+                        <SelectItem value="GBP">GBP</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
+                <Button type="submit" className="w-full">
+                  Create Campaign
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="space-y-4">
