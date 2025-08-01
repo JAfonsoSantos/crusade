@@ -678,11 +678,6 @@ Deno.serve(async (req) => {
         }
       }
     } catch (error) {
-      console.error('Error during cleanup process:', error)
-      operationDetails.campaigns.errors.push(`Cleanup error: ${error.message}`)
-      errorCount++
-    }
-    } catch (error) {
       console.error('Error in campaign cleanup:', error)
       errorCount++
     }
