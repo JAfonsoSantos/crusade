@@ -470,7 +470,104 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Clean up campaigns that no longer exist in Kevel
+    // Sync Flights for each campaign
+    console.log('Syncing flights for each campaign...')
+    for (const kevelCampaign of campaignsData.items || []) {
+      if (kevelCampaign.IsDeleted) continue
+      
+      try {
+        // Get the local campaign ID
+        const { data: localCampaign } = await supabase
+          .from('campaigns')
+          .select('id')
+          .eq('name', kevelCampaign.Name)
+          .eq('company_id', integration.company_id)
+          .single()
+
+        if (localCampaign) {
+          // Fetch flights for this campaign from Kevel
+          const flightsResponse = await fetch(`https://api.kevel.co/v1/flight/list`, {
+            method: 'POST',
+            headers: {
+              'X-Adzerk-ApiKey': apiKey,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              CampaignId: kevelCampaign.Id
+            })
+          })
+
+          if (flightsResponse.ok) {
+            const flightsData = await flightsResponse.json()
+            
+            for (const kevelFlight of flightsData.items || []) {
+              if (kevelFlight.IsDeleted) continue
+              
+              const flightData = {
+                campaign_id: localCampaign.id,
+                name: kevelFlight.Name || `Flight ${kevelFlight.Id}`,
+                description: `Imported from Kevel (ID: ${kevelFlight.Id})`,
+                start_date: kevelFlight.StartDate ? kevelFlight.StartDate.split('T')[0] : kevelCampaign.StartDate?.split('T')[0] || new Date().toISOString().split('T')[0],
+                end_date: kevelFlight.EndDate ? kevelFlight.EndDate.split('T')[0] : kevelCampaign.EndDate?.split('T')[0] || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                budget: kevelFlight.Price || null,
+                currency: 'USD',
+                status: kevelFlight.IsActive ? 'active' : 'paused',
+                priority: kevelFlight.Priority || 1,
+                external_id: kevelFlight.Id.toString(),
+                ad_server: 'kevel',
+                targeting_criteria: {
+                  kevel_flight_id: kevelFlight.Id,
+                  impression_cap: kevelFlight.CapType || null,
+                  daily_cap: kevelFlight.DailyCap || null
+                }
+              }
+
+              // Check if flight already exists
+              const { data: existingFlight } = await supabase
+                .from('flights')
+                .select('id')
+                .eq('external_id', kevelFlight.Id.toString())
+                .eq('campaign_id', localCampaign.id)
+                .single()
+
+              if (existingFlight) {
+                // Update existing flight
+                const { error: updateError } = await supabase
+                  .from('flights')
+                  .update({
+                    status: kevelFlight.IsActive ? 'active' : 'paused',
+                    budget: kevelFlight.Price || null,
+                    priority: kevelFlight.Priority || 1
+                  })
+                  .eq('id', existingFlight.id)
+
+                if (updateError) {
+                  console.error('Error updating flight:', updateError)
+                  errorCount++
+                } else {
+                  syncedCount++
+                }
+              } else {
+                // Insert new flight
+                const { error: insertError } = await supabase
+                  .from('flights')
+                  .insert(flightData)
+
+                if (insertError) {
+                  console.error('Error inserting flight:', insertError)
+                  errorCount++
+                } else {
+                  syncedCount++
+                }
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Error syncing flights for campaign ${kevelCampaign.Name}:`, error)
+        errorCount++
+      }
+    }
     console.log('Checking for campaigns to clean up...')
     try {
       // Get all campaigns that were imported from Kevel for this company
