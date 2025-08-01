@@ -677,6 +677,7 @@ Deno.serve(async (req) => {
           }
         }
       }
+    }
     } catch (error) {
       console.error('Error in campaign cleanup:', error)
       errorCount++
