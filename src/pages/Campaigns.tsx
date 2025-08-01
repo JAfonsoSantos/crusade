@@ -533,46 +533,44 @@ const Campaigns = () => {
           const isExpanded = expandedCampaigns.has(campaign.id);
           
           return (
-            <Card key={campaign.id} className="w-full">
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <CollapsibleTrigger 
-                        onClick={() => toggleCampaignExpansion(campaign.id)}
-                        className="flex items-center gap-1 hover:bg-muted/50 rounded p-1"
-                      >
-                        {isExpanded ? (
-                          <ChevronDown className="h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4" />
-                        )}
-                      </CollapsibleTrigger>
-                      <CardTitle className="text-lg font-semibold">
-                        {campaign.name}
-                      </CardTitle>
-                      <Badge variant="secondary" className="text-xs">
-                        {campaign.flights?.length || 0} flights
-                      </Badge>
+            <Collapsible key={campaign.id} open={isExpanded} onOpenChange={() => toggleCampaignExpansion(campaign.id)}>
+              <Card className="w-full">
+                <CardHeader>
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <CollapsibleTrigger className="flex items-center gap-1 hover:bg-muted/50 rounded p-1">
+                          {isExpanded ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
+                        </CollapsibleTrigger>
+                        <CardTitle className="text-lg font-semibold">
+                          {campaign.name}
+                        </CardTitle>
+                        <Badge variant="secondary" className="text-xs">
+                          {campaign.flights?.length || 0} flights
+                        </Badge>
+                      </div>
+                      {campaign.description && (
+                        <p className="text-muted-foreground mt-1 ml-7">
+                          {campaign.description}
+                        </p>
+                      )}
                     </div>
-                    {campaign.description && (
-                      <p className="text-muted-foreground mt-1 ml-7">
-                        {campaign.description}
-                      </p>
-                    )}
+                    <Badge 
+                      variant={
+                        campaign.status === 'active' ? 'default' : 
+                        campaign.status === 'paused' ? 'secondary' : 
+                        'outline'
+                      }
+                      className={getStatusColor(campaign.status)}
+                    >
+                      {campaign.status}
+                    </Badge>
                   </div>
-                  <Badge 
-                    variant={
-                      campaign.status === 'active' ? 'default' : 
-                      campaign.status === 'paused' ? 'secondary' : 
-                      'outline'
-                    }
-                    className={getStatusColor(campaign.status)}
-                  >
-                    {campaign.status}
-                  </Badge>
-                </div>
-              </CardHeader>
+                </CardHeader>
               
               <CardContent>
                 {/* Campaign Overview */}
@@ -725,6 +723,7 @@ const Campaigns = () => {
                 </Collapsible>
               </CardContent>
             </Card>
+          </Collapsible>
           );
         })}
       </div>
