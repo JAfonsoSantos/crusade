@@ -501,7 +501,7 @@ Deno.serve(async (req) => {
           
           // Fetch flights for this campaign from Kevel
           console.log(`Fetching flights from Kevel for campaign ${kevelCampaign.Id}...`)
-          const flightsResponse = await fetch(`https://api.kevel.co/v1/campaign/${kevelCampaign.Id}/flight`, {
+          const flightsResponse = await fetch(`https://api.kevel.co/v1/flight`, {
             method: 'GET',
             headers: {
               'X-Adzerk-ApiKey': apiKey,
@@ -518,9 +518,15 @@ Deno.serve(async (req) => {
           }
           
           const flightsData = await flightsResponse.json()
-          console.log(`Found ${flightsData.items?.length || 0} flights for campaign ${kevelCampaign.Name}`)
+          console.log(`Fetched ${flightsData.items?.length || 0} total flights from Kevel`)
           
-          for (const kevelFlight of flightsData.items || []) {
+          // Filter flights for this specific campaign
+          const campaignFlights = (flightsData.items || []).filter(flight => 
+            flight.CampaignId === kevelCampaign.Id
+          )
+          console.log(`Found ${campaignFlights.length} flights for campaign ${kevelCampaign.Name} (ID: ${kevelCampaign.Id})`)
+          
+          for (const kevelFlight of campaignFlights) {
             if (kevelFlight.IsDeleted) {
               console.log(`Skipping deleted flight: ${kevelFlight.Name || kevelFlight.Id}`)
               continue
