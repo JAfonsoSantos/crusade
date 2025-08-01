@@ -472,20 +472,35 @@ Deno.serve(async (req) => {
 
     // Sync Flights for each campaign
     console.log('Syncing flights for each campaign...')
+    console.log(`Found ${campaignsData.items?.length || 0} campaigns to process for flights`)
+    
     for (const kevelCampaign of campaignsData.items || []) {
-      if (kevelCampaign.IsDeleted) continue
+      if (kevelCampaign.IsDeleted) {
+        console.log(`Skipping deleted campaign: ${kevelCampaign.Name}`)
+        continue
+      }
+      
+      console.log(`Processing flights for campaign: ${kevelCampaign.Name} (ID: ${kevelCampaign.Id})`)
       
       try {
         // Get the local campaign ID
-        const { data: localCampaign } = await supabase
+        const { data: localCampaign, error: campaignError } = await supabase
           .from('campaigns')
           .select('id')
           .eq('name', kevelCampaign.Name)
           .eq('company_id', integration.company_id)
           .single()
 
+        if (campaignError) {
+          console.error(`Error finding local campaign for ${kevelCampaign.Name}:`, campaignError)
+          continue
+        }
+
         if (localCampaign) {
+          console.log(`Found local campaign ID: ${localCampaign.id} for ${kevelCampaign.Name}`)
+          
           // Fetch flights for this campaign from Kevel
+          console.log(`Fetching flights from Kevel for campaign ${kevelCampaign.Id}...`)
           const flightsResponse = await fetch(`https://api.kevel.co/v1/flight/list`, {
             method: 'POST',
             headers: {
@@ -497,13 +512,26 @@ Deno.serve(async (req) => {
             })
           })
 
-          if (flightsResponse.ok) {
-            const flightsData = await flightsResponse.json()
+          console.log(`Kevel flights API response status: ${flightsResponse.status}`)
+          
+          if (!flightsResponse.ok) {
+            const errorText = await flightsResponse.text()
+            console.error(`Failed to fetch flights from Kevel: ${flightsResponse.status} - ${errorText}`)
+            continue
+          }
+          
+          const flightsData = await flightsResponse.json()
+          console.log(`Found ${flightsData.items?.length || 0} flights for campaign ${kevelCampaign.Name}`)
+          
+          for (const kevelFlight of flightsData.items || []) {
+            if (kevelFlight.IsDeleted) {
+              console.log(`Skipping deleted flight: ${kevelFlight.Name || kevelFlight.Id}`)
+              continue
+            }
             
-            for (const kevelFlight of flightsData.items || []) {
-              if (kevelFlight.IsDeleted) continue
-              
-              const flightData = {
+            console.log(`Processing flight: ${kevelFlight.Name || kevelFlight.Id} (ID: ${kevelFlight.Id})`)
+            
+            const flightData = {
                 campaign_id: localCampaign.id,
                 name: kevelFlight.Name || `Flight ${kevelFlight.Id}`,
                 description: `Imported from Kevel (ID: ${kevelFlight.Id})`,
