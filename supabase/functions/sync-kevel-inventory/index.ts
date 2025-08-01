@@ -501,15 +501,12 @@ Deno.serve(async (req) => {
           
           // Fetch flights for this campaign from Kevel
           console.log(`Fetching flights from Kevel for campaign ${kevelCampaign.Id}...`)
-          const flightsResponse = await fetch(`https://api.kevel.co/v1/flight/list`, {
-            method: 'POST',
+          const flightsResponse = await fetch(`https://api.kevel.co/v1/campaign/${kevelCampaign.Id}/flight`, {
+            method: 'GET',
             headers: {
               'X-Adzerk-ApiKey': apiKey,
               'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              CampaignId: kevelCampaign.Id
-            })
+            }
           })
 
           console.log(`Kevel flights API response status: ${flightsResponse.status}`)
