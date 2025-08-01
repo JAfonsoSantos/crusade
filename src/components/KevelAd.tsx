@@ -65,6 +65,9 @@ const KevelAd = ({
   const adId = `${position.toLowerCase().replace(/\s+/g, '-')}-${size}`;
 
   useEffect(() => {
+    // TEMPORARILY DISABLED TO PREVENT EXCESSIVE API REQUESTS
+    return;
+    
     const fetchAd = async () => {
       try {
         setLoading(true);
