@@ -679,6 +679,10 @@ Deno.serve(async (req) => {
       operationDetails.campaigns.errors.push(`Cleanup error: ${error.message}`)
       errorCount++
     }
+    } catch (error) {
+      console.error('Error in campaign cleanup:', error)
+      errorCount++
+    }
 
     // Save sync history
     const syncEndTime = Date.now()
