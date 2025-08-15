@@ -369,51 +369,9 @@ const Campaigns = () => {
       <Card>
         <CardContent className="p-6">
           <div className="space-y-4">
-            <div className="relative w-full h-24">
-              <svg width="100%" height="96" viewBox="0 0 800 96" className="overflow-visible">
-                {/* Slots Available - 100% (Purple) */}
-                <path
-                  d="M 0 20 L 200 20 L 240 38 L 240 58 L 200 76 L 0 76 Z"
-                  fill="url(#purpleGradient)"
-                  className="drop-shadow-sm"
-                />
-                
-                {/* Slots Filled - 85% (Cyan) */}
-                <path
-                  d="M 200 20 L 400 20 L 440 32 L 440 64 L 400 76 L 240 76 L 240 38 Z"
-                  fill="url(#cyanGradient)"
-                  className="drop-shadow-sm"
-                />
-                
-                {/* Impressions - 30% (Light Gray) */}
-                <path
-                  d="M 400 20 L 560 20 L 600 38 L 600 58 L 560 76 L 440 76 L 440 32 Z"
-                  fill="url(#lightGrayGradient)"
-                  className="drop-shadow-sm"
-                />
-                
-                {/* Clicks - 2% (Dark Gray) */}
-                <path
-                  d="M 560 20 L 680 20 L 720 42 L 720 54 L 680 76 L 600 76 L 600 38 Z"
-                  fill="url(#darkGrayGradient)"
-                  className="drop-shadow-sm"
-                />
-                
-                {/* Transactions - 15% (Green) */}
-                <path
-                  d="M 680 20 L 800 20 L 800 76 L 720 76 L 720 42 Z"
-                  fill="url(#greenGradient)"
-                  className="drop-shadow-sm"
-                />
-                
-                {/* Text Labels */}
-                <text x="100" y="52" textAnchor="middle" className="fill-white text-sm font-bold">100%</text>
-                <text x="300" y="52" textAnchor="middle" className="fill-white text-sm font-bold">85%</text>
-                <text x="480" y="52" textAnchor="middle" className="fill-white text-sm font-bold">30%</text>
-                <text x="620" y="52" textAnchor="middle" className="fill-white text-sm font-bold">2%</text>
-                <text x="740" y="52" textAnchor="middle" className="fill-white text-sm font-bold">15%</text>
-                
-                {/* Gradients */}
+            <div className="relative w-full h-20">
+              <svg width="100%" height="80" viewBox="0 0 1000 80" className="overflow-visible">
+                {/* Gradients first */}
                 <defs>
                   <linearGradient id="purpleGradient" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stopColor="#8b5cf6" />
@@ -436,6 +394,40 @@ const Campaigns = () => {
                     <stop offset="100%" stopColor="#16a34a" />
                   </linearGradient>
                 </defs>
+                
+                {/* 100% - Purple (Full height: 60px) */}
+                <rect x="0" y="10" width="200" height="60" fill="url(#purpleGradient)" rx="8" />
+                
+                {/* 85% - Cyan (85% height: 51px) */}
+                <path
+                  d="M 200 14.5 L 400 19 L 400 61 L 200 65.5 Z"
+                  fill="url(#cyanGradient)"
+                />
+                
+                {/* 30% - Light Gray (30% height: 18px) */}
+                <path
+                  d="M 400 31 L 650 37 L 650 43 L 400 49 Z"
+                  fill="url(#lightGrayGradient)"
+                />
+                
+                {/* 2% - Dark Gray (2% height: 1.2px) */}
+                <path
+                  d="M 650 39.4 L 850 39.8 L 850 40.2 L 650 40.6 Z"
+                  fill="url(#darkGrayGradient)"
+                />
+                
+                {/* 15% - Green (15% height: 9px) */}
+                <path
+                  d="M 850 35.5 L 1000 36 L 1000 44 L 850 44.5 Z"
+                  fill="url(#greenGradient)"
+                />
+                
+                {/* Text Labels */}
+                <text x="100" y="45" textAnchor="middle" className="fill-white text-sm font-bold">100%</text>
+                <text x="300" y="45" textAnchor="middle" className="fill-white text-sm font-bold">85%</text>
+                <text x="525" y="45" textAnchor="middle" className="fill-white text-sm font-bold">30%</text>
+                <text x="750" y="45" textAnchor="middle" className="fill-white text-sm font-bold">2%</text>
+                <text x="925" y="45" textAnchor="middle" className="fill-white text-sm font-bold">15%</text>
               </svg>
             </div>
             
