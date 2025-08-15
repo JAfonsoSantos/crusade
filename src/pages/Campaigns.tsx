@@ -369,69 +369,78 @@ const Campaigns = () => {
       <Card>
         <CardContent className="p-6">
           <div className="space-y-4">
-            <div className="relative w-full h-20 bg-gray-100 rounded-lg overflow-hidden">
-              {/* Slots Available - 100% */}
-              <div 
-                className="absolute left-0 top-0 h-full bg-gradient-to-r from-purple-500 to-purple-400 flex items-center justify-center text-white font-bold text-sm"
-                style={{
-                  width: '20%',
-                  clipPath: 'polygon(0 0, 100% 0, 85% 100%, 0 100%)'
-                }}
-              >
-                100%
-              </div>
-              
-              {/* Slots Filled - 85% */}
-              <div 
-                className="absolute top-0 h-full bg-gradient-to-r from-cyan-400 to-cyan-300 flex items-center justify-center text-white font-bold text-sm"
-                style={{
-                  left: '20%',
-                  width: '17%',
-                  clipPath: 'polygon(15% 0, 100% 0, 70% 100%, 0 100%)'
-                }}
-              >
-                85%
-              </div>
-              
-              {/* Impressions - 30% */}
-              <div 
-                className="absolute top-0 h-full bg-gradient-to-r from-gray-400 to-gray-300 flex items-center justify-center text-white font-bold text-sm"
-                style={{
-                  left: '37%',
-                  width: '14%',
-                  clipPath: 'polygon(30% 0, 100% 0, 55% 100%, 0 100%)'
-                }}
-              >
-                30%
-              </div>
-              
-              {/* Clicks - 2% */}
-              <div 
-                className="absolute top-0 h-full bg-gradient-to-r from-gray-500 to-gray-400 flex items-center justify-center text-white font-bold text-sm"
-                style={{
-                  left: '51%',
-                  width: '11%',
-                  clipPath: 'polygon(45% 0, 100% 0, 40% 100%, 0 100%)'
-                }}
-              >
-                2%
-              </div>
-              
-              {/* Transactions - 15% */}
-              <div 
-                className="absolute top-0 h-full bg-gradient-to-r from-green-500 to-green-400 flex items-center justify-center text-white font-bold text-sm"
-                style={{
-                  left: '62%',
-                  width: '8%',
-                  clipPath: 'polygon(60% 0, 100% 0, 100% 100%, 0 100%)'
-                }}
-              >
-                15%
-              </div>
+            <div className="relative w-full h-32">
+              <svg width="100%" height="128" viewBox="0 0 800 128" className="overflow-visible">
+                {/* Slots Available - 100% (Purple) */}
+                <path
+                  d="M 0 20 L 160 20 L 200 40 L 200 88 L 160 108 L 0 108 Z"
+                  fill="url(#purpleGradient)"
+                  className="drop-shadow-sm"
+                />
+                
+                {/* Slots Filled - 85% (Cyan) */}
+                <path
+                  d="M 160 20 L 320 20 L 360 32 L 360 96 L 320 108 L 200 108 L 200 40 Z"
+                  fill="url(#cyanGradient)"
+                  className="drop-shadow-sm"
+                />
+                
+                {/* Impressions - 30% (Light Gray) */}
+                <path
+                  d="M 320 20 L 480 20 L 520 40 L 520 88 L 480 108 L 360 108 L 360 32 Z"
+                  fill="url(#lightGrayGradient)"
+                  className="drop-shadow-sm"
+                />
+                
+                {/* Clicks - 2% (Dark Gray) */}
+                <path
+                  d="M 480 20 L 640 20 L 680 44 L 680 84 L 640 108 L 520 108 L 520 40 Z"
+                  fill="url(#darkGrayGradient)"
+                  className="drop-shadow-sm"
+                />
+                
+                {/* Transactions - 15% (Green) */}
+                <path
+                  d="M 640 20 L 800 20 L 800 108 L 680 108 L 680 44 Z"
+                  fill="url(#greenGradient)"
+                  className="drop-shadow-sm"
+                />
+                
+                {/* Text Labels */}
+                <text x="80" y="68" textAnchor="middle" className="fill-white text-sm font-bold">100%</text>
+                <text x="240" y="68" textAnchor="middle" className="fill-white text-sm font-bold">85%</text>
+                <text x="400" y="68" textAnchor="middle" className="fill-white text-sm font-bold">30%</text>
+                <text x="560" y="68" textAnchor="middle" className="fill-white text-sm font-bold">2%</text>
+                <text x="720" y="68" textAnchor="middle" className="fill-white text-sm font-bold">15%</text>
+                
+                {/* Gradients */}
+                <defs>
+                  <linearGradient id="purpleGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#8b5cf6" />
+                    <stop offset="100%" stopColor="#7c3aed" />
+                  </linearGradient>
+                  <linearGradient id="cyanGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#22d3ee" />
+                    <stop offset="100%" stopColor="#0891b2" />
+                  </linearGradient>
+                  <linearGradient id="lightGrayGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#9ca3af" />
+                    <stop offset="100%" stopColor="#6b7280" />
+                  </linearGradient>
+                  <linearGradient id="darkGrayGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#6b7280" />
+                    <stop offset="100%" stopColor="#4b5563" />
+                  </linearGradient>
+                  <linearGradient id="greenGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#22c55e" />
+                    <stop offset="100%" stopColor="#16a34a" />
+                  </linearGradient>
+                </defs>
+              </svg>
             </div>
             
             {/* Labels below the funnel */}
-            <div className="flex justify-between text-xs text-muted-foreground mt-2 px-2">
+            <div className="grid grid-cols-5 gap-4 text-xs text-muted-foreground text-center mt-4">
               <span>Slots Available</span>
               <span>Slots Filled</span>
               <span>Impressions</span>
