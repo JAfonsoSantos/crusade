@@ -369,49 +369,49 @@ const Campaigns = () => {
       <Card>
         <CardContent className="p-6">
           <div className="space-y-4">
-            <div className="relative w-full h-32">
-              <svg width="100%" height="128" viewBox="0 0 800 128" className="overflow-visible">
+            <div className="relative w-full h-24">
+              <svg width="100%" height="96" viewBox="0 0 800 96" className="overflow-visible">
                 {/* Slots Available - 100% (Purple) */}
                 <path
-                  d="M 0 20 L 160 20 L 200 40 L 200 88 L 160 108 L 0 108 Z"
+                  d="M 0 20 L 200 20 L 240 38 L 240 58 L 200 76 L 0 76 Z"
                   fill="url(#purpleGradient)"
                   className="drop-shadow-sm"
                 />
                 
                 {/* Slots Filled - 85% (Cyan) */}
                 <path
-                  d="M 160 20 L 320 20 L 360 32 L 360 96 L 320 108 L 200 108 L 200 40 Z"
+                  d="M 200 20 L 400 20 L 440 32 L 440 64 L 400 76 L 240 76 L 240 38 Z"
                   fill="url(#cyanGradient)"
                   className="drop-shadow-sm"
                 />
                 
                 {/* Impressions - 30% (Light Gray) */}
                 <path
-                  d="M 320 20 L 480 20 L 520 40 L 520 88 L 480 108 L 360 108 L 360 32 Z"
+                  d="M 400 20 L 560 20 L 600 38 L 600 58 L 560 76 L 440 76 L 440 32 Z"
                   fill="url(#lightGrayGradient)"
                   className="drop-shadow-sm"
                 />
                 
                 {/* Clicks - 2% (Dark Gray) */}
                 <path
-                  d="M 480 20 L 640 20 L 680 44 L 680 84 L 640 108 L 520 108 L 520 40 Z"
+                  d="M 560 20 L 680 20 L 720 42 L 720 54 L 680 76 L 600 76 L 600 38 Z"
                   fill="url(#darkGrayGradient)"
                   className="drop-shadow-sm"
                 />
                 
                 {/* Transactions - 15% (Green) */}
                 <path
-                  d="M 640 20 L 800 20 L 800 108 L 680 108 L 680 44 Z"
+                  d="M 680 20 L 800 20 L 800 76 L 720 76 L 720 42 Z"
                   fill="url(#greenGradient)"
                   className="drop-shadow-sm"
                 />
                 
                 {/* Text Labels */}
-                <text x="80" y="68" textAnchor="middle" className="fill-white text-sm font-bold">100%</text>
-                <text x="240" y="68" textAnchor="middle" className="fill-white text-sm font-bold">85%</text>
-                <text x="400" y="68" textAnchor="middle" className="fill-white text-sm font-bold">30%</text>
-                <text x="560" y="68" textAnchor="middle" className="fill-white text-sm font-bold">2%</text>
-                <text x="720" y="68" textAnchor="middle" className="fill-white text-sm font-bold">15%</text>
+                <text x="100" y="52" textAnchor="middle" className="fill-white text-sm font-bold">100%</text>
+                <text x="300" y="52" textAnchor="middle" className="fill-white text-sm font-bold">85%</text>
+                <text x="480" y="52" textAnchor="middle" className="fill-white text-sm font-bold">30%</text>
+                <text x="620" y="52" textAnchor="middle" className="fill-white text-sm font-bold">2%</text>
+                <text x="740" y="52" textAnchor="middle" className="fill-white text-sm font-bold">15%</text>
                 
                 {/* Gradients */}
                 <defs>
