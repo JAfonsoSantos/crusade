@@ -8,9 +8,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Edit, Trash2, Megaphone, Calendar, Upload, ExternalLink, Loader2, PlayCircle, PauseCircle, RefreshCw, ChevronDown, ChevronRight, Target, Eye, MousePointer, TrendingUp } from 'lucide-react';
+import { Plus, Edit, Trash2, Megaphone, Calendar, Upload, ExternalLink, Loader2, PlayCircle, PauseCircle, RefreshCw, ChevronDown, ChevronRight, Target, Eye, MousePointer, TrendingUp, BarChart3, Lightbulb } from 'lucide-react';
 
 interface Flight {
   id: string;
@@ -57,6 +58,7 @@ const Campaigns = () => {
   const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
   const [pushingCampaigns, setPushingCampaigns] = useState<Set<string>>(new Set());
   const [integrations, setIntegrations] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState("campaigns");
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -299,131 +301,137 @@ const Campaigns = () => {
     return <div>Loading...</div>;
   }
 
-  return (
+  // Mock data for Ad Funnel
+  const funnelData = {
+    slotsAvailable: 91140000,
+    slotsFilled: 77260000,
+    impressions: 23530000,
+    clicks: 500120,
+    transactions: 76780
+  };
+
+  const calculatePercentage = (current: number, previous: number) => {
+    return ((current / previous) * 100).toFixed(0);
+  };
+
+  const AdFunnelContent = () => (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Campaigns & Flights</h2>
-          <p className="text-muted-foreground">
-            Manage your advertising campaigns and their flights
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={syncAllIntegrations}
-            disabled={syncing}
-          >
-            {syncing ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Syncing...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Sync with Platforms
-              </>
-            )}
-          </Button>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                New Campaign
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Create New Campaign</DialogTitle>
-                <DialogDescription>
-                  Set up a new advertising campaign
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid w-full items-center gap-1.5">
-                  <Label htmlFor="name">Campaign Name</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Ex: Summer 2024 Campaign"
-                    required
-                  />
-                </div>
-                
-                <div className="grid w-full items-center gap-1.5">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Campaign description..."
-                  />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="grid w-full items-center gap-1.5">
-                    <Label htmlFor="start_date">Start Date</Label>
-                    <Input
-                      id="start_date"
-                      type="date"
-                      value={formData.start_date}
-                      onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                      required
-                    />
-                  </div>
-                  
-                  <div className="grid w-full items-center gap-1.5">
-                    <Label htmlFor="end_date">End Date</Label>
-                    <Input
-                      id="end_date"
-                      type="date"
-                      value={formData.end_date}
-                      onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                      required
-                    />
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="grid w-full items-center gap-1.5">
-                    <Label htmlFor="budget">Budget</Label>
-                    <Input
-                      id="budget"
-                      type="number"
-                      step="0.01"
-                      value={formData.budget}
-                      onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
-                      placeholder="0.00"
-                      required
-                    />
-                  </div>
-                  
-                  <div className="grid w-full items-center gap-1.5">
-                    <Label htmlFor="currency">Currency</Label>
-                    <Select value={formData.currency} onValueChange={(value) => setFormData({ ...formData, currency: value })}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="EUR">EUR</SelectItem>
-                        <SelectItem value="USD">USD</SelectItem>
-                        <SelectItem value="GBP">GBP</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                
-                <Button type="submit" className="w-full">
-                  Create Campaign
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <h3 className="text-lg font-medium">Ad Funnel</h3>
+          <p className="text-sm text-muted-foreground">Last 7 Days</p>
         </div>
       </div>
 
+      {/* Key Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold">{formatNumber(funnelData.slotsAvailable)}</div>
+            <div className="text-sm text-muted-foreground">Slots Available</div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-purple-600">{formatNumber(funnelData.slotsFilled)}</div>
+            <div className="text-sm text-muted-foreground">Slots Filled</div>
+            <div className="text-xs text-purple-600">{calculatePercentage(funnelData.slotsFilled, funnelData.slotsAvailable)}% of Slots Available</div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-cyan-600">{formatNumber(funnelData.impressions)}</div>
+            <div className="text-sm text-muted-foreground">Impressions</div>
+            <div className="text-xs text-cyan-600">{calculatePercentage(funnelData.impressions, funnelData.slotsFilled)}% of Slots Filled</div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-gray-600">{formatNumber(funnelData.clicks)}</div>
+            <div className="text-sm text-muted-foreground">Clicks</div>
+            <div className="text-xs text-gray-600">{calculatePercentage(funnelData.clicks, funnelData.impressions)}% of Impressions</div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-green-600">{formatNumber(funnelData.transactions)}</div>
+            <div className="text-sm text-muted-foreground">Transactions</div>
+            <div className="text-xs text-green-600">{calculatePercentage(funnelData.transactions, funnelData.clicks)}% of Clicks</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Funnel Visualization */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <div className="h-16 bg-gradient-to-r from-purple-500 to-purple-400 rounded-l-lg flex items-center justify-center text-white font-semibold">
+                  100%
+                </div>
+              </div>
+              <div className="flex-1">
+                <div className="h-16 bg-gradient-to-r from-cyan-400 to-cyan-300 flex items-center justify-center text-white font-semibold relative" style={{clipPath: 'polygon(0 0, 85% 0, 75% 100%, 0 100%)'}}>
+                  85%
+                </div>
+              </div>
+              <div className="flex-1">
+                <div className="h-16 bg-gradient-to-r from-gray-400 to-gray-300 flex items-center justify-center text-white font-semibold relative" style={{clipPath: 'polygon(0 0, 30% 0, 25% 100%, 0 100%)'}}>
+                  30%
+                </div>
+              </div>
+              <div className="flex-1">
+                <div className="h-16 bg-gradient-to-r from-gray-500 to-gray-400 flex items-center justify-center text-white font-semibold relative" style={{clipPath: 'polygon(0 0, 15% 0, 12% 100%, 0 100%)'}}>
+                  2%
+                </div>
+              </div>
+              <div className="flex-1">
+                <div className="h-16 bg-gradient-to-r from-green-500 to-green-400 rounded-r-lg flex items-center justify-center text-white font-semibold relative" style={{clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%)'}}>
+                  15%
+                </div>
+                <div className="text-xs text-green-600 mt-1 text-center">Transactions: 15%</div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* AI Recommendations */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Lightbulb className="h-4 w-4 text-blue-600" />
+              <span className="text-sm font-medium text-blue-600">AI Recommendation: Improve Ad Visibility</span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Your ads are not getting enough views. Move ads to higher-traffic areas to increase impressions.
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Lightbulb className="h-4 w-4 text-blue-600" />
+              <span className="text-sm font-medium text-blue-600">AI Recommendation: Increase ad slots.</span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Your inventory fill rate is high. Add ad slots to unlock more revenue.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+
+  const CampaignsContent = () => (
+    <>
       {/* Flight Creation Dialog */}
       <Dialog open={flightDialogOpen} onOpenChange={setFlightDialogOpen}>
         <DialogContent className="sm:max-w-[525px]">
@@ -743,6 +751,154 @@ const Campaigns = () => {
           </CardContent>
         </Card>
       )}
+    </>
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Campaigns & Flights</h2>
+          <p className="text-muted-foreground">
+            Manage your advertising campaigns and analyze performance
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={syncAllIntegrations}
+            disabled={syncing}
+          >
+            {syncing ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Syncing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Sync with Platforms
+              </>
+            )}
+          </Button>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                New Campaign
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Create New Campaign</DialogTitle>
+                <DialogDescription>
+                  Set up a new advertising campaign
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid w-full items-center gap-1.5">
+                  <Label htmlFor="name">Campaign Name</Label>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="Ex: Summer 2024 Campaign"
+                    required
+                  />
+                </div>
+                
+                <div className="grid w-full items-center gap-1.5">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Campaign description..."
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="grid w-full items-center gap-1.5">
+                    <Label htmlFor="start_date">Start Date</Label>
+                    <Input
+                      id="start_date"
+                      type="date"
+                      value={formData.start_date}
+                      onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                      required
+                    />
+                  </div>
+                  
+                  <div className="grid w-full items-center gap-1.5">
+                    <Label htmlFor="end_date">End Date</Label>
+                    <Input
+                      id="end_date"
+                      type="date"
+                      value={formData.end_date}
+                      onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="grid w-full items-center gap-1.5">
+                    <Label htmlFor="budget">Budget</Label>
+                    <Input
+                      id="budget"
+                      type="number"
+                      step="0.01"
+                      value={formData.budget}
+                      onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
+                      placeholder="0.00"
+                      required
+                    />
+                  </div>
+                  
+                  <div className="grid w-full items-center gap-1.5">
+                    <Label htmlFor="currency">Currency</Label>
+                    <Select value={formData.currency} onValueChange={(value) => setFormData({ ...formData, currency: value })}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="EUR">EUR</SelectItem>
+                        <SelectItem value="USD">USD</SelectItem>
+                        <SelectItem value="GBP">GBP</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
+                <Button type="submit" className="w-full">
+                  Create Campaign
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="campaigns" className="flex items-center gap-2">
+            <Target className="h-4 w-4" />
+            Campaigns
+          </TabsTrigger>
+          <TabsTrigger value="ad-funnel" className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Ad Funnel
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="campaigns" className="mt-6">
+          <CampaignsContent />
+        </TabsContent>
+
+        <TabsContent value="ad-funnel" className="mt-6">
+          <AdFunnelContent />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
