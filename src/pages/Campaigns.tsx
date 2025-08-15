@@ -369,32 +369,71 @@ const Campaigns = () => {
       <Card>
         <CardContent className="p-6">
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <div className="h-16 bg-gradient-to-r from-purple-500 to-purple-400 rounded-l-lg flex items-center justify-center text-white font-semibold">
-                  100%
+            <div className="relative flex justify-center">
+              <div className="w-full max-w-4xl">
+                {/* Slots Available - 100% */}
+                <div className="relative mb-2">
+                  <div 
+                    className="h-20 bg-gradient-to-r from-purple-500 to-purple-400 flex items-center justify-center text-white font-bold text-lg shadow-lg"
+                    style={{
+                      clipPath: 'polygon(0 0, 100% 0, 95% 100%, 5% 100%)',
+                      width: '100%'
+                    }}
+                  >
+                    100% - Slots Available
+                  </div>
                 </div>
-              </div>
-              <div className="flex-1">
-                <div className="h-16 bg-gradient-to-r from-cyan-400 to-cyan-300 flex items-center justify-center text-white font-semibold relative" style={{clipPath: 'polygon(0 0, 85% 0, 75% 100%, 0 100%)'}}>
-                  85%
+                
+                {/* Slots Filled - 85% */}
+                <div className="relative mb-2 flex justify-center">
+                  <div 
+                    className="h-18 bg-gradient-to-r from-cyan-400 to-cyan-300 flex items-center justify-center text-white font-bold text-lg shadow-lg"
+                    style={{
+                      clipPath: 'polygon(0 0, 100% 0, 90% 100%, 10% 100%)',
+                      width: '85%'
+                    }}
+                  >
+                    85% - Slots Filled
+                  </div>
                 </div>
-              </div>
-              <div className="flex-1">
-                <div className="h-16 bg-gradient-to-r from-gray-400 to-gray-300 flex items-center justify-center text-white font-semibold relative" style={{clipPath: 'polygon(0 0, 30% 0, 25% 100%, 0 100%)'}}>
-                  30%
+                
+                {/* Impressions - 30% */}
+                <div className="relative mb-2 flex justify-center">
+                  <div 
+                    className="h-16 bg-gradient-to-r from-gray-400 to-gray-300 flex items-center justify-center text-white font-bold text-lg shadow-lg"
+                    style={{
+                      clipPath: 'polygon(0 0, 100% 0, 85% 100%, 15% 100%)',
+                      width: '30%'
+                    }}
+                  >
+                    30% - Impressions
+                  </div>
                 </div>
-              </div>
-              <div className="flex-1">
-                <div className="h-16 bg-gradient-to-r from-gray-500 to-gray-400 flex items-center justify-center text-white font-semibold relative" style={{clipPath: 'polygon(0 0, 15% 0, 12% 100%, 0 100%)'}}>
-                  2%
+                
+                {/* Clicks - 2% */}
+                <div className="relative mb-2 flex justify-center">
+                  <div 
+                    className="h-14 bg-gradient-to-r from-gray-500 to-gray-400 flex items-center justify-center text-white font-bold text-sm shadow-lg"
+                    style={{
+                      clipPath: 'polygon(0 0, 100% 0, 80% 100%, 20% 100%)',
+                      width: '15%'
+                    }}
+                  >
+                    2% - Clicks
+                  </div>
                 </div>
-              </div>
-              <div className="flex-1">
-                <div className="h-16 bg-gradient-to-r from-green-500 to-green-400 rounded-r-lg flex items-center justify-center text-white font-semibold relative" style={{clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%)'}}>
-                  15%
+                
+                {/* Transactions - 15% of clicks */}
+                <div className="relative flex justify-center">
+                  <div 
+                    className="h-12 bg-gradient-to-r from-green-500 to-green-400 flex items-center justify-center text-white font-bold text-sm shadow-lg rounded-b-lg"
+                    style={{
+                      width: '8%'
+                    }}
+                  >
+                    15% - Transactions
+                  </div>
                 </div>
-                <div className="text-xs text-green-600 mt-1 text-center">Transactions: 15%</div>
               </div>
             </div>
           </div>
