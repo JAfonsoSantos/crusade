@@ -369,75 +369,79 @@ const Campaigns = () => {
       <Card>
         <CardContent className="p-6">
           <div className="space-y-4">
-            <div className="flex items-center h-20 w-full">
+            <div className="relative w-full h-20 bg-gray-100 rounded-lg overflow-hidden">
               {/* Slots Available - 100% */}
-              <div className="flex-1 h-full relative">
-                <div 
-                  className="h-full bg-gradient-to-r from-purple-500 to-purple-400 flex items-center justify-center text-white font-bold text-sm shadow-lg"
-                  style={{
-                    clipPath: 'polygon(0 0, 85% 0, 80% 100%, 0 100%)'
-                  }}
-                >
-                  100%
-                </div>
+              <div 
+                className="absolute left-0 top-0 h-full bg-gradient-to-r from-purple-500 to-purple-400 flex items-center justify-center text-white font-bold text-sm"
+                style={{
+                  width: '20%',
+                  clipPath: 'polygon(0 0, 85% 0, 100% 50%, 85% 100%, 0 100%)'
+                }}
+              >
+                100%
               </div>
               
               {/* Slots Filled - 85% */}
-              <div className="flex-1 h-full relative">
-                <div 
-                  className="h-full bg-gradient-to-r from-cyan-400 to-cyan-300 flex items-center justify-center text-white font-bold text-sm shadow-lg"
-                  style={{
-                    clipPath: 'polygon(0 0, 70% 0, 65% 100%, 0 100%)'
-                  }}
-                >
-                  85%
-                </div>
+              <div 
+                className="absolute top-0 h-full bg-gradient-to-r from-cyan-400 to-cyan-300 flex items-center justify-center text-white font-bold text-sm"
+                style={{
+                  left: '17%',
+                  width: '20%',
+                  clipPath: 'polygon(0 10%, 85% 0, 100% 50%, 85% 100%, 0 90%)'
+                }}
+              >
+                85%
               </div>
               
               {/* Impressions - 30% */}
-              <div className="flex-1 h-full relative">
-                <div 
-                  className="h-full bg-gradient-to-r from-gray-400 to-gray-300 flex items-center justify-center text-white font-bold text-sm shadow-lg"
-                  style={{
-                    clipPath: 'polygon(0 0, 40% 0, 35% 100%, 0 100%)'
-                  }}
-                >
-                  30%
-                </div>
+              <div 
+                className="absolute top-0 h-full bg-gradient-to-r from-gray-400 to-gray-300 flex items-center justify-center text-white font-bold text-sm"
+                style={{
+                  left: '34%',
+                  width: '20%',
+                  clipPath: 'polygon(0 20%, 85% 10%, 100% 50%, 85% 90%, 0 80%)'
+                }}
+              >
+                30%
               </div>
               
               {/* Clicks - 2% */}
-              <div className="flex-1 h-full relative">
-                <div 
-                  className="h-full bg-gradient-to-r from-gray-500 to-gray-400 flex items-center justify-center text-white font-bold text-sm shadow-lg"
-                  style={{
-                    clipPath: 'polygon(0 0, 25% 0, 20% 100%, 0 100%)'
-                  }}
-                >
-                  2%
-                </div>
+              <div 
+                className="absolute top-0 h-full bg-gradient-to-r from-gray-500 to-gray-400 flex items-center justify-center text-white font-bold text-sm"
+                style={{
+                  left: '51%',
+                  width: '20%',
+                  clipPath: 'polygon(0 30%, 85% 20%, 100% 50%, 85% 80%, 0 70%)'
+                }}
+              >
+                2%
               </div>
               
               {/* Transactions - 15% */}
-              <div className="flex-1 h-full relative">
-                <div 
-                  className="h-full bg-gradient-to-r from-green-500 to-green-400 flex items-center justify-center text-white font-bold text-sm shadow-lg rounded-r-lg"
-                  style={{
-                    clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%)'
-                  }}
-                >
-                  15%
-                </div>
+              <div 
+                className="absolute top-0 h-full bg-gradient-to-r from-green-500 to-green-400 flex items-center justify-center text-white font-bold text-sm"
+                style={{
+                  left: '68%',
+                  width: '32%',
+                  clipPath: 'polygon(0 40%, 100% 35%, 100% 65%, 0 60%)'
+                }}
+              >
+                15%
+              </div>
+              
+              {/* Percentage indicator on the right */}
+              <div className="absolute right-4 top-1/2 transform -translate-y-1/2 text-xs text-green-600 font-medium bg-white px-2 py-1 rounded shadow">
+                Transactions: 15%
               </div>
             </div>
             
             {/* Labels below the funnel */}
-            <div className="flex items-center text-xs text-muted-foreground mt-2">
-              <div className="flex-1 text-center">Slots Available</div>
-              <div className="flex-1 text-center">Slots Filled</div>
-              <div className="flex-1 text-center">Impressions</div>
-              <div className="flex-1 text-center">Clicks</div>
-              <div className="flex-1 text-center">Transactions</div>
+            <div className="flex justify-between text-xs text-muted-foreground mt-2 px-2">
+              <span>Slots Available</span>
+              <span>Slots Filled</span>
+              <span>Impressions</span>
+              <span>Clicks</span>
+              <span>Transactions</span>
             </div>
           </div>
         </CardContent>
