@@ -375,7 +375,7 @@ const Campaigns = () => {
                 className="absolute left-0 top-0 h-full bg-gradient-to-r from-purple-500 to-purple-400 flex items-center justify-center text-white font-bold text-sm"
                 style={{
                   width: '20%',
-                  clipPath: 'polygon(0 0, 85% 0, 100% 50%, 85% 100%, 0 100%)'
+                  clipPath: 'polygon(0 0, 100% 0, 85% 100%, 0 100%)'
                 }}
               >
                 100%
@@ -385,9 +385,9 @@ const Campaigns = () => {
               <div 
                 className="absolute top-0 h-full bg-gradient-to-r from-cyan-400 to-cyan-300 flex items-center justify-center text-white font-bold text-sm"
                 style={{
-                  left: '17%',
-                  width: '20%',
-                  clipPath: 'polygon(0 10%, 85% 0, 100% 50%, 85% 100%, 0 90%)'
+                  left: '20%',
+                  width: '17%',
+                  clipPath: 'polygon(15% 0, 100% 0, 70% 100%, 0 100%)'
                 }}
               >
                 85%
@@ -397,9 +397,9 @@ const Campaigns = () => {
               <div 
                 className="absolute top-0 h-full bg-gradient-to-r from-gray-400 to-gray-300 flex items-center justify-center text-white font-bold text-sm"
                 style={{
-                  left: '34%',
-                  width: '20%',
-                  clipPath: 'polygon(0 20%, 85% 10%, 100% 50%, 85% 90%, 0 80%)'
+                  left: '37%',
+                  width: '14%',
+                  clipPath: 'polygon(30% 0, 100% 0, 55% 100%, 0 100%)'
                 }}
               >
                 30%
@@ -410,8 +410,8 @@ const Campaigns = () => {
                 className="absolute top-0 h-full bg-gradient-to-r from-gray-500 to-gray-400 flex items-center justify-center text-white font-bold text-sm"
                 style={{
                   left: '51%',
-                  width: '20%',
-                  clipPath: 'polygon(0 30%, 85% 20%, 100% 50%, 85% 80%, 0 70%)'
+                  width: '11%',
+                  clipPath: 'polygon(45% 0, 100% 0, 40% 100%, 0 100%)'
                 }}
               >
                 2%
@@ -421,17 +421,12 @@ const Campaigns = () => {
               <div 
                 className="absolute top-0 h-full bg-gradient-to-r from-green-500 to-green-400 flex items-center justify-center text-white font-bold text-sm"
                 style={{
-                  left: '68%',
-                  width: '32%',
-                  clipPath: 'polygon(0 40%, 100% 35%, 100% 65%, 0 60%)'
+                  left: '62%',
+                  width: '8%',
+                  clipPath: 'polygon(60% 0, 100% 0, 100% 100%, 0 100%)'
                 }}
               >
                 15%
-              </div>
-              
-              {/* Percentage indicator on the right */}
-              <div className="absolute right-4 top-1/2 transform -translate-y-1/2 text-xs text-green-600 font-medium bg-white px-2 py-1 rounded shadow">
-                Transactions: 15%
               </div>
             </div>
             
