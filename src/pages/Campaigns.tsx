@@ -424,10 +424,10 @@ const Campaigns = () => {
                 
                 {/* Text Labels */}
                 <text x="100" y="45" textAnchor="middle" className="fill-white text-sm font-bold">100%</text>
-                <text x="300" y="45" textAnchor="middle" className="fill-white text-sm font-bold">85%</text>
-                <text x="525" y="45" textAnchor="middle" className="fill-white text-sm font-bold">30%</text>
-                <text x="750" y="45" textAnchor="middle" className="fill-white text-sm font-bold">2%</text>
-                <text x="925" y="45" textAnchor="middle" className="fill-white text-sm font-bold">15%</text>
+                <text x="300" y="45" textAnchor="middle" className="fill-white text-sm font-bold">72%</text>
+                <text x="525" y="45" textAnchor="middle" className="fill-white text-sm font-bold">68%</text>
+                <text x="750" y="45" textAnchor="middle" className="fill-white text-sm font-bold">8%</text>
+                <text x="925" y="45" textAnchor="middle" className="fill-white text-sm font-bold">4%</text>
               </svg>
             </div>
             
