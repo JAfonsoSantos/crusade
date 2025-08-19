@@ -395,30 +395,30 @@ const Campaigns = () => {
                   </linearGradient>
                 </defs>
                 
-                {/* 100% - Purple (Full height: 60px) */}
-                <rect x="0" y="10" width="200" height="60" fill="url(#purpleGradient)" rx="8" />
+                {/* Slots Available: 91.1M (Full height: 60px) */}
+                <rect x="0" y="10" width="180" height="60" fill="url(#purpleGradient)" rx="8" />
                 
-                {/* 85% - Cyan (85% height: 51px) */}
+                {/* Slots Filled: 77.3M (85% of 91.1M - height: 51px) */}
                 <path
-                  d="M 200 14.5 L 400 19 L 400 61 L 200 65.5 Z"
+                  d="M 180 14.5 L 360 14.5 L 360 65.5 L 180 65.5 Z"
                   fill="url(#cyanGradient)"
                 />
                 
-                {/* 30% - Light Gray (30% height: 18px) */}
+                {/* Impressions: 23.5M (26% of 91.1M - height: 16px) */}
                 <path
-                  d="M 400 31 L 650 37 L 650 43 L 400 49 Z"
+                  d="M 360 32 L 540 32 L 540 48 L 360 48 Z"
                   fill="url(#lightGrayGradient)"
                 />
                 
-                {/* 2% - Dark Gray (2% height: 1.2px) */}
+                {/* Clicks: 500.1K (0.5% of 91.1M - height: 3px) */}
                 <path
-                  d="M 650 39.4 L 850 39.8 L 850 40.2 L 650 40.6 Z"
+                  d="M 540 38.5 L 720 38.5 L 720 41.5 L 540 41.5 Z"
                   fill="url(#darkGrayGradient)"
                 />
                 
-                {/* 15% - Green (15% height: 9px) */}
+                {/* Transactions: 76.8K (0.08% of 91.1M - height: 1px) */}
                 <path
-                  d="M 850 35.5 L 1000 36 L 1000 44 L 850 44.5 Z"
+                  d="M 720 39.5 L 900 39.5 L 900 40.5 L 720 40.5 Z"
                   fill="url(#greenGradient)"
                 />
                 
