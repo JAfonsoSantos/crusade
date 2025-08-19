@@ -306,8 +306,8 @@ const Campaigns = () => {
     slotsAvailable: 10000000,   // 10M slots available
     slotsFilled: 7200000,       // 7.2M filled (72% fill rate)
     impressions: 6800000,       // 6.8M impressions (94% of filled)
-    clicks: 68000,              // 68K clicks (1% CTR)
-    transactions: 2720          // 2.7K transactions (4% conversion)
+    clicks: 816000,             // 816K clicks (12% CTR)
+    transactions: 40800         // 40.8K transactions (5% conversion)
   };
 
   const calculatePercentage = (current: number, previous: number) => {
@@ -410,15 +410,15 @@ const Campaigns = () => {
                   fill="url(#lightGrayGradient)"
                 />
                 
-                {/* Clicks: 68K (0.68% of 10.0M - height: 4px) */}
+                {/* Clicks: 816K (8.16% of 10.0M - height: 49px) */}
                 <path
-                  d="M 540 38 L 720 38 L 720 42 L 540 42 Z"
+                  d="M 540 15.5 L 720 15.5 L 720 64.5 L 540 64.5 Z"
                   fill="url(#darkGrayGradient)"
                 />
                 
-                {/* Transactions: 2.7K (0.027% of 10.0M - height: 2px) */}
+                {/* Transactions: 40.8K (0.408% of 10.0M - height: 24px) */}
                 <path
-                  d="M 720 39 L 900 39 L 900 41 L 720 41 Z"
+                  d="M 720 28 L 900 28 L 900 52 L 720 52 Z"
                   fill="url(#greenGradient)"
                 />
                 
