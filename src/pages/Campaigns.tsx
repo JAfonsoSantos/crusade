@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Plus, Edit, Trash2, Megaphone, Calendar, Upload, ExternalLink, Loader2, PlayCircle, PauseCircle, RefreshCw, ChevronDown, ChevronRight, Target, Eye, MousePointer, TrendingUp, BarChart3, Lightbulb } from 'lucide-react';
+import FlightsGantt from "@/components/FlightsGantt";
 
 interface Flight {
   id: string;

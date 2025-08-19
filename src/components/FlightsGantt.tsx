@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import supabase from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 
 type GanttRow = {
   flight_id: string;
