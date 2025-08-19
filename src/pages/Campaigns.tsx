@@ -11,7 +11,10 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Edit, Trash2, Megaphone, Calendar, Upload, ExternalLink, Loader2, PlayCircle, PauseCircle, RefreshCw, ChevronDown, ChevronRight, Target, Eye, MousePointer, TrendingUp, BarChart3, Lightbulb } from 'lucide-react';
+import {
+  Plus, Edit, Megaphone, RefreshCw, ChevronDown, ChevronRight, Target,
+  Eye, MousePointer, TrendingUp, BarChart3, Lightbulb, Loader2, Calendar
+} from 'lucide-react';
 import FlightsGantt from "@/components/FlightsGantt";
 
 interface Flight {
@@ -60,6 +63,8 @@ const Campaigns = () => {
   const [pushingCampaigns, setPushingCampaigns] = useState<Set<string>>(new Set());
   const [integrations, setIntegrations] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState("campaigns");
+  const [companyId, setCompanyId] = useState<string | null>(null); // <- para Timeline
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -83,7 +88,21 @@ const Campaigns = () => {
   useEffect(() => {
     fetchCampaigns();
     fetchIntegrations();
+    fetchCompanyId(); // <- para sabermos que companyId passar ao Gantt
   }, []);
+
+  const fetchCompanyId = async () => {
+    const { data: user } = await supabase.auth.getUser();
+    if (!user?.user) return;
+
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('company_id')
+      .eq('user_id', user.user.id)
+      .single();
+
+    if (!error && profile?.company_id) setCompanyId(profile.company_id);
+  };
 
   const fetchCampaigns = async () => {
     const { data: campaignsData, error: campaignsError } = await supabase
@@ -101,7 +120,6 @@ const Campaigns = () => {
       return;
     }
 
-    // Fetch flights for each campaign
     const campaignsWithFlights = await Promise.all(
       (campaignsData || []).map(async (campaign) => {
         const { data: flightsData } = await supabase
@@ -109,11 +127,8 @@ const Campaigns = () => {
           .select('*')
           .eq('campaign_id', campaign.id)
           .order('priority', { ascending: true });
-        
-        return {
-          ...campaign,
-          flights: flightsData || []
-        };
+
+        return { ...campaign, flights: flightsData || [] };
       })
     );
 
@@ -137,7 +152,7 @@ const Campaigns = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const { data: user } = await supabase.auth.getUser();
     const { data: profile } = await supabase
       .from('profiles')
@@ -168,26 +183,16 @@ const Campaigns = () => {
         variant: "destructive",
       });
     } else {
-      toast({
-        title: "Success",
-        description: "Campaign created successfully!",
-      });
+      toast({ title: "Success", description: "Campaign created successfully!" });
       setDialogOpen(false);
-      setFormData({
-        name: '',
-        description: '',
-        start_date: '',
-        end_date: '',
-        budget: '',
-        currency: 'EUR',
-      });
+      setFormData({ name: '', description: '', start_date: '', end_date: '', budget: '', currency: 'EUR' });
       fetchCampaigns();
     }
   };
 
   const handleFlightSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const { error } = await supabase.from('flights').insert({
       ...flightFormData,
       campaign_id: selectedCampaignId,
@@ -202,10 +207,7 @@ const Campaigns = () => {
         variant: "destructive",
       });
     } else {
-      toast({
-        title: "Success",
-        description: "Flight created successfully!",
-      });
+      toast({ title: "Success", description: "Flight created successfully!" });
       setFlightDialogOpen(false);
       setFlightFormData({
         name: '',
@@ -223,32 +225,24 @@ const Campaigns = () => {
 
   const toggleCampaignExpansion = (campaignId: string) => {
     setExpandedCampaigns(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(campaignId)) {
-        newSet.delete(campaignId);
-      } else {
-        newSet.add(campaignId);
-      }
-      return newSet;
+      const s = new Set(prev);
+      s.has(campaignId) ? s.delete(campaignId) : s.add(campaignId);
+      return s;
     });
   };
 
   const formatNumber = (num: number) => {
-    if (num >= 1000000) {
-      return (num / 1000000).toFixed(1) + 'M';
-    }
-    if (num >= 1000) {
-      return (num / 1000).toFixed(1) + 'K';
-    }
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
     return num.toString();
   };
 
   const calculateCampaignTotals = (flights: Flight[]) => {
-    return flights.reduce((totals, flight) => ({
-      impressions: totals.impressions + flight.impressions,
-      clicks: totals.clicks + flight.clicks,
-      conversions: totals.conversions + flight.conversions,
-      spend: totals.spend + flight.spend,
+    return flights.reduce((totals, f) => ({
+      impressions: totals.impressions + f.impressions,
+      clicks: totals.clicks + f.clicks,
+      conversions: totals.conversions + f.conversions,
+      spend: totals.spend + f.spend,
     }), { impressions: 0, clicks: 0, conversions: 0, spend: 0 });
   };
 
@@ -256,16 +250,13 @@ const Campaigns = () => {
     setSyncing(true);
     try {
       const { data, error } = await supabase.functions.invoke('auto-sync-kevel');
-
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       toast({
         title: "Sync Complete",
-        description: data.message || `Synced ${data.total_synced} items from ${data.integrations_processed} integrations`,
+        description: data?.message || `Synced ${data?.total_synced} items from ${data?.integrations_processed} integrations`,
       });
-      
+
       await Promise.all([fetchIntegrations(), fetchCampaigns()]);
     } catch (error) {
       console.error('Sync error:', error);
@@ -281,39 +272,28 @@ const Campaigns = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'active':
-        return 'bg-green-100 text-green-800';
-      case 'draft':
-        return 'bg-gray-100 text-gray-800';
-      case 'paused':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'completed':
-        return 'bg-blue-100 text-blue-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+      case 'active': return 'bg-green-100 text-green-800';
+      case 'draft': return 'bg-gray-100 text-gray-800';
+      case 'paused': return 'bg-yellow-100 text-yellow-800';
+      case 'completed': return 'bg-blue-100 text-blue-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US');
-  };
+  const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-US');
 
-  if (loading) {
-    return <div>Loading...</div>;
-  }
+  if (loading) return <div>Loading...</div>;
 
-  // Mock data for Ad Funnel
+  // Mock data para Ad Funnel (continua igual)
   const funnelData = {
-    slotsAvailable: 10000000,   // 10M slots available
-    slotsFilled: 7200000,       // 7.2M filled (72% fill rate)
-    impressions: 6800000,       // 6.8M impressions (94% of filled)
-    clicks: 816000,             // 816K clicks (12% CTR)
-    transactions: 40800         // 40.8K transactions (5% conversion)
+    slotsAvailable: 10000000,
+    slotsFilled: 7200000,
+    impressions: 6800000,
+    clicks: 816000,
+    transactions: 40800
   };
-
-  const calculatePercentage = (current: number, previous: number) => {
-    return ((current / previous) * 100).toFixed(0);
-  };
+  const calculatePercentage = (current: number, previous: number) =>
+    ((current / previous) * 100).toFixed(0);
 
   const AdFunnelContent = () => (
     <div className="space-y-6">
@@ -326,53 +306,42 @@ const Campaigns = () => {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold">{formatNumber(funnelData.slotsAvailable)}</div>
-            <div className="text-sm text-muted-foreground">Slots Available</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-purple-600">{formatNumber(funnelData.slotsFilled)}</div>
-            <div className="text-sm text-muted-foreground">Slots Filled</div>
-            <div className="text-xs text-purple-600">{calculatePercentage(funnelData.slotsFilled, funnelData.slotsAvailable)}% of Slots Available</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-cyan-600">{formatNumber(funnelData.impressions)}</div>
-            <div className="text-sm text-muted-foreground">Impressions</div>
-            <div className="text-xs text-cyan-600">{calculatePercentage(funnelData.impressions, funnelData.slotsFilled)}% of Slots Filled</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-gray-600">{formatNumber(funnelData.clicks)}</div>
-            <div className="text-sm text-muted-foreground">Clicks</div>
-            <div className="text-xs text-gray-600">{calculatePercentage(funnelData.clicks, funnelData.impressions)}% of Impressions</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-green-600">{formatNumber(funnelData.transactions)}</div>
-            <div className="text-sm text-muted-foreground">Transactions</div>
-            <div className="text-xs text-green-600">{calculatePercentage(funnelData.transactions, funnelData.clicks)}% of Clicks</div>
-          </CardContent>
-        </Card>
+        <Card><CardContent className="p-4">
+          <div className="text-2xl font-bold">{formatNumber(funnelData.slotsAvailable)}</div>
+          <div className="text-sm text-muted-foreground">Slots Available</div>
+        </CardContent></Card>
+
+        <Card><CardContent className="p-4">
+          <div className="text-2xl font-bold text-purple-600">{formatNumber(funnelData.slotsFilled)}</div>
+          <div className="text-sm text-muted-foreground">Slots Filled</div>
+          <div className="text-xs text-purple-600">{calculatePercentage(funnelData.slotsFilled, funnelData.slotsAvailable)}% of Slots Available</div>
+        </CardContent></Card>
+
+        <Card><CardContent className="p-4">
+          <div className="text-2xl font-bold text-cyan-600">{formatNumber(funnelData.impressions)}</div>
+          <div className="text-sm text-muted-foreground">Impressions</div>
+          <div className="text-xs text-cyan-600">{calculatePercentage(funnelData.impressions, funnelData.slotsFilled)}% of Slots Filled</div>
+        </CardContent></Card>
+
+        <Card><CardContent className="p-4">
+          <div className="text-2xl font-bold text-gray-600">{formatNumber(funnelData.clicks)}</div>
+          <div className="text-sm text-muted-foreground">Clicks</div>
+          <div className="text-xs text-gray-600">{calculatePercentage(funnelData.clicks, funnelData.impressions)}% of Impressions</div>
+        </CardContent></Card>
+
+        <Card><CardContent className="p-4">
+          <div className="text-2xl font-bold text-green-600">{formatNumber(funnelData.transactions)}</div>
+          <div className="text-sm text-muted-foreground">Transactions</div>
+          <div className="text-xs text-green-600">{calculatePercentage(funnelData.transactions, funnelData.clicks)}% of Clicks</div>
+        </CardContent></Card>
       </div>
 
-      {/* Funnel Visualization */}
+      {/* Funnel bar */}
       <Card>
         <CardContent className="p-6">
           <div className="space-y-4">
             <div className="relative w-full h-20">
               <svg width="100%" height="80" viewBox="0 0 1000 80" className="overflow-visible">
-                {/* Gradients first */}
                 <defs>
                   <linearGradient id="purpleGradient" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stopColor="#8b5cf6" />
@@ -395,35 +364,13 @@ const Campaigns = () => {
                     <stop offset="100%" stopColor="#16a34a" />
                   </linearGradient>
                 </defs>
-                
-                {/* Slots Available: 10.0M (Full height: 60px) */}
+
                 <rect x="0" y="10" width="180" height="60" fill="url(#purpleGradient)" rx="8" />
-                
-                {/* Slots Filled: 7.2M (72% of 10.0M - height: 43px) */}
-                <path
-                  d="M 180 18.5 L 360 18.5 L 360 61.5 L 180 61.5 Z"
-                  fill="url(#cyanGradient)"
-                />
-                
-                {/* Impressions: 6.8M (68% of 10.0M - height: 41px) */}
-                <path
-                  d="M 360 19.5 L 540 19.5 L 540 60.5 L 360 60.5 Z"
-                  fill="url(#lightGrayGradient)"
-                />
-                
-                {/* Clicks: 816K (8.16% of 10.0M - height: 49px) */}
-                <path
-                  d="M 540 15.5 L 720 15.5 L 720 64.5 L 540 64.5 Z"
-                  fill="url(#darkGrayGradient)"
-                />
-                
-                {/* Transactions: 40.8K (0.408% of 10.0M - height: 24px) */}
-                <path
-                  d="M 720 28 L 900 28 L 900 52 L 720 52 Z"
-                  fill="url(#greenGradient)"
-                />
-                
-                {/* Text Labels */}
+                <path d="M 180 18.5 L 360 18.5 L 360 61.5 L 180 61.5 Z" fill="url(#cyanGradient)" />
+                <path d="M 360 19.5 L 540 19.5 L 540 60.5 L 360 60.5 Z" fill="url(#lightGrayGradient)" />
+                <path d="M 540 15.5 L 720 15.5 L 720 64.5 L 540 64.5 Z" fill="url(#darkGrayGradient)" />
+                <path d="M 720 28 L 900 28 L 900 52 L 720 52 Z" fill="url(#greenGradient)" />
+
                 <text x="100" y="45" textAnchor="middle" className="fill-white text-sm font-bold">100%</text>
                 <text x="300" y="45" textAnchor="middle" className="fill-white text-sm font-bold">72%</text>
                 <text x="525" y="45" textAnchor="middle" className="fill-white text-sm font-bold">68%</text>
@@ -431,8 +378,7 @@ const Campaigns = () => {
                 <text x="925" y="45" textAnchor="middle" className="fill-white text-sm font-bold">4%</text>
               </svg>
             </div>
-            
-            {/* Labels below the funnel */}
+
             <div className="grid grid-cols-5 gap-4 text-xs text-muted-foreground text-center mt-4">
               <span>Slots Available</span>
               <span>Slots Filled</span>
@@ -444,45 +390,38 @@ const Campaigns = () => {
         </CardContent>
       </Card>
 
-      {/* AI Recommendations */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Lightbulb className="h-4 w-4 text-blue-600" />
-              <span className="text-sm font-medium text-blue-600">AI Recommendation: Improve Ad Visibility</span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Your ads are not getting enough views. Move ads to higher-traffic areas to increase impressions.
-            </p>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Lightbulb className="h-4 w-4 text-blue-600" />
-              <span className="text-sm font-medium text-blue-600">AI Recommendation: Increase ad slots.</span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Your inventory fill rate is high. Add ad slots to unlock more revenue.
-            </p>
-          </CardContent>
-        </Card>
+        <Card><CardContent className="p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Lightbulb className="h-4 w-4 text-blue-600" />
+            <span className="text-sm font-medium text-blue-600">AI Recommendation: Improve Ad Visibility</span>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Your ads are not getting enough views. Move ads to higher-traffic areas to increase impressions.
+          </p>
+        </CardContent></Card>
+
+        <Card><CardContent className="p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Lightbulb className="h-4 w-4 text-blue-600" />
+            <span className="text-sm font-medium text-blue-600">AI Recommendation: Increase ad slots.</span>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Your inventory fill rate is high. Add ad slots to unlock more revenue.
+          </p>
+        </CardContent></Card>
       </div>
     </div>
   );
 
   const CampaignsContent = () => (
     <>
-      {/* Flight Creation Dialog */}
+      {/* Dialog criar Flight */}
       <Dialog open={flightDialogOpen} onOpenChange={setFlightDialogOpen}>
         <DialogContent className="sm:max-w-[525px]">
           <DialogHeader>
             <DialogTitle>Create New Flight</DialogTitle>
-            <DialogDescription>
-              Add a new flight to the campaign
-            </DialogDescription>
+            <DialogDescription>Add a new flight to the campaign</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleFlightSubmit} className="space-y-4">
             <div className="grid w-full items-center gap-1.5">
@@ -495,7 +434,7 @@ const Campaigns = () => {
                 required
               />
             </div>
-            
+
             <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="flight_description">Description</Label>
               <Textarea
@@ -505,7 +444,7 @@ const Campaigns = () => {
                 placeholder="Flight description..."
               />
             </div>
-            
+
             <div className="grid grid-cols-2 gap-2">
               <div className="grid w-full items-center gap-1.5">
                 <Label htmlFor="flight_start_date">Start Date</Label>
@@ -517,7 +456,6 @@ const Campaigns = () => {
                   required
                 />
               </div>
-              
               <div className="grid w-full items-center gap-1.5">
                 <Label htmlFor="flight_end_date">End Date</Label>
                 <Input
@@ -529,7 +467,7 @@ const Campaigns = () => {
                 />
               </div>
             </div>
-            
+
             <div className="grid grid-cols-3 gap-2">
               <div className="grid w-full items-center gap-1.5">
                 <Label htmlFor="flight_budget">Budget</Label>
@@ -542,7 +480,6 @@ const Campaigns = () => {
                   placeholder="0.00"
                 />
               </div>
-              
               <div className="grid w-full items-center gap-1.5">
                 <Label htmlFor="flight_priority">Priority</Label>
                 <Input
@@ -554,13 +491,10 @@ const Campaigns = () => {
                   max="10"
                 />
               </div>
-              
               <div className="grid w-full items-center gap-1.5">
                 <Label htmlFor="flight_ad_server">Ad Server</Label>
                 <Select value={flightFormData.ad_server} onValueChange={(value) => setFlightFormData({ ...flightFormData, ad_server: value })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="kevel">🎯 Kevel</SelectItem>
                     <SelectItem value="google">🟦 Google</SelectItem>
@@ -570,10 +504,8 @@ const Campaigns = () => {
                 </Select>
               </div>
             </div>
-            
-            <Button type="submit" className="w-full">
-              Create Flight
-            </Button>
+
+            <Button type="submit" className="w-full">Create Flight</Button>
           </form>
         </DialogContent>
       </Dialog>
@@ -582,7 +514,7 @@ const Campaigns = () => {
         {campaigns.map((campaign) => {
           const totals = calculateCampaignTotals(campaign.flights || []);
           const isExpanded = expandedCampaigns.has(campaign.id);
-          
+
           return (
             <Collapsible key={campaign.id} open={isExpanded} onOpenChange={() => toggleCampaignExpansion(campaign.id)}>
               <Card className="w-full">
@@ -591,30 +523,17 @@ const Campaigns = () => {
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <CollapsibleTrigger className="flex items-center gap-1 hover:bg-muted/50 rounded p-1">
-                          {isExpanded ? (
-                            <ChevronDown className="h-4 w-4" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4" />
-                          )}
+                          {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         </CollapsibleTrigger>
-                        <CardTitle className="text-lg font-semibold">
-                          {campaign.name}
-                        </CardTitle>
-                        <Badge variant="secondary" className="text-xs">
-                          {campaign.flights?.length || 0} flights
-                        </Badge>
+                        <CardTitle className="text-lg font-semibold">{campaign.name}</CardTitle>
+                        <Badge variant="secondary" className="text-xs">{campaign.flights?.length || 0} flights</Badge>
                       </div>
-                      {campaign.description && (
-                        <p className="text-muted-foreground mt-1 ml-7">
-                          {campaign.description}
-                        </p>
-                      )}
+                      {campaign.description && <p className="text-muted-foreground mt-1 ml-7">{campaign.description}</p>}
                     </div>
-                    <Badge 
+                    <Badge
                       variant={
-                        campaign.status === 'active' ? 'default' : 
-                        campaign.status === 'paused' ? 'secondary' : 
-                        'outline'
+                        campaign.status === 'active' ? 'default' :
+                        campaign.status === 'paused' ? 'secondary' : 'outline'
                       }
                       className={getStatusColor(campaign.status)}
                     >
@@ -622,159 +541,134 @@ const Campaigns = () => {
                     </Badge>
                   </div>
                 </CardHeader>
-              
-              <CardContent>
-                {/* Campaign Overview */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Budget</p>
-                    <p className="font-medium">
-                      {campaign.budget ? 
-                        `${campaign.currency} ${campaign.budget.toLocaleString()}` : 
-                        'Not set'
-                      }
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Campaign Period</p>
-                    <p className="font-medium text-xs">
-                      {formatDate(campaign.start_date)} - {formatDate(campaign.end_date)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Total Impressions</p>
-                    <p className="font-medium">{formatNumber(totals.impressions)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Total Clicks</p>
-                    <p className="font-medium">{formatNumber(totals.clicks)}</p>
-                  </div>
-                </div>
 
-                {/* Campaign Actions */}
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      setSelectedCampaignId(campaign.id);
-                      setFlightDialogOpen(true);
-                    }}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Flight
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <Edit className="h-4 w-4 mr-2" />
-                    Edit Campaign
-                  </Button>
-                </div>
+                <CardContent>
+                  {/* Overview */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Budget</p>
+                      <p className="font-medium">
+                        {campaign.budget ? `${campaign.currency} ${campaign.budget.toLocaleString()}` : 'Not set'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Campaign Period</p>
+                      <p className="font-medium text-xs">
+                        {formatDate(campaign.start_date)} - {formatDate(campaign.end_date)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Impressions</p>
+                      <p className="font-medium">{formatNumber(totals.impressions)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Clicks</p>
+                      <p className="font-medium">{formatNumber(totals.clicks)}</p>
+                    </div>
+                  </div>
 
-                {/* Flights Section */}
-                <Collapsible open={isExpanded}>
-                  <CollapsibleContent className="space-y-3">
-                    {campaign.flights && campaign.flights.length > 0 ? (
-                      <div className="space-y-3">
-                        <h4 className="text-sm font-semibold text-muted-foreground">Flights</h4>
-                        {campaign.flights.map((flight) => (
-                          <div key={flight.id} className="bg-muted/30 rounded-lg p-4 ml-4 border-l-2 border-primary/20">
-                            <div className="flex justify-between items-start mb-3">
-                              <div>
-                                <h5 className="font-medium">{flight.name}</h5>
-                                {flight.description && (
-                                  <p className="text-sm text-muted-foreground">{flight.description}</p>
-                                )}
-                              </div>
-                              <div className="flex gap-2">
-                                <Badge variant="outline" className={getStatusColor(flight.status)}>
-                                  {flight.status}
-                                </Badge>
-                                <Badge variant="secondary" className="text-xs">
-                                  Priority {flight.priority}
-                                </Badge>
-                              </div>
-                            </div>
-                            
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                              <div>
-                                <span className="text-muted-foreground">Period:</span>
-                                <p className="text-xs">{formatDate(flight.start_date)} - {formatDate(flight.end_date)}</p>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Budget:</span>
-                                <p>{flight.budget ? `${flight.currency} ${flight.budget.toLocaleString()}` : 'No budget'}</p>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Ad Server:</span>
-                                <p>{flight.ad_server}</p>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Spend:</span>
-                                <p>{flight.spend ? `${flight.currency} ${flight.spend.toLocaleString()}` : '€0'}</p>
-                              </div>
-                            </div>
-                            
-                            {/* Flight Performance */}
-                            {(flight.impressions > 0 || flight.clicks > 0) && (
-                              <div className="mt-3 p-3 bg-background/50 rounded">
-                                <h6 className="text-xs font-medium text-muted-foreground mb-2">Performance</h6>
-                                <div className="grid grid-cols-3 gap-4 text-sm">
-                                  <div className="flex items-center gap-1">
-                                    <Eye className="w-3 h-3 text-blue-600" />
-                                    <span>{formatNumber(flight.impressions)} impressions</span>
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <MousePointer className="w-3 h-3 text-green-600" />
-                                    <span>{formatNumber(flight.clicks)} clicks</span>
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <TrendingUp className="w-3 h-3 text-purple-600" />
-                                    <span>{formatNumber(flight.conversions)} conversions</span>
-                                  </div>
+                  {/* Actions */}
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { setSelectedCampaignId(campaign.id); setFlightDialogOpen(true); }}
+                    >
+                      <Plus className="h-4 w-4 mr-2" /> Add Flight
+                    </Button>
+                    <Button variant="outline" size="sm">
+                      <Edit className="h-4 w-4 mr-2" /> Edit Campaign
+                    </Button>
+                  </div>
+
+                  {/* Flights */}
+                  <Collapsible open={isExpanded}>
+                    <CollapsibleContent className="space-y-3">
+                      {campaign.flights && campaign.flights.length > 0 ? (
+                        <div className="space-y-3">
+                          <h4 className="text-sm font-semibold text-muted-foreground">Flights</h4>
+                          {campaign.flights.map((flight) => (
+                            <div key={flight.id} className="bg-muted/30 rounded-lg p-4 ml-4 border-l-2 border-primary/20">
+                              <div className="flex justify-between items-start mb-3">
+                                <div>
+                                  <h5 className="font-medium">{flight.name}</h5>
+                                  {flight.description && <p className="text-sm text-muted-foreground">{flight.description}</p>}
                                 </div>
-                                {flight.clicks > 0 && flight.impressions > 0 && (
-                                  <p className="text-xs text-muted-foreground mt-1">
-                                    CTR: {((flight.clicks / flight.impressions) * 100).toFixed(2)}%
-                                  </p>
-                                )}
+                                <div className="flex gap-2">
+                                  <Badge variant="outline" className={getStatusColor(flight.status)}>{flight.status}</Badge>
+                                  <Badge variant="secondary" className="text-xs">Priority {flight.priority}</Badge>
+                                </div>
                               </div>
-                            )}
-                            
-                            <div className="flex gap-2 mt-3">
-                              <Button variant="outline" size="sm">
-                                <Edit className="h-4 w-4 mr-1" />
-                                Edit
-                              </Button>
-                              <Button variant="outline" size="sm">
-                                <Target className="h-4 w-4 mr-1" />
-                                Assign Spaces
-                              </Button>
+
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Period:</span>
+                                  <p className="text-xs">{formatDate(flight.start_date)} - {formatDate(flight.end_date)}</p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Budget:</span>
+                                  <p>{flight.budget ? `${flight.currency} ${flight.budget.toLocaleString()}` : 'No budget'}</p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Ad Server:</span>
+                                  <p>{flight.ad_server}</p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Spend:</span>
+                                  <p>{flight.spend ? `${flight.currency} ${flight.spend.toLocaleString()}` : '€0'}</p>
+                                </div>
+                              </div>
+
+                              {(flight.impressions > 0 || flight.clicks > 0) && (
+                                <div className="mt-3 p-3 bg-background/50 rounded">
+                                  <h6 className="text-xs font-medium text-muted-foreground mb-2">Performance</h6>
+                                  <div className="grid grid-cols-3 gap-4 text-sm">
+                                    <div className="flex items-center gap-1">
+                                      <Eye className="w-3 h-3 text-blue-600" />
+                                      <span>{formatNumber(flight.impressions)} impressions</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <MousePointer className="w-3 h-3 text-green-600" />
+                                      <span>{formatNumber(flight.clicks)} clicks</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <TrendingUp className="w-3 h-3 text-purple-600" />
+                                      <span>{formatNumber(flight.conversions)} conversions</span>
+                                    </div>
+                                  </div>
+                                  {flight.clicks > 0 && flight.impressions > 0 && (
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      CTR: {((flight.clicks / flight.impressions) * 100).toFixed(2)}%
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+
+                              <div className="flex gap-2 mt-3">
+                                <Button variant="outline" size="sm"><Edit className="h-4 w-4 mr-1" /> Edit</Button>
+                                <Button variant="outline" size="sm"><Target className="h-4 w-4 mr-1" /> Assign Spaces</Button>
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 bg-muted/30 rounded-lg ml-4">
-                        <Target className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                        <p className="text-sm text-muted-foreground mb-3">No flights in this campaign</p>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => {
-                            setSelectedCampaignId(campaign.id);
-                            setFlightDialogOpen(true);
-                          }}
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Create First Flight
-                        </Button>
-                      </div>
-                    )}
-                  </CollapsibleContent>
-                </Collapsible>
-              </CardContent>
-            </Card>
-          </Collapsible>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 bg-muted/30 rounded-lg ml-4">
+                          <Target className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                          <p className="text-sm text-muted-foreground mb-3">No flights in this campaign</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => { setSelectedCampaignId(campaign.id); setFlightDialogOpen(true); }}
+                          >
+                            <Plus className="h-4 w-4 mr-2" /> Create First Flight
+                          </Button>
+                        </div>
+                      )}
+                    </CollapsibleContent>
+                  </Collapsible>
+                </CardContent>
+              </Card>
+            </Collapsible>
           );
         })}
       </div>
@@ -788,8 +682,7 @@ const Campaigns = () => {
               Create your first campaign to start promoting your ads.
             </p>
             <Button onClick={() => setDialogOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create First Campaign
+              <Plus className="mr-2 h-4 w-4" /> Create First Campaign
             </Button>
           </CardContent>
         </Card>
@@ -802,108 +695,49 @@ const Campaigns = () => {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Campaigns & Flights</h2>
-          <p className="text-muted-foreground">
-            Manage your advertising campaigns and analyze performance
-          </p>
+          <p className="text-muted-foreground">Manage your advertising campaigns and analyze performance</p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={syncAllIntegrations}
-            disabled={syncing}
-          >
-            {syncing ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Syncing...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Sync with Platforms
-              </>
-            )}
+          <Button variant="outline" onClick={syncAllIntegrations} disabled={syncing}>
+            {syncing ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Syncing...</>) : (<><RefreshCw className="mr-2 h-4 w-4" /> Sync with Platforms</>)}
           </Button>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                New Campaign
-              </Button>
+              <Button><Plus className="mr-2 h-4 w-4" /> New Campaign</Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
                 <DialogTitle>Create New Campaign</DialogTitle>
-                <DialogDescription>
-                  Set up a new advertising campaign
-                </DialogDescription>
+                <DialogDescription>Set up a new advertising campaign</DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid w-full items-center gap-1.5">
                   <Label htmlFor="name">Campaign Name</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Ex: Summer 2024 Campaign"
-                    required
-                  />
+                  <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Ex: Summer 2024 Campaign" required />
                 </div>
-                
                 <div className="grid w-full items-center gap-1.5">
                   <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Campaign description..."
-                  />
+                  <Textarea id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Campaign description..." />
                 </div>
-                
                 <div className="grid grid-cols-2 gap-2">
                   <div className="grid w-full items-center gap-1.5">
                     <Label htmlFor="start_date">Start Date</Label>
-                    <Input
-                      id="start_date"
-                      type="date"
-                      value={formData.start_date}
-                      onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                      required
-                    />
+                    <Input id="start_date" type="date" value={formData.start_date} onChange={(e) => setFormData({ ...formData, start_date: e.target.value })} required />
                   </div>
-                  
                   <div className="grid w-full items-center gap-1.5">
                     <Label htmlFor="end_date">End Date</Label>
-                    <Input
-                      id="end_date"
-                      type="date"
-                      value={formData.end_date}
-                      onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                      required
-                    />
+                    <Input id="end_date" type="date" value={formData.end_date} onChange={(e) => setFormData({ ...formData, end_date: e.target.value })} required />
                   </div>
                 </div>
-                
                 <div className="grid grid-cols-2 gap-2">
                   <div className="grid w-full items-center gap-1.5">
                     <Label htmlFor="budget">Budget</Label>
-                    <Input
-                      id="budget"
-                      type="number"
-                      step="0.01"
-                      value={formData.budget}
-                      onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
-                      placeholder="0.00"
-                      required
-                    />
+                    <Input id="budget" type="number" step="0.01" value={formData.budget} onChange={(e) => setFormData({ ...formData, budget: e.target.value })} placeholder="0.00" required />
                   </div>
-                  
                   <div className="grid w-full items-center gap-1.5">
                     <Label htmlFor="currency">Currency</Label>
                     <Select value={formData.currency} onValueChange={(value) => setFormData({ ...formData, currency: value })}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="EUR">EUR</SelectItem>
                         <SelectItem value="USD">USD</SelectItem>
@@ -912,10 +746,7 @@ const Campaigns = () => {
                     </Select>
                   </div>
                 </div>
-                
-                <Button type="submit" className="w-full">
-                  Create Campaign
-                </Button>
+                <Button type="submit" className="w-full">Create Campaign</Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -923,14 +754,15 @@ const Campaigns = () => {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="campaigns" className="flex items-center gap-2">
-            <Target className="h-4 w-4" />
-            Campaigns
+            <Target className="h-4 w-4" /> Campaigns
           </TabsTrigger>
           <TabsTrigger value="ad-funnel" className="flex items-center gap-2">
-            <BarChart3 className="h-4 w-4" />
-            Ad Funnel
+            <BarChart3 className="h-4 w-4" /> Ad Funnel
+          </TabsTrigger>
+          <TabsTrigger value="timeline" className="flex items-center gap-2">
+            <Calendar className="h-4 w-4" /> Timeline
           </TabsTrigger>
         </TabsList>
 
@@ -940,6 +772,22 @@ const Campaigns = () => {
 
         <TabsContent value="ad-funnel" className="mt-6">
           <AdFunnelContent />
+        </TabsContent>
+
+        <TabsContent value="timeline" className="mt-6">
+          {companyId ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Campaign & Flight Timeline</CardTitle>
+                <CardDescription>Visualização Gantt das datas dos flights por campanha</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <FlightsGantt companyId={companyId} />
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="text-sm text-muted-foreground">A carregar a tua empresa…</div>
+          )}
         </TabsContent>
       </Tabs>
     </div>
