@@ -303,11 +303,11 @@ const Campaigns = () => {
 
   // Mock data for Ad Funnel
   const funnelData = {
-    slotsAvailable: 91140000,
-    slotsFilled: 77260000,
-    impressions: 23530000,
-    clicks: 500120,
-    transactions: 76780
+    slotsAvailable: 10000000,   // 10M slots available
+    slotsFilled: 7200000,       // 7.2M filled (72% fill rate)
+    impressions: 6800000,       // 6.8M impressions (94% of filled)
+    clicks: 68000,              // 68K clicks (1% CTR)
+    transactions: 2720          // 2.7K transactions (4% conversion)
   };
 
   const calculatePercentage = (current: number, previous: number) => {
@@ -395,30 +395,30 @@ const Campaigns = () => {
                   </linearGradient>
                 </defs>
                 
-                {/* Slots Available: 91.1M (Full height: 60px) */}
+                {/* Slots Available: 10.0M (Full height: 60px) */}
                 <rect x="0" y="10" width="180" height="60" fill="url(#purpleGradient)" rx="8" />
                 
-                {/* Slots Filled: 77.3M (85% of 91.1M - height: 51px) */}
+                {/* Slots Filled: 7.2M (72% of 10.0M - height: 43px) */}
                 <path
-                  d="M 180 14.5 L 360 14.5 L 360 65.5 L 180 65.5 Z"
+                  d="M 180 18.5 L 360 18.5 L 360 61.5 L 180 61.5 Z"
                   fill="url(#cyanGradient)"
                 />
                 
-                {/* Impressions: 23.5M (26% of 91.1M - height: 16px) */}
+                {/* Impressions: 6.8M (68% of 10.0M - height: 41px) */}
                 <path
-                  d="M 360 32 L 540 32 L 540 48 L 360 48 Z"
+                  d="M 360 19.5 L 540 19.5 L 540 60.5 L 360 60.5 Z"
                   fill="url(#lightGrayGradient)"
                 />
                 
-                {/* Clicks: 500.1K (0.5% of 91.1M - height: 3px) */}
+                {/* Clicks: 68K (0.68% of 10.0M - height: 4px) */}
                 <path
-                  d="M 540 38.5 L 720 38.5 L 720 41.5 L 540 41.5 Z"
+                  d="M 540 38 L 720 38 L 720 42 L 540 42 Z"
                   fill="url(#darkGrayGradient)"
                 />
                 
-                {/* Transactions: 76.8K (0.08% of 91.1M - height: 1px) */}
+                {/* Transactions: 2.7K (0.027% of 10.0M - height: 2px) */}
                 <path
-                  d="M 720 39.5 L 900 39.5 L 900 40.5 L 720 40.5 Z"
+                  d="M 720 39 L 900 39 L 900 41 L 720 41 Z"
                   fill="url(#greenGradient)"
                 />
                 
