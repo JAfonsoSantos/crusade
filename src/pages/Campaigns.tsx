@@ -782,7 +782,7 @@ const Campaigns = () => {
                 <CardDescription>Visualização Gantt das datas dos flights por campanha</CardDescription>
               </CardHeader>
               <CardContent>
-                <FlightsGantt companyId={companyId} />
+                <FlightsGantt items={[]} from={new Date()} to={new Date()} />
               </CardContent>
             </Card>
           ) : (
