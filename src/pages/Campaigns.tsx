@@ -1,44 +1,48 @@
-// src/pages/Campaigns.tsx
-import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
-
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-import {
-  Plus,
-  Edit,
-  ChevronDown,
-  ChevronRight,
-  RefreshCw,
-  Loader2,
-  Target,
-  Eye,
-  MousePointer,
-  TrendingUp,
-  BarChart3,
-  Lightbulb,
-} from "lucide-react";
-
+  Plus, Edit, Megaphone, RefreshCw, ChevronDown, ChevronRight, Target,
+  Eye, MousePointer, TrendingUp, BarChart3, Lightbulb, Loader2, Calendar
+} from 'lucide-react';
 import FlightsGantt from "@/components/FlightsGantt";
 
-/* ---------- Tipos locais ---------- */
+async function fetchTimeline() {
+  try {
+    const { data: user } = await supabase.auth.getUser();
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("company_id")
+      .eq("user_id", user.user?.id)
+      .single();
+
+    if (!profile?.company_id) return;
+
+    // 👇 Força o tipo da view como `any` para evitar o erro de tipos
+    const { data: raw, error } = await supabase
+      .from<any>("v_flights_gantt")
+      .select("*")
+      .eq("company_id", profile.company_id);
+
+    if (error) throw error;
+
+    setGanttRows((raw ?? []) as unknown as VFlightsGanttRow[]);
+  } catch (err) {
+    console.error(err);
+    // silencia no UI
+  }
+}
+
 
 interface Flight {
   id: string;
@@ -47,7 +51,7 @@ interface Flight {
   description?: string;
   start_date: string;
   end_date: string;
-  budget?: number | null;
+  budget?: number;
   currency: string;
   status: string;
   priority: number;
@@ -56,7 +60,7 @@ interface Flight {
   clicks: number;
   conversions: number;
   spend: number;
-  external_id?: string | null;
+  external_id?: string;
   ad_server: string;
   created_at: string;
   updated_at: string;
@@ -65,343 +69,656 @@ interface Flight {
 interface Campaign {
   id: string;
   name: string;
-  description: string | null;
+  description: string;
   start_date: string;
   end_date: string;
-  budget: number | null;
-  currency: string | null;
-  status: string | null;
+  budget: number;
+  currency: string;
+  status: string;
   created_at: string;
   flights?: Flight[];
 }
 
-/** Tipo manual para a VIEW v_flights_gantt (evita erros de TS) */
-type VFlightsGanttRow = {
-  company_id: string;
-  campaign_id: string;
-  campaign_name: string;
-  flight_id: string | null;
-  flight_name: string | null;
-  start_date: string; // Supabase devolve string
-  end_date: string;
-  priority: number | null;
-  status: string | null;
-};
-
-/** Item do Gantt que enviamos para o componente */
-type GanttItem = {
-  id: string;
-  left: string; // label à esquerda (campanha/flight)
-  right?: string; // label pequena (prioridade/estado)
-  start: Date;
-  end: Date;
-};
-
-/* ---------- Componente ---------- */
-
-export default function Campaigns() {
-  const { toast } = useToast();
-
-  const [activeTab, setActiveTab] = useState<"campaigns" | "ad-funnel" | "timeline">("campaigns");
+const Campaigns = () => {
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
-
-  // Dialogs (criar campanha / flight)
   const [dialogOpen, setDialogOpen] = useState(false);
   const [flightDialogOpen, setFlightDialogOpen] = useState(false);
-  const [selectedCampaignId, setSelectedCampaignId] = useState<string>("");
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
+  const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
+  const [pushingCampaigns, setPushingCampaigns] = useState<Set<string>>(new Set());
+  const [integrations, setIntegrations] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState("campaigns");
+  const [companyId, setCompanyId] = useState<string | null>(null); // <- para Timeline
 
-  // Forms
   const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    start_date: "",
-    end_date: "",
-    budget: "",
-    currency: "EUR",
+    name: '',
+    description: '',
+    start_date: '',
+    end_date: '',
+    budget: '',
+    currency: 'EUR',
   });
-
   const [flightFormData, setFlightFormData] = useState({
-    name: "",
-    description: "",
-    start_date: "",
-    end_date: "",
-    budget: "",
-    currency: "EUR",
-    priority: "1",
-    ad_server: "kevel",
+    name: '',
+    description: '',
+    start_date: '',
+    end_date: '',
+    budget: '',
+    currency: 'EUR',
+    priority: '1',
+    ad_server: 'kevel',
   });
-
-  // Timeline
-  const [ganttRows, setGanttRows] = useState<VFlightsGanttRow[]>([]);
+  const { toast } = useToast();
 
   useEffect(() => {
-    (async () => {
-      await fetchCampaigns();
-      await fetchTimeline();
-    })();
+    fetchCampaigns();
+    fetchIntegrations();
+    fetchCompanyId(); // <- para sabermos que companyId passar ao Gantt
   }, []);
 
-  /* ---------- Fetchers ---------- */
+  const fetchCompanyId = async () => {
+    const { data: user } = await supabase.auth.getUser();
+    if (!user?.user) return;
 
-  async function fetchCampaigns() {
-    setLoading(true);
-    try {
-      const { data: campaignsData, error: campaignsError } = await supabase
-        .from("campaigns")
-        .select("*")
-        .order("created_at", { ascending: false });
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('company_id')
+      .eq('user_id', user.user.id)
+      .single();
 
-      if (campaignsError) throw campaignsError;
-
-      const campaignsWithFlights = await Promise.all(
-        (campaignsData ?? []).map(async (campaign) => {
-          const { data: flightsData } = await supabase
-            .from("flights")
-            .select("*")
-            .eq("campaign_id", campaign.id)
-            .order("priority", { ascending: true });
-
-          return { ...campaign, flights: flightsData ?? [] };
-        })
-      );
-
-      setCampaigns(campaignsWithFlights);
-    } catch (err) {
-      console.error(err);
-      toast({
-        title: "Erro",
-        description: "Não foi possível carregar campanhas.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function fetchTimeline() {
-    try {
-      // company_id do utilizador
-      const { data: user } = await supabase.auth.getUser();
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("company_id")
-        .eq("user_id", user.user?.id)
-        .single();
-
-      if (!profile?.company_id) return;
-
-      const { data: raw, error } = await supabase
-        .from("v_flights_gantt" as any) // 👈 força o TS a aceitar a view
-        .select("*")
-        .eq("company_id", profile.company_id);
-
-      if (error) throw error;
-
-      setGanttRows((raw ?? []) as VFlightsGanttRow[]);
-    } catch (err) {
-      console.error(err);
-      // Mantemos silêncio para não chatear o utilizador; a tab "Timeline" mostra vazio
-    }
-  }
-
-  async function syncAllIntegrations() {
-    setSyncing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("auto-sync-kevel");
-      if (error) throw error;
-
-      toast({
-        title: "Sync concluído",
-        description:
-          (data as any)?.message ??
-          `Sincronização terminada: ${(data as any)?.integrations_processed ?? "—"} integrações`,
-      });
-
-      await Promise.all([fetchCampaigns(), fetchTimeline()]);
-    } catch (err) {
-      console.error(err);
-      toast({
-        title: "Falha na sincronização",
-        description: "Tenta novamente dentro de momentos.",
-        variant: "destructive",
-      });
-    } finally {
-      setSyncing(false);
-    }
-  }
-
-  /* ---------- Helpers ---------- */
-
-  function toggleCampaignExpansion(campaignId: string) {
-    setExpandedCampaigns((prev) => {
-      const next = new Set(prev);
-      next.has(campaignId) ? next.delete(campaignId) : next.add(campaignId);
-      return next;
-    });
-  }
-
-  const formatNumber = (num: number) => {
-    if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + "M";
-    if (num >= 1_000) return (num / 1_000).toFixed(1) + "K";
-    return (num ?? 0).toString();
+    if (!error && profile?.company_id) setCompanyId(profile.company_id);
   };
 
-  function getStatusColor(status?: string | null) {
-    switch (status) {
-      case "active":
-        return "bg-green-100 text-green-800";
-      case "paused":
-        return "bg-yellow-100 text-yellow-800";
-      case "completed":
-        return "bg-blue-100 text-blue-800";
-      case "draft":
-      default:
-        return "bg-gray-100 text-gray-800";
+  const fetchCampaigns = async () => {
+    const { data: campaignsData, error: campaignsError } = await supabase
+      .from('campaigns')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (campaignsError) {
+      toast({
+        title: "Error",
+        description: "Could not load campaigns.",
+        variant: "destructive",
+      });
+      setLoading(false);
+      return;
     }
-  }
 
-  const formatDate = (iso: string) => new Date(iso).toLocaleDateString("en-US");
+    const campaignsWithFlights = await Promise.all(
+      (campaignsData || []).map(async (campaign) => {
+        const { data: flightsData } = await supabase
+          .from('flights')
+          .select('*')
+          .eq('campaign_id', campaign.id)
+          .order('priority', { ascending: true });
 
-  /* ---------- Totais de campanha ---------- */
-
-  const calculateCampaignTotals = (flights: Flight[]) =>
-    flights.reduce(
-      (t, f) => ({
-        impressions: t.impressions + (f.impressions ?? 0),
-        clicks: t.clicks + (f.clicks ?? 0),
-        conversions: t.conversions + (f.conversions ?? 0),
-        spend: t.spend + (f.spend ?? 0),
-      }),
-      { impressions: 0, clicks: 0, conversions: 0, spend: 0 }
+        return { ...campaign, flights: flightsData || [] };
+      })
     );
 
-  /* ---------- Forms ---------- */
+    setCampaigns(campaignsWithFlights);
+    setLoading(false);
+  };
 
-  async function handleCreateCampaign(e: React.FormEvent) {
+  const fetchIntegrations = async () => {
+    const { data, error } = await supabase
+      .from('ad_server_integrations')
+      .select('*')
+      .in('provider', ['kevel', 'koddi', 'topsort'])
+      .eq('status', 'active');
+
+    if (error) {
+      console.error('Error fetching integrations:', error);
+    } else {
+      setIntegrations(data || []);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const { data: user } = await supabase.auth.getUser();
     const { data: profile } = await supabase
-      .from("profiles")
-      .select("company_id")
-      .eq("user_id", user.user?.id)
+      .from('profiles')
+      .select('company_id')
+      .eq('user_id', user.user?.id)
       .single();
 
     if (!profile?.company_id) {
       toast({
-        title: "Erro",
-        description: "Perfil/Empresa não encontrado.",
+        title: "Error",
+        description: "Company profile not found. Set up your company first.",
         variant: "destructive",
       });
       return;
     }
 
-    const { error } = await supabase.from("campaigns").insert({
-      name: formData.name,
-      description: formData.description || null,
-      start_date: formData.start_date,
-      end_date: formData.end_date,
-      budget: formData.budget ? parseFloat(formData.budget) : null,
-      currency: formData.currency,
+    const { error } = await supabase.from('campaigns').insert({
+      ...formData,
+      budget: parseFloat(formData.budget),
       company_id: profile.company_id,
-      created_by: user.user?.id ?? null,
-      status: "draft",
+      created_by: user.user?.id,
     });
 
     if (error) {
-      toast({ title: "Erro", description: "Não foi possível criar a campanha.", variant: "destructive" });
-    } else {
-      toast({ title: "Sucesso", description: "Campanha criada." });
-      setDialogOpen(false);
-      setFormData({ name: "", description: "", start_date: "", end_date: "", budget: "", currency: "EUR" });
-      await fetchCampaigns();
-      await fetchTimeline();
-    }
-  }
-
-  async function handleCreateFlight(e: React.FormEvent) {
-    e.preventDefault();
-
-    const { error } = await supabase.from("flights").insert({
-      name: flightFormData.name,
-      description: flightFormData.description || null,
-      start_date: flightFormData.start_date,
-      end_date: flightFormData.end_date,
-      budget: flightFormData.budget ? parseFloat(flightFormData.budget) : null,
-      currency: flightFormData.currency,
-      priority: parseInt(flightFormData.priority || "1", 10),
-      ad_server: flightFormData.ad_server,
-      campaign_id: selectedCampaignId,
-      status: "draft",
-    });
-
-    if (error) {
-      toast({ title: "Erro", description: "Não foi possível criar o flight.", variant: "destructive" });
-    } else {
-      toast({ title: "Sucesso", description: "Flight criado." });
-      setFlightDialogOpen(false);
-      setFlightFormData({
-        name: "",
-        description: "",
-        start_date: "",
-        end_date: "",
-        budget: "",
-        currency: "EUR",
-        priority: "1",
-        ad_server: "kevel",
+      toast({
+        title: "Error",
+        description: "Could not create campaign.",
+        variant: "destructive",
       });
-      await fetchCampaigns();
-      await fetchTimeline();
+    } else {
+      toast({ title: "Success", description: "Campaign created successfully!" });
+      setDialogOpen(false);
+      setFormData({ name: '', description: '', start_date: '', end_date: '', budget: '', currency: 'EUR' });
+      fetchCampaigns();
     }
-  }
-
-  /* ---------- Ad Funnel (mock) ---------- */
-
-  const funnel = {
-    slotsAvailable: 10_000_000,
-    slotsFilled: 7_200_000,
-    impressions: 6_800_000,
-    clicks: 816_000,
-    transactions: 40_800,
   };
 
-  const pct = (n: number, d: number) => ((n / d) * 100).toFixed(0);
+  const handleFlightSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-  /* ---------- Timeline data ---------- */
+    const { error } = await supabase.from('flights').insert({
+      ...flightFormData,
+      campaign_id: selectedCampaignId,
+      budget: flightFormData.budget ? parseFloat(flightFormData.budget) : null,
+      priority: parseInt(flightFormData.priority),
+    });
 
-  const ganttItems: GanttItem[] = useMemo(() => {
-    return (ganttRows ?? []).map((r) => ({
-      id: r.flight_id ?? r.campaign_id,
-      left: r.flight_name ? `${r.campaign_name} · ${r.flight_name}` : r.campaign_name,
-      right: r.priority != null ? `prio ${r.priority}` : undefined,
-      start: new Date(r.start_date),
-      end: new Date(r.end_date),
-    }));
-  }, [ganttRows]);
-
-  const [timelineFrom, timelineTo] = useMemo(() => {
-    if (!ganttItems.length) {
-      const today = new Date();
-      const in7 = new Date();
-      in7.setDate(today.getDate() + 7);
-      return [today, in7] as const;
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Could not create flight.",
+        variant: "destructive",
+      });
+    } else {
+      toast({ title: "Success", description: "Flight created successfully!" });
+      setFlightDialogOpen(false);
+      setFlightFormData({
+        name: '',
+        description: '',
+        start_date: '',
+        end_date: '',
+        budget: '',
+        currency: 'EUR',
+        priority: '1',
+        ad_server: 'kevel',
+      });
+      fetchCampaigns();
     }
-    const min = new Date(Math.min(...ganttItems.map((g) => g.start.getTime())));
-    const max = new Date(Math.max(...ganttItems.map((g) => g.end.getTime())));
-    return [min, max] as const;
-  }, [ganttItems]);
+  };
 
-  /* ---------- UI ---------- */
+  const toggleCampaignExpansion = (campaignId: string) => {
+    setExpandedCampaigns(prev => {
+      const s = new Set(prev);
+      s.has(campaignId) ? s.delete(campaignId) : s.add(campaignId);
+      return s;
+    });
+  };
 
-  if (loading) return <div className="p-6">Loading…</div>;
+  const formatNumber = (num: number) => {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num.toString();
+  };
+
+  const calculateCampaignTotals = (flights: Flight[]) => {
+    return flights.reduce((totals, f) => ({
+      impressions: totals.impressions + f.impressions,
+      clicks: totals.clicks + f.clicks,
+      conversions: totals.conversions + f.conversions,
+      spend: totals.spend + f.spend,
+    }), { impressions: 0, clicks: 0, conversions: 0, spend: 0 });
+  };
+
+  const syncAllIntegrations = async () => {
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('auto-sync-kevel');
+      if (error) throw error;
+
+      toast({
+        title: "Sync Complete",
+        description: data?.message || `Synced ${data?.total_synced} items from ${data?.integrations_processed} integrations`,
+      });
+
+      await Promise.all([fetchIntegrations(), fetchCampaigns()]);
+    } catch (error) {
+      console.error('Sync error:', error);
+      toast({
+        title: "Sync Failed",
+        description: "Failed to sync with ad platforms. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'bg-green-100 text-green-800';
+      case 'draft': return 'bg-gray-100 text-gray-800';
+      case 'paused': return 'bg-yellow-100 text-yellow-800';
+      case 'completed': return 'bg-blue-100 text-blue-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-US');
+
+  if (loading) return <div>Loading...</div>;
+
+  // Mock data para Ad Funnel (continua igual)
+  const funnelData = {
+    slotsAvailable: 10000000,
+    slotsFilled: 7200000,
+    impressions: 6800000,
+    clicks: 816000,
+    transactions: 40800
+  };
+  const calculatePercentage = (current: number, previous: number) =>
+    ((current / previous) * 100).toFixed(0);
+
+  const AdFunnelContent = () => (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="text-lg font-medium">Ad Funnel</h3>
+          <p className="text-sm text-muted-foreground">Last 7 Days</p>
+        </div>
+      </div>
+
+      {/* Key Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <Card><CardContent className="p-4">
+          <div className="text-2xl font-bold">{formatNumber(funnelData.slotsAvailable)}</div>
+          <div className="text-sm text-muted-foreground">Slots Available</div>
+        </CardContent></Card>
+
+        <Card><CardContent className="p-4">
+          <div className="text-2xl font-bold text-purple-600">{formatNumber(funnelData.slotsFilled)}</div>
+          <div className="text-sm text-muted-foreground">Slots Filled</div>
+          <div className="text-xs text-purple-600">{calculatePercentage(funnelData.slotsFilled, funnelData.slotsAvailable)}% of Slots Available</div>
+        </CardContent></Card>
+
+        <Card><CardContent className="p-4">
+          <div className="text-2xl font-bold text-cyan-600">{formatNumber(funnelData.impressions)}</div>
+          <div className="text-sm text-muted-foreground">Impressions</div>
+          <div className="text-xs text-cyan-600">{calculatePercentage(funnelData.impressions, funnelData.slotsFilled)}% of Slots Filled</div>
+        </CardContent></Card>
+
+        <Card><CardContent className="p-4">
+          <div className="text-2xl font-bold text-gray-600">{formatNumber(funnelData.clicks)}</div>
+          <div className="text-sm text-muted-foreground">Clicks</div>
+          <div className="text-xs text-gray-600">{calculatePercentage(funnelData.clicks, funnelData.impressions)}% of Impressions</div>
+        </CardContent></Card>
+
+        <Card><CardContent className="p-4">
+          <div className="text-2xl font-bold text-green-600">{formatNumber(funnelData.transactions)}</div>
+          <div className="text-sm text-muted-foreground">Transactions</div>
+          <div className="text-xs text-green-600">{calculatePercentage(funnelData.transactions, funnelData.clicks)}% of Clicks</div>
+        </CardContent></Card>
+      </div>
+
+      {/* Funnel bar */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="space-y-4">
+            <div className="relative w-full h-20">
+              <svg width="100%" height="80" viewBox="0 0 1000 80" className="overflow-visible">
+                <defs>
+                  <linearGradient id="purpleGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#8b5cf6" />
+                    <stop offset="100%" stopColor="#7c3aed" />
+                  </linearGradient>
+                  <linearGradient id="cyanGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#22d3ee" />
+                    <stop offset="100%" stopColor="#0891b2" />
+                  </linearGradient>
+                  <linearGradient id="lightGrayGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#9ca3af" />
+                    <stop offset="100%" stopColor="#6b7280" />
+                  </linearGradient>
+                  <linearGradient id="darkGrayGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#6b7280" />
+                    <stop offset="100%" stopColor="#4b5563" />
+                  </linearGradient>
+                  <linearGradient id="greenGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#22c55e" />
+                    <stop offset="100%" stopColor="#16a34a" />
+                  </linearGradient>
+                </defs>
+
+                <rect x="0" y="10" width="180" height="60" fill="url(#purpleGradient)" rx="8" />
+                <path d="M 180 18.5 L 360 18.5 L 360 61.5 L 180 61.5 Z" fill="url(#cyanGradient)" />
+                <path d="M 360 19.5 L 540 19.5 L 540 60.5 L 360 60.5 Z" fill="url(#lightGrayGradient)" />
+                <path d="M 540 15.5 L 720 15.5 L 720 64.5 L 540 64.5 Z" fill="url(#darkGrayGradient)" />
+                <path d="M 720 28 L 900 28 L 900 52 L 720 52 Z" fill="url(#greenGradient)" />
+
+                <text x="100" y="45" textAnchor="middle" className="fill-white text-sm font-bold">100%</text>
+                <text x="300" y="45" textAnchor="middle" className="fill-white text-sm font-bold">72%</text>
+                <text x="525" y="45" textAnchor="middle" className="fill-white text-sm font-bold">68%</text>
+                <text x="750" y="45" textAnchor="middle" className="fill-white text-sm font-bold">8%</text>
+                <text x="925" y="45" textAnchor="middle" className="fill-white text-sm font-bold">4%</text>
+              </svg>
+            </div>
+
+            <div className="grid grid-cols-5 gap-4 text-xs text-muted-foreground text-center mt-4">
+              <span>Slots Available</span>
+              <span>Slots Filled</span>
+              <span>Impressions</span>
+              <span>Clicks</span>
+              <span>Transactions</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card><CardContent className="p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Lightbulb className="h-4 w-4 text-blue-600" />
+            <span className="text-sm font-medium text-blue-600">AI Recommendation: Improve Ad Visibility</span>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Your ads are not getting enough views. Move ads to higher-traffic areas to increase impressions.
+          </p>
+        </CardContent></Card>
+
+        <Card><CardContent className="p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Lightbulb className="h-4 w-4 text-blue-600" />
+            <span className="text-sm font-medium text-blue-600">AI Recommendation: Increase ad slots.</span>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Your inventory fill rate is high. Add ad slots to unlock more revenue.
+          </p>
+        </CardContent></Card>
+      </div>
+    </div>
+  );
+
+  const CampaignsContent = () => (
+    <>
+      {/* Dialog criar Flight */}
+      <Dialog open={flightDialogOpen} onOpenChange={setFlightDialogOpen}>
+        <DialogContent className="sm:max-w-[525px]">
+          <DialogHeader>
+            <DialogTitle>Create New Flight</DialogTitle>
+            <DialogDescription>Add a new flight to the campaign</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleFlightSubmit} className="space-y-4">
+            <div className="grid w-full items-center gap-1.5">
+              <Label htmlFor="flight_name">Flight Name</Label>
+              <Input
+                id="flight_name"
+                value={flightFormData.name}
+                onChange={(e) => setFlightFormData({ ...flightFormData, name: e.target.value })}
+                placeholder="Ex: Homepage Banner Flight"
+                required
+              />
+            </div>
+
+            <div className="grid w-full items-center gap-1.5">
+              <Label htmlFor="flight_description">Description</Label>
+              <Textarea
+                id="flight_description"
+                value={flightFormData.description}
+                onChange={(e) => setFlightFormData({ ...flightFormData, description: e.target.value })}
+                placeholder="Flight description..."
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="grid w-full items-center gap-1.5">
+                <Label htmlFor="flight_start_date">Start Date</Label>
+                <Input
+                  id="flight_start_date"
+                  type="date"
+                  value={flightFormData.start_date}
+                  onChange={(e) => setFlightFormData({ ...flightFormData, start_date: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="grid w-full items-center gap-1.5">
+                <Label htmlFor="flight_end_date">End Date</Label>
+                <Input
+                  id="flight_end_date"
+                  type="date"
+                  value={flightFormData.end_date}
+                  onChange={(e) => setFlightFormData({ ...flightFormData, end_date: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="grid w-full items-center gap-1.5">
+                <Label htmlFor="flight_budget">Budget</Label>
+                <Input
+                  id="flight_budget"
+                  type="number"
+                  step="0.01"
+                  value={flightFormData.budget}
+                  onChange={(e) => setFlightFormData({ ...flightFormData, budget: e.target.value })}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="grid w-full items-center gap-1.5">
+                <Label htmlFor="flight_priority">Priority</Label>
+                <Input
+                  id="flight_priority"
+                  type="number"
+                  value={flightFormData.priority}
+                  onChange={(e) => setFlightFormData({ ...flightFormData, priority: e.target.value })}
+                  min="1"
+                  max="10"
+                />
+              </div>
+              <div className="grid w-full items-center gap-1.5">
+                <Label htmlFor="flight_ad_server">Ad Server</Label>
+                <Select value={flightFormData.ad_server} onValueChange={(value) => setFlightFormData({ ...flightFormData, ad_server: value })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="kevel">🎯 Kevel</SelectItem>
+                    <SelectItem value="google">🟦 Google</SelectItem>
+                    <SelectItem value="criteo">🟧 Criteo</SelectItem>
+                    <SelectItem value="koddi">🟩 Koddi</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <Button type="submit" className="w-full">Create Flight</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <div className="space-y-4">
+        {campaigns.map((campaign) => {
+          const totals = calculateCampaignTotals(campaign.flights || []);
+          const isExpanded = expandedCampaigns.has(campaign.id);
+
+          return (
+            <Collapsible key={campaign.id} open={isExpanded} onOpenChange={() => toggleCampaignExpansion(campaign.id)}>
+              <Card className="w-full">
+                <CardHeader>
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <CollapsibleTrigger className="flex items-center gap-1 hover:bg-muted/50 rounded p-1">
+                          {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        </CollapsibleTrigger>
+                        <CardTitle className="text-lg font-semibold">{campaign.name}</CardTitle>
+                        <Badge variant="secondary" className="text-xs">{campaign.flights?.length || 0} flights</Badge>
+                      </div>
+                      {campaign.description && <p className="text-muted-foreground mt-1 ml-7">{campaign.description}</p>}
+                    </div>
+                    <Badge
+                      variant={
+                        campaign.status === 'active' ? 'default' :
+                        campaign.status === 'paused' ? 'secondary' : 'outline'
+                      }
+                      className={getStatusColor(campaign.status)}
+                    >
+                      {campaign.status}
+                    </Badge>
+                  </div>
+                </CardHeader>
+
+                <CardContent>
+                  {/* Overview */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Budget</p>
+                      <p className="font-medium">
+                        {campaign.budget ? `${campaign.currency} ${campaign.budget.toLocaleString()}` : 'Not set'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Campaign Period</p>
+                      <p className="font-medium text-xs">
+                        {formatDate(campaign.start_date)} - {formatDate(campaign.end_date)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Impressions</p>
+                      <p className="font-medium">{formatNumber(totals.impressions)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Clicks</p>
+                      <p className="font-medium">{formatNumber(totals.clicks)}</p>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { setSelectedCampaignId(campaign.id); setFlightDialogOpen(true); }}
+                    >
+                      <Plus className="h-4 w-4 mr-2" /> Add Flight
+                    </Button>
+                    <Button variant="outline" size="sm">
+                      <Edit className="h-4 w-4 mr-2" /> Edit Campaign
+                    </Button>
+                  </div>
+
+                  {/* Flights */}
+                  <Collapsible open={isExpanded}>
+                    <CollapsibleContent className="space-y-3">
+                      {campaign.flights && campaign.flights.length > 0 ? (
+                        <div className="space-y-3">
+                          <h4 className="text-sm font-semibold text-muted-foreground">Flights</h4>
+                          {campaign.flights.map((flight) => (
+                            <div key={flight.id} className="bg-muted/30 rounded-lg p-4 ml-4 border-l-2 border-primary/20">
+                              <div className="flex justify-between items-start mb-3">
+                                <div>
+                                  <h5 className="font-medium">{flight.name}</h5>
+                                  {flight.description && <p className="text-sm text-muted-foreground">{flight.description}</p>}
+                                </div>
+                                <div className="flex gap-2">
+                                  <Badge variant="outline" className={getStatusColor(flight.status)}>{flight.status}</Badge>
+                                  <Badge variant="secondary" className="text-xs">Priority {flight.priority}</Badge>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Period:</span>
+                                  <p className="text-xs">{formatDate(flight.start_date)} - {formatDate(flight.end_date)}</p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Budget:</span>
+                                  <p>{flight.budget ? `${flight.currency} ${flight.budget.toLocaleString()}` : 'No budget'}</p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Ad Server:</span>
+                                  <p>{flight.ad_server}</p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Spend:</span>
+                                  <p>{flight.spend ? `${flight.currency} ${flight.spend.toLocaleString()}` : '€0'}</p>
+                                </div>
+                              </div>
+
+                              {(flight.impressions > 0 || flight.clicks > 0) && (
+                                <div className="mt-3 p-3 bg-background/50 rounded">
+                                  <h6 className="text-xs font-medium text-muted-foreground mb-2">Performance</h6>
+                                  <div className="grid grid-cols-3 gap-4 text-sm">
+                                    <div className="flex items-center gap-1">
+                                      <Eye className="w-3 h-3 text-blue-600" />
+                                      <span>{formatNumber(flight.impressions)} impressions</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <MousePointer className="w-3 h-3 text-green-600" />
+                                      <span>{formatNumber(flight.clicks)} clicks</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <TrendingUp className="w-3 h-3 text-purple-600" />
+                                      <span>{formatNumber(flight.conversions)} conversions</span>
+                                    </div>
+                                  </div>
+                                  {flight.clicks > 0 && flight.impressions > 0 && (
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      CTR: {((flight.clicks / flight.impressions) * 100).toFixed(2)}%
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+
+                              <div className="flex gap-2 mt-3">
+                                <Button variant="outline" size="sm"><Edit className="h-4 w-4 mr-1" /> Edit</Button>
+                                <Button variant="outline" size="sm"><Target className="h-4 w-4 mr-1" /> Assign Spaces</Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 bg-muted/30 rounded-lg ml-4">
+                          <Target className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                          <p className="text-sm text-muted-foreground mb-3">No flights in this campaign</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => { setSelectedCampaignId(campaign.id); setFlightDialogOpen(true); }}
+                          >
+                            <Plus className="h-4 w-4 mr-2" /> Create First Flight
+                          </Button>
+                        </div>
+                      )}
+                    </CollapsibleContent>
+                  </Collapsible>
+                </CardContent>
+              </Card>
+            </Collapsible>
+          );
+        })}
+      </div>
+
+      {campaigns.length === 0 && (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-8">
+            <Megaphone className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No campaigns</h3>
+            <p className="text-muted-foreground text-center mb-4">
+              Create your first campaign to start promoting your ads.
+            </p>
+            <Button onClick={() => setDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" /> Create First Campaign
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+    </>
+  );
 
   return (
-    <div className="space-y-6 p-1 md:p-2">
-      {/* Header */}
+    <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Campaigns & Flights</h2>
@@ -409,100 +726,45 @@ export default function Campaigns() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={syncAllIntegrations} disabled={syncing}>
-            {syncing ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Syncing…
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Sync with Platforms
-              </>
-            )}
+            {syncing ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Syncing...</>) : (<><RefreshCw className="mr-2 h-4 w-4" /> Sync with Platforms</>)}
           </Button>
-
-          {/* New Campaign */}
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                New Campaign
-              </Button>
+              <Button><Plus className="mr-2 h-4 w-4" /> New Campaign</Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
                 <DialogTitle>Create New Campaign</DialogTitle>
                 <DialogDescription>Set up a new advertising campaign</DialogDescription>
               </DialogHeader>
-
-              <form onSubmit={handleCreateCampaign} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid w-full items-center gap-1.5">
-                  <Label htmlFor="c_name">Campaign Name</Label>
-                  <Input
-                    id="c_name"
-                    value={formData.name}
-                    onChange={(e) => setFormData((s) => ({ ...s, name: e.target.value }))}
-                    placeholder="Ex: Summer 2024 Campaign"
-                    required
-                  />
+                  <Label htmlFor="name">Campaign Name</Label>
+                  <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Ex: Summer 2024 Campaign" required />
                 </div>
-
                 <div className="grid w-full items-center gap-1.5">
-                  <Label htmlFor="c_desc">Description</Label>
-                  <Textarea
-                    id="c_desc"
-                    value={formData.description}
-                    onChange={(e) => setFormData((s) => ({ ...s, description: e.target.value }))}
-                    placeholder="Campaign description…"
-                  />
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Campaign description..." />
                 </div>
-
                 <div className="grid grid-cols-2 gap-2">
                   <div className="grid w-full items-center gap-1.5">
-                    <Label htmlFor="c_start">Start Date</Label>
-                    <Input
-                      id="c_start"
-                      type="date"
-                      value={formData.start_date}
-                      onChange={(e) => setFormData((s) => ({ ...s, start_date: e.target.value }))}
-                      required
-                    />
+                    <Label htmlFor="start_date">Start Date</Label>
+                    <Input id="start_date" type="date" value={formData.start_date} onChange={(e) => setFormData({ ...formData, start_date: e.target.value })} required />
                   </div>
                   <div className="grid w-full items-center gap-1.5">
-                    <Label htmlFor="c_end">End Date</Label>
-                    <Input
-                      id="c_end"
-                      type="date"
-                      value={formData.end_date}
-                      onChange={(e) => setFormData((s) => ({ ...s, end_date: e.target.value }))}
-                      required
-                    />
+                    <Label htmlFor="end_date">End Date</Label>
+                    <Input id="end_date" type="date" value={formData.end_date} onChange={(e) => setFormData({ ...formData, end_date: e.target.value })} required />
                   </div>
                 </div>
-
                 <div className="grid grid-cols-2 gap-2">
                   <div className="grid w-full items-center gap-1.5">
-                    <Label htmlFor="c_budget">Budget</Label>
-                    <Input
-                      id="c_budget"
-                      type="number"
-                      step="0.01"
-                      value={formData.budget}
-                      onChange={(e) => setFormData((s) => ({ ...s, budget: e.target.value }))}
-                      placeholder="0.00"
-                    />
+                    <Label htmlFor="budget">Budget</Label>
+                    <Input id="budget" type="number" step="0.01" value={formData.budget} onChange={(e) => setFormData({ ...formData, budget: e.target.value })} placeholder="0.00" required />
                   </div>
-
                   <div className="grid w-full items-center gap-1.5">
-                    <Label>Currency</Label>
-                    <Select
-                      value={formData.currency}
-                      onValueChange={(v) => setFormData((s) => ({ ...s, currency: v }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                    <Label htmlFor="currency">Currency</Label>
+                    <Select value={formData.currency} onValueChange={(value) => setFormData({ ...formData, currency: value })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="EUR">EUR</SelectItem>
                         <SelectItem value="USD">USD</SelectItem>
@@ -511,430 +773,52 @@ export default function Campaigns() {
                     </Select>
                   </div>
                 </div>
-
-                <Button type="submit" className="w-full">
-                  Create Campaign
-                </Button>
+                <Button type="submit" className="w-full">Create Campaign</Button>
               </form>
             </DialogContent>
           </Dialog>
         </div>
       </div>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="campaigns" className="flex items-center gap-2">
-            <Target className="h-4 w-4" />
-            Campaigns
+            <Target className="h-4 w-4" /> Campaigns
           </TabsTrigger>
           <TabsTrigger value="ad-funnel" className="flex items-center gap-2">
-            <BarChart3 className="h-4 w-4" />
-            Ad Funnel
+            <BarChart3 className="h-4 w-4" /> Ad Funnel
           </TabsTrigger>
           <TabsTrigger value="timeline" className="flex items-center gap-2">
-            <BarChart3 className="h-4 w-4" />
-            Timeline
+            <Calendar className="h-4 w-4" /> Timeline
           </TabsTrigger>
         </TabsList>
 
-        {/* CAMPAIGNS ------------------------------------------------------- */}
         <TabsContent value="campaigns" className="mt-6">
-          {/* Flight creation dialog */}
-          <Dialog open={flightDialogOpen} onOpenChange={setFlightDialogOpen}>
-            <DialogContent className="sm:max-w-[525px]">
-              <DialogHeader>
-                <DialogTitle>Create New Flight</DialogTitle>
-                <DialogDescription>Add a new flight to the campaign</DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleCreateFlight} className="space-y-4">
-                <div className="grid w-full items-center gap-1.5">
-                  <Label htmlFor="f_name">Flight Name</Label>
-                  <Input
-                    id="f_name"
-                    value={flightFormData.name}
-                    onChange={(e) => setFlightFormData((s) => ({ ...s, name: e.target.value }))}
-                    placeholder="Ex: Homepage Banner Flight"
-                    required
-                  />
-                </div>
+          <CampaignsContent />
+        </TabsContent>
 
-                <div className="grid w-full items-center gap-1.5">
-                  <Label htmlFor="f_desc">Description</Label>
-                  <Textarea
-                    id="f_desc"
-                    value={flightFormData.description}
-                    onChange={(e) => setFlightFormData((s) => ({ ...s, description: e.target.value }))}
-                    placeholder="Flight description…"
-                  />
-                </div>
+        <TabsContent value="ad-funnel" className="mt-6">
+          <AdFunnelContent />
+        </TabsContent>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="grid w-full items-center gap-1.5">
-                    <Label htmlFor="f_start">Start Date</Label>
-                    <Input
-                      id="f_start"
-                      type="date"
-                      value={flightFormData.start_date}
-                      onChange={(e) => setFlightFormData((s) => ({ ...s, start_date: e.target.value }))}
-                      required
-                    />
-                  </div>
-                  <div className="grid w-full items-center gap-1.5">
-                    <Label htmlFor="f_end">End Date</Label>
-                    <Input
-                      id="f_end"
-                      type="date"
-                      value={flightFormData.end_date}
-                      onChange={(e) => setFlightFormData((s) => ({ ...s, end_date: e.target.value }))}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="grid w-full items-center gap-1.5">
-                    <Label htmlFor="f_budget">Budget</Label>
-                    <Input
-                      id="f_budget"
-                      type="number"
-                      step="0.01"
-                      value={flightFormData.budget}
-                      onChange={(e) => setFlightFormData((s) => ({ ...s, budget: e.target.value }))}
-                      placeholder="0.00"
-                    />
-                  </div>
-
-                  <div className="grid w-full items-center gap-1.5">
-                    <Label htmlFor="f_priority">Priority</Label>
-                    <Input
-                      id="f_priority"
-                      type="number"
-                      value={flightFormData.priority}
-                      onChange={(e) => setFlightFormData((s) => ({ ...s, priority: e.target.value }))}
-                      min={1}
-                      max={10}
-                    />
-                  </div>
-
-                  <div className="grid w-full items-center gap-1.5">
-                    <Label>Ad Server</Label>
-                    <Select
-                      value={flightFormData.ad_server}
-                      onValueChange={(v) => setFlightFormData((s) => ({ ...s, ad_server: v }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="kevel">🎯 Kevel</SelectItem>
-                        <SelectItem value="koddi">🟩 Koddi</SelectItem>
-                        <SelectItem value="topsort">🟦 Topsort</SelectItem>
-                        <SelectItem value="google">🟦 Google</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <Button type="submit" className="w-full">
-                  Create Flight
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
-
-          {/* Lista de campanhas */}
-          <div className="space-y-4">
-            {campaigns.map((c) => {
-              const totals = calculateCampaignTotals(c.flights ?? []);
-              const isOpen = expandedCampaigns.has(c.id);
-
-              return (
-                <Collapsible key={c.id} open={isOpen} onOpenChange={() => toggleCampaignExpansion(c.id)}>
-                  <Card className="w-full">
-                    <CardHeader>
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <CollapsibleTrigger className="flex items-center gap-1 hover:bg-muted/50 rounded p-1">
-                              {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                            </CollapsibleTrigger>
-                            <CardTitle className="text-lg font-semibold">{c.name}</CardTitle>
-                            <Badge variant="secondary" className="text-xs">
-                              {c.flights?.length ?? 0} flights
-                            </Badge>
-                          </div>
-                          {c.description && <p className="text-muted-foreground mt-1 ml-7">{c.description}</p>}
-                        </div>
-                        <Badge variant="outline" className={getStatusColor(c.status ?? "draft")}>
-                          {c.status ?? "draft"}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-
-                    <CardContent>
-                      {/* Overview */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                        <div>
-                          <p className="text-sm text-muted-foreground">Budget</p>
-                          <p className="font-medium">
-                            {c.budget ? `${c.currency ?? "EUR"} ${c.budget.toLocaleString()}` : "Not set"}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">Campaign Period</p>
-                          <p className="font-medium text-xs">
-                            {formatDate(c.start_date)} - {formatDate(c.end_date)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">Total Impressions</p>
-                          <p className="font-medium">{formatNumber(totals.impressions)}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">Total Clicks</p>
-                          <p className="font-medium">{formatNumber(totals.clicks)}</p>
-                        </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex flex-wrap gap-2 mb-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedCampaignId(c.id);
-                            setFlightDialogOpen(true);
-                          }}
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add Flight
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit Campaign
-                        </Button>
-                      </div>
-
-                      {/* Flights */}
-                      <Collapsible open={isOpen}>
-                        <CollapsibleContent className="space-y-3">
-                          {c.flights && c.flights.length > 0 ? (
-                            <div className="space-y-3">
-                              <h4 className="text-sm font-semibold text-muted-foreground">Flights</h4>
-                              {c.flights.map((f) => (
-                                <div
-                                  key={f.id}
-                                  className="bg-muted/30 rounded-lg p-4 ml-4 border-l-2 border-primary/20"
-                                >
-                                  <div className="flex justify-between items-start mb-3">
-                                    <div>
-                                      <h5 className="font-medium">{f.name}</h5>
-                                      {f.description && (
-                                        <p className="text-sm text-muted-foreground">{f.description}</p>
-                                      )}
-                                    </div>
-                                    <div className="flex gap-2">
-                                      <Badge variant="outline" className={getStatusColor(f.status)}>
-                                        {f.status}
-                                      </Badge>
-                                      <Badge variant="secondary" className="text-xs">
-                                        Priority {f.priority}
-                                      </Badge>
-                                    </div>
-                                  </div>
-
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                                    <div>
-                                      <span className="text-muted-foreground">Period:</span>
-                                      <p className="text-xs">
-                                        {formatDate(f.start_date)} - {formatDate(f.end_date)}
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <span className="text-muted-foreground">Budget:</span>
-                                      <p>{f.budget ? `${f.currency} ${f.budget.toLocaleString()}` : "No budget"}</p>
-                                    </div>
-                                    <div>
-                                      <span className="text-muted-foreground">Ad Server:</span>
-                                      <p>{f.ad_server}</p>
-                                    </div>
-                                    <div>
-                                      <span className="text-muted-foreground">Spend:</span>
-                                      <p>{f.spend ? `${f.currency} ${f.spend.toLocaleString()}` : "€0"}</p>
-                                    </div>
-                                  </div>
-
-                                  {(f.impressions > 0 || f.clicks > 0) && (
-                                    <div className="mt-3 p-3 bg-background/50 rounded">
-                                      <h6 className="text-xs font-medium text-muted-foreground mb-2">Performance</h6>
-                                      <div className="grid grid-cols-3 gap-4 text-sm">
-                                        <div className="flex items-center gap-1">
-                                          <Eye className="w-3 h-3 text-blue-600" />
-                                          <span>{formatNumber(f.impressions)} impressions</span>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                          <MousePointer className="w-3 h-3 text-green-600" />
-                                          <span>{formatNumber(f.clicks)} clicks</span>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                          <TrendingUp className="w-3 h-3 text-purple-600" />
-                                          <span>{formatNumber(f.conversions)} conversions</span>
-                                        </div>
-                                      </div>
-                                      {f.clicks > 0 && f.impressions > 0 && (
-                                        <p className="text-xs text-muted-foreground mt-1">
-                                          CTR: {((f.clicks / f.impressions) * 100).toFixed(2)}%
-                                        </p>
-                                      )}
-                                    </div>
-                                  )}
-
-                                  <div className="flex gap-2 mt-3">
-                                    <Button variant="outline" size="sm">
-                                      <Edit className="h-4 w-4 mr-1" />
-                                      Edit
-                                    </Button>
-                                    <Button variant="outline" size="sm">
-                                      <Target className="h-4 w-4 mr-1" />
-                                      Assign Spaces
-                                    </Button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="text-center py-8 bg-muted/30 rounded-lg ml-4">
-                              <Target className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                              <p className="text-sm text-muted-foreground mb-3">No flights in this campaign</p>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedCampaignId(c.id);
-                                  setFlightDialogOpen(true);
-                                }}
-                              >
-                                <Plus className="h-4 w-4 mr-2" />
-                                Create First Flight
-                              </Button>
-                            </div>
-                          )}
-                        </CollapsibleContent>
-                      </Collapsible>
-                    </CardContent>
-                  </Card>
-                </Collapsible>
-              );
-            })}
-          </div>
-
-          {campaigns.length === 0 && (
+        <TabsContent value="timeline" className="mt-6">
+          {companyId ? (
             <Card>
-              <CardContent className="flex flex-col items-center justify-center py-8">
-                <Target className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No campaigns</h3>
-                <p className="text-muted-foreground text-center mb-4">
-                  Create your first campaign to start promoting your ads.
-                </p>
-                <Button onClick={() => setDialogOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create First Campaign
-                </Button>
+              <CardHeader>
+                <CardTitle>Campaign & Flight Timeline</CardTitle>
+                <CardDescription>Visualização Gantt das datas dos flights por campanha</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <FlightsGantt items={[]} from={new Date()} to={new Date()} />
               </CardContent>
             </Card>
+          ) : (
+            <div className="text-sm text-muted-foreground">A carregar a tua empresa…</div>
           )}
-        </TabsContent>
-
-        {/* AD FUNNEL ------------------------------------------------------- */}
-        <TabsContent value="ad-funnel" className="mt-6">
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-              <Card>
-                <CardContent className="p-4">
-                  <div className="text-2xl font-bold">{formatNumber(funnel.slotsAvailable)}</div>
-                  <div className="text-sm text-muted-foreground">Slots Available</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="text-2xl font-bold text-purple-600">{formatNumber(funnel.slotsFilled)}</div>
-                  <div className="text-sm text-muted-foreground">Slots Filled</div>
-                  <div className="text-xs text-purple-600">
-                    {pct(funnel.slotsFilled, funnel.slotsAvailable)}% of Slots Available
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="text-2xl font-bold text-cyan-600">{formatNumber(funnel.impressions)}</div>
-                  <div className="text-sm text-muted-foreground">Impressions</div>
-                  <div className="text-xs text-cyan-600">
-                    {pct(funnel.impressions, funnel.slotsFilled)}% of Slots Filled
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="text-2xl font-bold text-gray-600">{formatNumber(funnel.clicks)}</div>
-                  <div className="text-sm text-muted-foreground">Clicks</div>
-                  <div className="text-xs text-gray-600">{pct(funnel.clicks, funnel.impressions)}% of Impressions</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="text-2xl font-bold text-green-600">{formatNumber(funnel.transactions)}</div>
-                  <div className="text-sm text-muted-foreground">Transactions</div>
-                  <div className="text-xs text-green-600">{pct(funnel.transactions, funnel.clicks)}% of Clicks</div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Lightbulb className="h-4 w-4 text-blue-600" />
-                    <span className="text-sm font-medium text-blue-600">AI Recommendation: Improve Ad Visibility</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Your ads are not getting enough views. Move ads to higher-traffic areas to increase impressions.
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Lightbulb className="h-4 w-4 text-blue-600" />
-                    <span className="text-sm font-medium text-blue-600">AI Recommendation: Increase ad slots.</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Your inventory fill rate is high. Add ad slots to unlock more revenue.
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </TabsContent>
-
-        {/* TIMELINE -------------------------------------------------------- */}
-        <TabsContent value="timeline" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Campaign & Flight Timeline</CardTitle>
-              <p className="text-sm text-muted-foreground">Visualização Gantt das datas dos flights por campanha</p>
-            </CardHeader>
-            <CardContent>
-              {ganttItems.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No flights found.</div>
-              ) : (
-                // cast para any evita incompatibilidades de props entre o teu FlightsGantt e este tipo local
-                <FlightsGantt items={ganttItems as any} from={timelineFrom} to={timelineTo} />
-              )}
-            </CardContent>
-          </Card>
         </TabsContent>
       </Tabs>
     </div>
   );
-}
+};
+
+export default Campaigns;
