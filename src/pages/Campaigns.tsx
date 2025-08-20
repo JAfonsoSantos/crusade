@@ -438,14 +438,16 @@ const Campaigns: React.FC = () => {
     for (const c of campaigns) {
       for (const f of c.flights || []) {
        out.push({
-  campaign_id: c.id,
-  campaign_name: c.name,
-  flight_id: f.id,
-  flight_name: f.name,
-  start_date: f.start_date,
-  end_date: f.end_date,
-  priority: f.priority ?? null,
-});
+          campaign_id: c.id,
+          campaign_name: c.name,
+          flight_id: f.id,
+          flight_name: f.name,
+          start_date: f.start_date,
+          end_date: f.end_date,
+          priority: f.priority ?? null,
+          status: f.status ?? 'draft',           // <- acrescenta
+          ad_server: f.ad_server ?? 'unknown',   // <- acrescenta
+        });
       }
     }
     return out;
