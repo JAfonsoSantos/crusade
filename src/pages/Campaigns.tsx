@@ -437,16 +437,15 @@ const Campaigns: React.FC = () => {
     const out: GanttItem[] = [];
     for (const c of campaigns) {
       for (const f of c.flights || []) {
-        out.push({
-          id: `${c.id}-${f.id}`,
-          campaign_id: c.id,
-          campaign_name: c.name,
-          flight_id: f.id,
-          flight_name: f.name,
-          start_date: f.start_date,
-          end_date: f.end_date,
-          priority: f.priority ?? null,
-        });
+       out.push({
+  campaign_id: c.id,
+  campaign_name: c.name,
+  flight_id: f.id,
+  flight_name: f.name,
+  start_date: f.start_date,
+  end_date: f.end_date,
+  priority: f.priority ?? null,
+});
       }
     }
     return out;
