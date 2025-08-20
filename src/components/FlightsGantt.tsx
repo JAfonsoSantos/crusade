@@ -1,33 +1,80 @@
 import { useEffect, useState } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import FlightsGantt from "@/components/FlightsGantt";
 import { supabase } from "@/integrations/supabase/client";
 
-type Props = { companyId: string };
-
-export default function FlightsGantt({ companyId }: Props) {
-  const [rows, setRows] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function CampaignsPage() {
+  const [companyId, setCompanyId] = useState<string | null>(null);
 
   useEffect(() => {
-    async function load() {
-      setLoading(true);
-      const { data, error } = await (supabase as any)
-        .from("v_flights_gantt")
-        .select("*")
-        .eq("company_id", companyId);
-
-      if (!error) setRows(data ?? []);
-      setLoading(false);
+    async function fetchCompany() {
+      const { data, error } = await supabase
+        .from("companies")
+        .select("id")
+        .limit(1)
+        .single();
+      if (!error && data) {
+        setCompanyId(data.id);
+      }
     }
-    if (companyId) load();
-  }, [companyId]);
-
-  if (loading) return <div>Loading timeline…</div>;
-  if (!rows.length) return <div>No flights found.</div>;
+    fetchCompany();
+  }, []);
 
   return (
-    <div className="w-full">
-      <pre className="text-xs">{JSON.stringify(rows, null, 2)}</pre>
-      {/* aqui substituis depois pelo teu Gantt chart UI */}
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-2">Campaigns & Flights</h1>
+      <p className="text-muted-foreground mb-6">
+        Manage your advertising campaigns and analyze performance
+      </p>
+
+      <Tabs defaultValue="campaigns">
+        <TabsList>
+          <TabsTrigger value="campaigns">Campaigns</TabsTrigger>
+          <TabsTrigger value="adfunnel">Ad Funnel</TabsTrigger>
+          <TabsTrigger value="timeline">Timeline</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="campaigns" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Campaigns</CardTitle>
+              <CardDescription>List of your campaigns</CardDescription>
+            </CardHeader>
+            <CardContent>TODO: campaigns table</CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="adfunnel" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Ad Funnel</CardTitle>
+              <CardDescription>Performance across funnel stages</CardDescription>
+            </CardHeader>
+            <CardContent>TODO: ad funnel charts</CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="timeline" className="mt-6">
+          {companyId ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Campaign & Flight Timeline</CardTitle>
+                <CardDescription>
+                  Visualização Gantt das datas dos flights por campanha
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <FlightsGantt companyId={companyId} />
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="text-sm text-muted-foreground">
+              A carregar a tua empresa…
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
