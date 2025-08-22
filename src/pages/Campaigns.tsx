@@ -1,134 +1,219 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import FlightsGantt, { TimelineItem } from "@/components/FlightsGantt";
 import { supabase } from "@/integrations/supabase/client";
+import { Calendar, BarChart3, Target, RefreshCw, Loader2 } from "lucide-react";
 
-// (Optional) UI wrappers – if your project doesn't have these shadcn cards,
-// you can safely replace them by simple <div> blocks.
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
+type Campaign = {
+  id: string;
+  name: string;
+  description?: string | null;
+  start_date: string;
+  end_date: string;
+  budget?: number | null;
+  currency?: string | null;
+  status?: string | null;
+};
 
-const Campaigns: React.FC = () => {
+type GanttRow = {
+  company_id: string;
+  campaign_id: string;
+  campaign_name: string;
+  flight_id: string;
+  flight_name: string;
+  start_date: string;
+  end_date: string;
+  priority: number | null;
+  status: string | null;
+};
+
+const CampaignsPage: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<"timeline" | "campaigns" | "ad-funnel">("timeline");
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [items, setItems] = useState<TimelineItem[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
 
-  // 1) Load user's company_id
   useEffect(() => {
-    let mounted = true;
-    (async () => {
+    const run = async () => {
       try {
-        const { data: auth } = await supabase.auth.getUser();
-        const uid = auth?.user?.id;
+        // Get current user -> company
+        const { data: userRes } = await supabase.auth.getUser();
+        const uid = userRes.user?.id;
         if (!uid) {
-          if (mounted) {
-            setCompanyId(null);
-            setLoading(false);
-            setError("Not authenticated.");
-          }
+          setLoading(false);
           return;
         }
-
-        const { data: profile, error: pErr } = await supabase
+        const { data: prof, error: profErr } = await supabase
           .from("profiles")
           .select("company_id")
           .eq("user_id", uid)
-          .maybeSingle();
+          .single();
+        if (profErr) console.error(profErr);
+        const cId = prof?.company_id || null;
+        setCompanyId(cId);
 
-        if (pErr) throw pErr;
-        if (mounted) setCompanyId(profile?.company_id ?? null);
-      } catch (e: any) {
-        if (mounted) setError(e.message || "Failed to load profile.");
+        // Load campaigns
+        const { data: cData, error: cErr } = await supabase
+          .from("campaigns")
+          .select("*")
+          .order("start_date", { ascending: true });
+        if (cErr) console.error(cErr);
+        setCampaigns((cData as any as Campaign[]) || []);
+
+        // Load gantt items from fast view (TYPE-SAFE via manual cast)
+        if (cId) {
+          const { data: gData, error: gErr } = await supabase
+            .from("v_gantt_items_fast")
+            .select(
+              "company_id,campaign_id,campaign_name,flight_id,flight_name,start_date,end_date,priority,status"
+            )
+            .eq("company_id", cId);
+          if (gErr) console.error(gErr);
+          const rows = (gData as any as GanttRow[]) || [];
+          const mapped: TimelineItem[] = rows.map((r) => ({
+            campaign_id: r.campaign_id,
+            campaign_name: r.campaign_name,
+            flight_id: r.flight_id,
+            flight_name: r.flight_name,
+            start_date: r.start_date,
+            end_date: r.end_date,
+            priority: r.priority,
+            status: r.status,
+          }));
+          setItems(mapped);
+        } else {
+          setItems([]);
+        }
       } finally {
-        if (mounted) setLoading(false);
+        setLoading(false);
       }
-    })();
-    return () => {
-      mounted = false;
     };
+    run();
   }, []);
 
-  // 2) Load Gantt items from the fast view for that company
-  useEffect(() => {
-    if (!companyId) return;
-    let mounted = true;
+  const byStatusColor = (status?: string | null) => {
+    const s = (status || "").toLowerCase();
+    if (s === "active") return "bg-green-100 text-green-800";
+    if (s === "paused") return "bg-yellow-100 text-yellow-800";
+    if (s === "completed") return "bg-blue-100 text-blue-800";
+    return "bg-gray-100 text-gray-800";
+  };
 
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const { data, error } = await supabase
-          .from("v_gantt_items_fast")
-          .select(
-            "company_id,campaign_id,campaign_name,flight_id,flight_name,start_date,end_date,priority,status"
-          )
-          .eq("company_id", companyId);
+  const CampaignsList = useMemo(
+    () => (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {campaigns.map((c) => (
+          <Card key={c.id}>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">{c.name}</CardTitle>
+                <Badge className={byStatusColor(c.status)} variant="outline">
+                  {c.status || "draft"}
+                </Badge>
+              </div>
+              <CardDescription>
+                {new Date(c.start_date).toLocaleDateString()} →{" "}
+                {new Date(c.end_date).toLocaleDateString()}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">{c.description}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    ),
+    [campaigns]
+  );
 
-        if (error) throw error;
+  const AdFunnel = (
+    <Card>
+      <CardHeader>
+        <CardTitle>Ad Funnel</CardTitle>
+        <CardDescription>Demo metrics</CardDescription>
+      </CardHeader>
+      <CardContent>Coming soon…</CardContent>
+    </Card>
+  );
 
-        const rows = (data ?? []) as any[];
-        const mapped: TimelineItem[] = rows.map((r) => ({
-          campaign_id: r.campaign_id,
-          campaign_name: r.campaign_name ?? "",
-          flight_id: r.flight_id,
-          flight_name: r.flight_name ?? "",
-          start_date: r.start_date,
-          end_date: r.end_date,
-          priority: r.priority ?? null,
-          status: r.status ?? null,
-        }));
-
-        if (mounted) setItems(mapped);
-      } catch (e: any) {
-        if (mounted) setError(e.message || "Failed to fetch timeline items.");
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, [companyId]);
+  const syncAll = async () => {
+    setSyncing(true);
+    try {
+      const { error } = await supabase.functions.invoke("auto-sync-kevel");
+      if (error) throw error;
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
-      <h2 className="text-3xl font-bold tracking-tight">Campaigns & Flights</h2>
-      <p className="text-muted-foreground">
-        Manage your advertising campaigns and analyze performance
-      </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Campaigns & Flights</h2>
+          <p className="text-muted-foreground">
+            Manage your advertising campaigns and analyze performance
+          </p>
+        </div>
+        <Button variant="outline" onClick={syncAll} disabled={syncing}>
+          {syncing ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Syncing…
+            </>
+          ) : (
+            <>
+              <RefreshCw className="mr-2 h-4 w-4" /> Sync with Platforms
+            </>
+          )}
+        </Button>
+      </div>
 
-      {loading && <div>Loading…</div>}
-      {!loading && error && (
-        <div className="text-sm text-red-600">Error: {error}</div>
-      )}
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="timeline" className="flex items-center gap-2">
+            <Calendar className="h-4 w-4" /> Timeline
+          </TabsTrigger>
+          <TabsTrigger value="campaigns" className="flex items-center gap-2">
+            <Target className="h-4 w-4" /> Campaigns
+          </TabsTrigger>
+          <TabsTrigger value="ad-funnel" className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" /> Ad Funnel
+          </TabsTrigger>
+        </TabsList>
 
-      {!loading && !error && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Campaign &amp; Flight Timeline</CardTitle>
-            <CardDescription>
-              Visual timeline (Gantt) grouped by campaign
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {items.length > 0 ? (
-              <FlightsGantt items={items} />
-            ) : (
-              <div className="text-sm text-muted-foreground">
-                No flights found for your company.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+        <TabsContent value="timeline" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Campaign & Flight Timeline</CardTitle>
+              <CardDescription>Visualização Gantt por campanha</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!companyId ? (
+                <div className="text-sm text-muted-foreground">A carregar a tua empresa…</div>
+              ) : (
+                <FlightsGantt items={items} />
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="campaigns" className="mt-6">
+          {CampaignsList}
+        </TabsContent>
+
+        <TabsContent value="ad-funnel" className="mt-6">
+          {AdFunnel}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
 
-export default Campaigns;
+export default CampaignsPage;
