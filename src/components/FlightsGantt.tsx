@@ -5,8 +5,8 @@ export type TimelineItem = {
   campaign_name: string;
   flight_id: string;
   flight_name: string;
-  start_date: string; // ISO date (YYYY-MM-DD)
-  end_date: string;   // ISO date (YYYY-MM-DD)
+  start_date: string; // YYYY-MM-DD
+  end_date: string;   // YYYY-MM-DD
   priority?: number | null;
   status?: string | null;
 };
@@ -17,9 +17,7 @@ export type FlightsGanttProps = {
   to?: Date;   // optional viewport end
 };
 
-// util
 function parseISO(d: string) {
-  // tolerate YYYY-MM-DD or full ISO
   const onlyDate = d.length === 10 ? d : d.slice(0, 10);
   const [y, m, day] = onlyDate.split("-").map(Number);
   return new Date(y, (m || 1) - 1, day || 1);
@@ -67,11 +65,8 @@ const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to }) => {
       (ends.length
         ? new Date(Math.max(...ends.map((d) => d.getTime())))
         : new Date(min.getTime() + 7 * 86400000));
-
     const total = Math.max(1, daysBetween(min, max));
-
     const tickLabels: string[] = [];
-    // show one tick per day (clamped to ~14 for readability)
     const step = Math.max(1, Math.floor(total / 14));
     for (let i = 0; i <= total; i += step) {
       const d = new Date(min.getTime());
@@ -92,9 +87,11 @@ const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to }) => {
     const leftDays = clamp(daysBetween(start, s), 0, totalDays);
     const widthDays = clamp(daysBetween(s, e), 0, totalDays);
     const leftPct = (leftDays / totalDays) * 100;
-    const widthPct = Math.max(0.5, (widthDays / totalDays) * 100); // min hairline
+    const widthPct = Math.max(0.5, (widthDays / totalDays) * 100);
     const color =
-      STATUS_COLORS[(row.status || "").toLowerCase()] || STATUS_COLORS["draft"];
+      STATUS_COLORS[(row.status || "").toLowerCase()] ||
+      STATUS_COLORS["draft"];
+
     return (
       <div className="relative h-8">
         <div
@@ -118,7 +115,6 @@ const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to }) => {
 
   return (
     <div className="w-full">
-      {/* header ticks */}
       <div className="mb-2 flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
         {ticks.map((t, i) => (
           <span key={i} className="tabular-nums">
@@ -127,7 +123,6 @@ const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to }) => {
         ))}
       </div>
 
-      {/* groups */}
       <div className="space-y-6">
         {grouped.map((g, gi) => (
           <div key={gi} className="rounded-lg border p-3">
