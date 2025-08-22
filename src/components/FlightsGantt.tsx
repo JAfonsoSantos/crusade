@@ -5,19 +5,21 @@ export type TimelineItem = {
   campaign_name: string;
   flight_id: string;
   flight_name: string;
-  start_date: string;
-  end_date: string;
+  start_date: string; // ISO date (YYYY-MM-DD)
+  end_date: string;   // ISO date (YYYY-MM-DD)
   priority?: number | null;
   status?: string | null;
 };
 
 export type FlightsGanttProps = {
   items: TimelineItem[];
-  from?: Date;
-  to?: Date;
+  from?: Date; // optional viewport start
+  to?: Date;   // optional viewport end
 };
 
+// util
 function parseISO(d: string) {
+  // tolerate YYYY-MM-DD or full ISO
   const onlyDate = d.length === 10 ? d : d.slice(0, 10);
   const [y, m, day] = onlyDate.split("-").map(Number);
   return new Date(y, (m || 1) - 1, day || 1);
@@ -55,16 +57,30 @@ const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to }) => {
   const { start, end, totalDays, ticks } = useMemo(() => {
     const starts = items.map((i) => parseISO(i.start_date));
     const ends = items.map((i) => parseISO(i.end_date));
-    const min = from ?? (starts.length ? new Date(Math.min(...starts.map((d) => d.getTime()))) : new Date());
-    const max = to ?? (ends.length ? new Date(Math.max(...ends.map((d) => d.getTime()))) : new Date(min.getTime() + 7 * 86400000));
+    const min =
+      from ??
+      (starts.length
+        ? new Date(Math.min(...starts.map((d) => d.getTime())))
+        : new Date());
+    const max =
+      to ??
+      (ends.length
+        ? new Date(Math.max(...ends.map((d) => d.getTime())))
+        : new Date(min.getTime() + 7 * 86400000));
+
     const total = Math.max(1, daysBetween(min, max));
+
     const tickLabels: string[] = [];
+    // show one tick per day (clamped to ~14 for readability)
     const step = Math.max(1, Math.floor(total / 14));
     for (let i = 0; i <= total; i += step) {
       const d = new Date(min.getTime());
       d.setDate(d.getDate() + i);
       tickLabels.push(
-        `${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getDate().toString().padStart(2, "0")}`
+        `${(d.getMonth() + 1).toString().padStart(2, "0")}/${d
+          .getDate()
+          .toString()
+          .padStart(2, "0")}`
       );
     }
     return { start: min, end: max, totalDays: total, ticks: tickLabels };
@@ -76,8 +92,9 @@ const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to }) => {
     const leftDays = clamp(daysBetween(start, s), 0, totalDays);
     const widthDays = clamp(daysBetween(s, e), 0, totalDays);
     const leftPct = (leftDays / totalDays) * 100;
-    const widthPct = Math.max(0.5, (widthDays / totalDays) * 100);
-    const color = STATUS_COLORS[(row.status || "").toLowerCase()] || STATUS_COLORS["draft"];
+    const widthPct = Math.max(0.5, (widthDays / totalDays) * 100); // min hairline
+    const color =
+      STATUS_COLORS[(row.status || "").toLowerCase()] || STATUS_COLORS["draft"];
     return (
       <div className="relative h-8">
         <div
@@ -85,26 +102,32 @@ const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to }) => {
           style={{ left: `${leftPct}%`, width: `${widthPct}%`, top: "10px" }}
           title={`${row.flight_name} (${row.start_date} → ${row.end_date})`}
         />
-        <div className="text-xs text-muted-foreground truncate">{row.flight_name}</div>
-        <div className="text-[10px] text-muted-foreground">{row.start_date} → {row.end_date}</div>
+        <div className="text-xs text-muted-foreground truncate">
+          {row.flight_name}
+        </div>
+        <div className="text-[10px] text-muted-foreground">
+          {row.start_date} → {row.end_date}
+        </div>
       </div>
     );
   };
 
   if (!items || items.length === 0) {
-    return (
-      <div className="text-sm text-muted-foreground">No flights to display.</div>
-    );
+    return <div className="text-sm text-muted-foreground">No flights to display.</div>;
   }
 
   return (
     <div className="w-full">
+      {/* header ticks */}
       <div className="mb-2 flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
         {ticks.map((t, i) => (
-          <span key={i} className="tabular-nums">{t}</span>
+          <span key={i} className="tabular-nums">
+            {t}
+          </span>
         ))}
       </div>
 
+      {/* groups */}
       <div className="space-y-6">
         {grouped.map((g, gi) => (
           <div key={gi} className="rounded-lg border p-3">
