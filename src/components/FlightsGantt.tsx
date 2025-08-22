@@ -1,4 +1,3 @@
-
 import React, { useMemo } from "react";
 
 export type TimelineItem = {
@@ -6,19 +5,18 @@ export type TimelineItem = {
   campaign_name: string;
   flight_id: string;
   flight_name: string;
-  start_date: string; // ISO date (YYYY-MM-DD)
-  end_date: string;   // ISO date (YYYY-MM-DD)
+  start_date: string;
+  end_date: string;
   priority?: number | null;
   status?: string | null;
 };
 
 export type FlightsGanttProps = {
   items: TimelineItem[];
-  from?: Date; // optional viewport start
-  to?: Date;   // optional viewport end
+  from?: Date;
+  to?: Date;
 };
 
-// util
 function parseISO(d: string) {
   const onlyDate = d.length === 10 ? d : d.slice(0, 10);
   const [y, m, day] = onlyDate.split("-").map(Number);
@@ -106,6 +104,7 @@ const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to }) => {
           <span key={i} className="tabular-nums">{t}</span>
         ))}
       </div>
+
       <div className="space-y-6">
         {grouped.map((g, gi) => (
           <div key={gi} className="rounded-lg border p-3">
