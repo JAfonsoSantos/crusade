@@ -6,13 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import FlightsGantt, { TimelineItem } from "@/components/FlightsGantt";
 import { supabase } from "@/integrations/supabase/client";
 import { Calendar, BarChart3, Target, RefreshCw, Loader2 } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Campaign = {
   id: string;
@@ -44,7 +38,7 @@ const CampaignsPage: React.FC = () => {
   const [items, setItems] = useState<TimelineItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [campaignFilter, setCampaignFilter] = useState<string | undefined>(undefined);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     const run = async () => {
@@ -55,26 +49,17 @@ const CampaignsPage: React.FC = () => {
           setLoading(false);
           return;
         }
-        const { data: prof } = await supabase
-          .from("profiles")
-          .select("company_id")
-          .eq("user_id", uid)
-          .single();
+        const { data: prof } = await supabase.from("profiles").select("company_id").eq("user_id", uid).single();
         const cId = prof?.company_id || null;
         setCompanyId(cId);
 
-        const { data: cData } = await supabase
-          .from("campaigns")
-          .select("*")
-          .order("start_date", { ascending: true });
+        const { data: cData } = await supabase.from("campaigns").select("*").order("start_date", { ascending: true });
         setCampaigns((cData as any as Campaign[]) || []);
 
         if (cId) {
           const { data: gData } = await (supabase as any)
             .from("v_gantt_items_fast")
-            .select(
-              "company_id,campaign_id,campaign_name,flight_id,flight_name,start_date,end_date,priority,status"
-            )
+            .select("company_id,campaign_id,campaign_name,flight_id,flight_name,start_date,end_date,priority,status")
             .eq("company_id", cId);
           const rows = (gData as any as GanttRow[]) || [];
           const mapped: TimelineItem[] = rows.map((r) => ({
@@ -98,11 +83,6 @@ const CampaignsPage: React.FC = () => {
     run();
   }, []);
 
-  const filteredItems = useMemo(() => {
-    if (!campaignFilter) return items;
-    return items.filter((i) => i.campaign_id === campaignFilter);
-  }, [items, campaignFilter]);
-
   const byStatusColor = (status?: string | null) => {
     const s = (status || "").toLowerCase();
     if (s === "active") return "bg-green-100 text-green-800";
@@ -110,6 +90,11 @@ const CampaignsPage: React.FC = () => {
     if (s === "completed") return "bg-blue-100 text-blue-800";
     return "bg-gray-100 text-gray-800";
   };
+
+  const filteredItems = useMemo(() => {
+    if (!selectedCampaignId) return items;
+    return items.filter((i) => i.campaign_id === selectedCampaignId);
+  }, [items, selectedCampaignId]);
 
   const CampaignsList = useMemo(
     () => (
@@ -124,8 +109,7 @@ const CampaignsPage: React.FC = () => {
                 </Badge>
               </div>
               <CardDescription>
-                {new Date(c.start_date).toLocaleDateString()} →{" "}
-                {new Date(c.end_date).toLocaleDateString()}
+                {new Date(c.start_date).toLocaleDateString()} → {new Date(c.end_date).toLocaleDateString()}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -160,37 +144,17 @@ const CampaignsPage: React.FC = () => {
     }
   };
 
-  const campaignOptions = useMemo(
-    () =>
-      Array.from(
-        new Map(campaigns.map((c) => [c.id, c])).values()
-      ).map((c) => ({ id: c.id, name: c.name })),
-    [campaigns]
-  );
-
-  if (loading) {
-    return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
-  }
+  const campaignSelectValue = selectedCampaignId ?? "all";
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Campaigns & Flights</h2>
-          <p className="text-muted-foreground">
-            Manage your advertising campaigns and analyze performance
-          </p>
+          <p className="text-muted-foreground">Manage your advertising campaigns and analyze performance</p>
         </div>
         <Button variant="outline" onClick={syncAll} disabled={syncing}>
-          {syncing ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Syncing…
-            </>
-          ) : (
-            <>
-              <RefreshCw className="mr-2 h-4 w-4" /> Sync with Platforms
-            </>
-          )}
+          {syncing ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Syncing…</>) : (<><RefreshCw className="mr-2 h-4 w-4" /> Sync with Platforms</>)}
         </Button>
       </div>
 
@@ -209,26 +173,28 @@ const CampaignsPage: React.FC = () => {
 
         <TabsContent value="timeline" className="mt-6">
           <Card>
-            <CardHeader className="space-y-2">
-              <CardTitle>Campaign & Flight Timeline</CardTitle>
-              <CardDescription>Visualização Gantt por campanha</CardDescription>
-              <div className="flex items-center gap-2">
-                <Select
-                  value={campaignFilter ?? "all"}
-                  onValueChange={(v) => setCampaignFilter(v === "all" ? undefined : v)}
-                >
-                  <SelectTrigger className="w-64">
-                    <SelectValue placeholder="All campaigns" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All campaigns</SelectItem>
-                    {campaignOptions.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Campaign & Flight Timeline</CardTitle>
+                  <CardDescription>Visualização Gantt por campanha</CardDescription>
+                </div>
+                <div className="w-64">
+                  <Select
+                    value={campaignSelectValue}
+                    onValueChange={(v) => setSelectedCampaignId(v === "all" ? undefined : v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="All campaigns" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All campaigns</SelectItem>
+                      {campaigns.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
