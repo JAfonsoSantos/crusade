@@ -1,40 +1,34 @@
 import React, { useMemo } from "react";
 
-/** Row item rendered on the timeline */
 export type TimelineItem = {
   campaign_id: string;
   campaign_name: string;
   flight_id: string;
   flight_name: string;
-  start_date: string; // YYYY-MM-DD
-  end_date: string;   // YYYY-MM-DD
+  start_date: string;
+  end_date: string;
   priority?: number | null;
   status?: string | null;
 };
 
-/** Props for FlightsGantt component */
 export type FlightsGanttProps = {
   items: TimelineItem[];
   from?: Date;
   to?: Date;
-  /** optional click handler when a bar is clicked */
-  onSelect?: (item: TimelineItem) => void;
+  onSelect?: (t: TimelineItem) => Promise<void> | void;
 };
 
-// ---- utils
 function parseISO(d: string) {
-  const s = d.length >= 10 ? d.slice(0, 10) : d;
-  const [y, m, day] = s.split("-").map(Number);
+  const onlyDate = d.length === 10 ? d : d.slice(0, 10);
+  const [y, m, day] = onlyDate.split("-").map(Number);
   return new Date(y, (m || 1) - 1, day || 1);
 }
-
 function daysBetween(a: Date, b: Date) {
-  const A = new Date(a.getFullYear(), a.getMonth(), a.getDate());
-  const B = new Date(b.getFullYear(), b.getMonth(), b.getDate());
   const ms = 1000 * 60 * 60 * 24;
-  return Math.max(0, Math.round((B.getTime() - A.getTime()) / ms));
+  const aa = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+  const bb = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.max(0, Math.round((bb.getTime() - aa.getTime()) / ms));
 }
-
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
 }
@@ -47,7 +41,6 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to, onSelect }) => {
-  // group by campaign
   const grouped = useMemo(() => {
     const m = new Map<string, { name: string; rows: TimelineItem[] }>();
     for (const it of items) {
@@ -58,15 +51,13 @@ const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to, onSelect }
     return Array.from(m.values());
   }, [items]);
 
-  // viewport
   const { start, end, totalDays, ticks } = useMemo(() => {
-    const starts = items.map(i => parseISO(i.start_date));
-    const ends = items.map(i => parseISO(i.end_date));
-    const min = from ?? (starts.length ? new Date(Math.min(...starts.map(d => d.getTime()))) : new Date());
-    const max = to ?? (ends.length ? new Date(Math.max(...ends.map(d => d.getTime()))) : new Date(min.getTime() + 7 * 86400000));
+    const starts = items.map((i) => parseISO(i.start_date));
+    const ends = items.map((i) => parseISO(i.end_date));
+    const min = from ?? (starts.length ? new Date(Math.min(...starts.map((d) => d.getTime()))) : new Date());
+    const max = to ?? (ends.length ? new Date(Math.max(...ends.map((d) => d.getTime()))) : new Date(min.getTime() + 7 * 86400000));
     const total = Math.max(1, daysBetween(min, max));
     const tickLabels: string[] = [];
-    // Show max 14 ticks for readability
     const step = Math.max(1, Math.floor(total / 14));
     for (let i = 0; i <= total; i += step) {
       const d = new Date(min.getTime());
@@ -84,11 +75,10 @@ const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to, onSelect }
     const leftPct = (leftDays / totalDays) * 100;
     const widthPct = Math.max(0.5, (widthDays / totalDays) * 100);
     const color = STATUS_COLORS[(row.status || "").toLowerCase()] || STATUS_COLORS["draft"];
-
     return (
       <div className="relative h-8">
         <div
-          className={`absolute h-3 rounded ${color}`}
+          className={`absolute h-3 rounded ${color} cursor-pointer`}
           style={{ left: `${leftPct}%`, width: `${widthPct}%`, top: "10px" }}
           title={`${row.flight_name} (${row.start_date} → ${row.end_date})`}
           onClick={() => onSelect?.(row)}
@@ -110,7 +100,6 @@ const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to, onSelect }
           <span key={i} className="tabular-nums">{t}</span>
         ))}
       </div>
-
       <div className="space-y-6">
         {grouped.map((g, gi) => (
           <div key={gi} className="rounded-lg border p-3">
