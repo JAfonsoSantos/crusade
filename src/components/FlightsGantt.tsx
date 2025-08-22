@@ -1,229 +1,125 @@
+import React, { useMemo } from "react";
 
-import { useEffect, useMemo, useState } from "react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { RefreshCw, Calendar, Target, BarChart3 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import FlightsGantt, { GanttItem } from "@/components/FlightsGantt";
-import { useToast } from "@/hooks/use-toast";
-
-type VRow = {
-  company_id: string;
+export type TimelineItem = {
   campaign_id: string;
   campaign_name: string;
   flight_id: string;
   flight_name: string;
-  start_date: string | null;
-  end_date: string | null;
-  priority: number | null;
-  status: string | null;
-  ad_server: string | null;
+  start_date: string; // ISO date (YYYY-MM-DD)
+  end_date: string;   // ISO date (YYYY-MM-DD)
+  priority?: number | null;
+  status?: string | null;
 };
 
-export default function CampaignsPage() {
-  const [activeTab, setActiveTab] = useState<"timeline" | "campaigns" | "ad-funnel">("timeline");
-  const [companyId, setCompanyId] = useState<string | null>(null);
-  const [items, setItems] = useState<GanttItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  const { toast } = useToast();
+export type FlightsGanttProps = {
+  items: TimelineItem[];
+  from?: Date; // optional viewport start
+  to?: Date;   // optional viewport end
+};
 
-  useEffect(() => {
-    (async () => {
-      // Resolve current user's companyId
-      const { data: auth } = await supabase.auth.getUser();
-      const uid = auth.user?.id;
-      if (!uid) {
-        setLoading(false);
-        return;
-      }
-      const { data: profile, error } = await supabase
-        .from("profiles")
-        .select("company_id")
-        .eq("user_id", uid)
-        .maybeSingle();
+// util
+function parseISO(d: string) {
+  const onlyDate = d.length === 10 ? d : d.slice(0, 10);
+  const [y, m, day] = onlyDate.split("-").map(Number);
+  return new Date(y, (m || 1) - 1, day || 1);
+}
 
-      if (error) {
-        console.error(error);
-      }
-      const cid = profile?.company_id ?? null;
-      setCompanyId(cid);
-    })();
-  }, []);
+function daysBetween(a: Date, b: Date) {
+  const ms = 1000 * 60 * 60 * 24;
+  const aa = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+  const bb = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.max(0, Math.round((bb.getTime() - aa.getTime()) / ms));
+}
 
-  useEffect(() => {
-    if (!companyId) return;
-    (async () => {
-      setLoading(true);
-      // Prefer the fast view if present; fallback to v_gantt_items
-      let rows: VRow[] = [];
-      // Try fast view
-      const { data: fast, error: e1 } = await supabase
-        .from("v_gantt_items_fast")
-        .select("*")
-        .eq("company_id", companyId);
-      if (!e1 && fast) {
-        rows = fast as unknown as VRow[];
-      } else {
-        const { data: slow, error: e2 } = await supabase
-          .from("v_gantt_items")
-          .select("*")
-          .eq("company_id", companyId);
-        if (e2) {
-          console.error("Fetch error:", e1 ?? e2);
-        }
-        rows = (slow ?? []) as unknown as VRow[];
-      }
+function clamp(n: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, n));
+}
 
-      const mapped: GanttItem[] = rows.map((r) => ({
-        campaign_id: r.campaign_id,
-        campaign_name: r.campaign_name,
-        flight_id: r.flight_id,
-        flight_name: r.flight_name,
-        start_date: r.start_date ?? "",
-        end_date: r.end_date ?? "",
-        priority: r.priority ?? 0,
-        status: r.status ?? "active",
-        ad_server: r.ad_server ?? "unknown",
-      }));
+const STATUS_COLORS: Record<string, string> = {
+  active: "bg-green-500",
+  paused: "bg-amber-400",
+  draft: "bg-gray-300",
+  completed: "bg-blue-500",
+};
 
-      setItems(mapped);
-      setLoading(false);
-    })();
-  }, [companyId]);
-
-  const range = useMemo(() => {
-    if (!items.length) return { from: undefined as Date | undefined, to: undefined as Date | undefined };
-    const toDate = (s: string) => {
-      // Accept 'YYYY-MM-DD' or ISO. If parse fails, return today to avoid NaN.
-      if (!s) return new Date();
-      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-      if (m) {
-        const y = Number(m[1]);
-        const mo = Number(m[2]) - 1;
-        const d = Number(m[3]);
-        return new Date(y, mo, d);
-      }
-      const d = new Date(s);
-      return isNaN(d.getTime()) ? new Date() : d;
-    };
-    let min = toDate(items[0].start_date);
-    let max = toDate(items[0].end_date);
+const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to }) => {
+  const grouped = useMemo(() => {
+    const m = new Map<string, { name: string; rows: TimelineItem[] }>();
     for (const it of items) {
-      const s = toDate(it.start_date);
-      const e = toDate(it.end_date);
-      if (s < min) min = s;
-      if (e > max) max = e;
+      const key = it.campaign_id || it.campaign_name;
+      if (!m.has(key)) m.set(key, { name: it.campaign_name, rows: [] });
+      m.get(key)!.rows.push(it);
     }
-    // pad a bit
-    const pad = 3 * 24 * 60 * 60 * 1000;
-    return { from: new Date(min.getTime() - pad), to: new Date(max.getTime() + pad) };
+    return Array.from(m.values());
   }, [items]);
 
-  const syncAll = async () => {
-    setSyncing(true);
-    try {
-      const { error } = await supabase.functions.invoke("auto-sync-kevel");
-      if (error) throw error;
-      toast({ title: "Sync requested", description: "Background sync with ad platforms started." });
-      // Refresh
-      if (companyId) {
-        const { data, error: e } = await supabase
-          .from("v_gantt_items_fast")
-          .select("*")
-          .eq("company_id", companyId);
-        if (!e && data) {
-          const mapped: GanttItem[] = (data as VRow[]).map((r) => ({
-            campaign_id: r.campaign_id,
-            campaign_name: r.campaign_name,
-            flight_id: r.flight_id,
-            flight_name: r.flight_name,
-            start_date: r.start_date ?? "",
-            end_date: r.end_date ?? "",
-            priority: r.priority ?? 0,
-            status: r.status ?? "active",
-            ad_server: r.ad_server ?? "unknown",
-          }));
-          setItems(mapped);
-        }
-      }
-    } catch (err: any) {
-      console.error(err);
-      toast({ title: "Sync failed", description: err?.message ?? "Unknown error", variant: "destructive" });
-    } finally {
-      setSyncing(false);
+  const { start, end, totalDays, ticks } = useMemo(() => {
+    const starts = items.map((i) => parseISO(i.start_date));
+    const ends = items.map((i) => parseISO(i.end_date));
+    const min = from ?? (starts.length ? new Date(Math.min(...starts.map((d) => d.getTime()))) : new Date());
+    const max = to ?? (ends.length ? new Date(Math.max(...ends.map((d) => d.getTime()))) : new Date(min.getTime() + 7 * 86400000));
+    const total = Math.max(1, daysBetween(min, max));
+    const tickLabels: string[] = [];
+    const step = Math.max(1, Math.floor(total / 14));
+    for (let i = 0; i <= total; i += step) {
+      const d = new Date(min.getTime());
+      d.setDate(d.getDate() + i);
+      tickLabels.push(
+        `${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getDate().toString().padStart(2, "0")}`
+      );
     }
+    return { start: min, end: max, totalDays: total, ticks: tickLabels };
+  }, [items, from, to]);
+
+  const barFor = (row: TimelineItem) => {
+    const s = parseISO(row.start_date);
+    const e = parseISO(row.end_date);
+    const leftDays = clamp(daysBetween(start, s), 0, totalDays);
+    const widthDays = clamp(daysBetween(s, e), 0, totalDays);
+    const leftPct = (leftDays / totalDays) * 100;
+    const widthPct = Math.max(0.5, (widthDays / totalDays) * 100);
+    const color = STATUS_COLORS[(row.status || "").toLowerCase()] || STATUS_COLORS["draft"];
+    return (
+      <div className="relative h-8">
+        <div
+          className={\`absolute h-3 rounded \${color}\`}
+          style={{ left: \`\${leftPct}%\`, width: \`\${widthPct}%\`, top: "10px" }}
+          title={\`\${row.flight_name} (\${row.start_date} → \${row.end_date})\`}
+        />
+        <div className="text-xs text-muted-foreground truncate">{row.flight_name}</div>
+        <div className="text-[10px] text-muted-foreground">{row.start_date} → {row.end_date}</div>
+      </div>
+    );
   };
 
+  if (!items || items.length === 0) {
+    return <div className="text-sm text-muted-foreground">No flights to display.</div>;
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Campaigns & Flights</h2>
-          <p className="text-muted-foreground">Manage your advertising campaigns and analyze performance</p>
-        </div>
-        <Button variant="outline" onClick={syncAll} disabled={syncing}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
-          Sync with Platforms
-        </Button>
+    <div className="w-full">
+      <div className="mb-2 flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
+        {ticks.map((t, i) => (
+          <span key={i} className="tabular-nums">{t}</span>
+        ))}
       </div>
-
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="timeline" className="flex items-center gap-2">
-            <Calendar className="h-4 w-4" /> Timeline
-          </TabsTrigger>
-          <TabsTrigger value="campaigns" className="flex items-center gap-2">
-            <Target className="h-4 w-4" /> Campaigns
-          </TabsTrigger>
-          <TabsTrigger value="ad-funnel" className="flex items-center gap-2">
-            <BarChart3 className="h-4 w-4" /> Ad Funnel
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="timeline" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Campaign & Flight Timeline</CardTitle>
-              <CardDescription>Visual timeline (Gantt) grouped by campaign</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="text-sm text-muted-foreground">Loading timeline…</div>
-              ) : !items.length ? (
-                <div className="text-sm text-muted-foreground">No flights found for your company.</div>
-              ) : (
-                <FlightsGantt items={items} from={range.from} to={range.to} />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="campaigns" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Campaigns</CardTitle>
-              <CardDescription>Simple list of campaigns (coming soon)</CardDescription>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              This section will list and manage campaigns.
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="ad-funnel" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Ad Funnel</CardTitle>
-              <CardDescription>Funnel and KPIs (coming soon)</CardDescription>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              This section will show funnel metrics.
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      <div className="space-y-6">
+        {grouped.map((g, gi) => (
+          <div key={gi} className="rounded-lg border p-3">
+            <div className="mb-2 font-medium">{g.name}</div>
+            <div className="space-y-2">
+              {g.rows
+                .slice()
+                .sort((a, b) => (a.priority || 99) - (b.priority || 99))
+                .map((row) => (
+                  <div key={row.flight_id}>{barFor(row)}</div>
+                ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
-}
+};
+
+export default FlightsGantt;
