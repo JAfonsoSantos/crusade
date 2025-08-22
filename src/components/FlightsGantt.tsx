@@ -1,273 +1,190 @@
-
 import React, { useMemo, useState } from "react";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { Gantt, Task, ViewMode } from "gantt-task-react";
+import "gantt-task-react/dist/index.css";
 
-/**
- * Dependency-free Gantt built with CSS grid + Tailwind
- * ----------------------------------------------------
- * Props:
- *  - items: array of rows (one per flight)
- *  - from / to: Date boundaries (inclusive)
- *
- * Each item minimally needs:
- *  {
- *    campaign_id: string;
- *    campaign_name: string;
- *    flight_id: string;
- *    flight_name: string;
- *    start_date: string; // ISO yyyy-mm-dd
- *    end_date: string;   // ISO yyyy-mm-dd
- *    priority?: number;
- *    status?: string;
- *    ad_server?: string;
- *  }
- */
+type PrimitiveDate = string | number | Date;
 
-export type GanttRow = {
+export type GanttItem = {
   campaign_id: string;
   campaign_name: string;
   flight_id: string;
   flight_name: string;
-  start_date: string; // yyyy-mm-dd
-  end_date: string;   // yyyy-mm-dd
+  start_date: PrimitiveDate;
+  end_date: PrimitiveDate;
   priority?: number;
   status?: string;
   ad_server?: string;
 };
 
-export type GanttItem = GanttRow;
-
 type Props = {
   items: GanttItem[];
-  from: Date;
-  to: Date;
+  /**
+   * Optional start & end window for the chart.
+   * If omitted we compute it from the items.
+   */
+  from?: PrimitiveDate;
+  to?: PrimitiveDate;
+  /**
+   * Compact mode uses smaller column width and hides toolbars
+   */
+  compact?: boolean;
 };
 
-function toISODate(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+function toDate(value?: PrimitiveDate): Date {
+  if (!value && value !== 0) return new Date(NaN);
+  if (value instanceof Date) return value;
+  // Try to parse ISO or yyyy-mm-dd safely
+  const asString = String(value).trim();
+  // If it's a plain date like 2025-12-01 ensure it's treated as local midnight
+  // rather than parsed with timezone quirks.
+  const isoLike = /^\d{4}-\d{2}-\d{2}$/.test(asString)
+    ? `${asString}T00:00:00`
+    : asString;
+  const dt = new Date(isoLike);
+  return dt;
 }
 
-function daysBetween(a: Date, b: Date) {
-  return Math.max(0, Math.ceil((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24)));
-}
-
-function clampDate(d: Date, min: Date, max: Date) {
-  if (d < min) return new Date(min);
-  if (d > max) return new Date(max);
-  return d;
-}
-
-function parseDate(s: string) {
-  // s expected yyyy-mm-dd
-  const [y, m, d] = s.split("-").map((n) => parseInt(n, 10));
-  return new Date(y, m - 1, d);
-}
-
-const dayLabel = (d: Date) =>
-  d.toLocaleDateString(undefined, { month: "2-digit", day: "2-digit" });
-
-const groupByCampaign = (rows: GanttItem[]) => {
-  const map = new Map<string, { name: string; flights: GanttItem[] }>();
-  rows.forEach((r) => {
-    const g = map.get(r.campaign_id) || { name: r.campaign_name, flights: [] };
-    g.flights.push(r);
-    map.set(r.campaign_id, g);
-  });
-  return Array.from(map.entries()).map(([id, v]) => ({ id, ...v }));
-};
-
-const statusColor = (s?: string) => {
-  switch ((s || "").toLowerCase()) {
-    case "active":
-      return "bg-green-500/80";
-    case "paused":
-      return "bg-yellow-500/80";
-    case "completed":
-      return "bg-blue-500/80";
-    case "draft":
-      return "bg-gray-400/70";
-    default:
-      return "bg-slate-500/70";
+function clampDates(start: Date, end: Date): { start: Date; end: Date } {
+  if (isNaN(+start) || isNaN(+end) || start > end) {
+    const now = new Date();
+    const later = new Date(now);
+    later.setDate(now.getDate() + 7);
+    return { start: now, end: later };
   }
-};
+  return { start, end };
+}
 
-/** Header timeline grid */
-const TimelineHeader: React.FC<{ from: Date; to: Date }> = ({ from, to }) => {
-  const days = daysBetween(from, to) + 1;
-  const cols = `repeat(${days}, minmax(28px, 1fr))`;
+const FlightsGantt: React.FC<Props> = ({ items, from, to, compact }) => {
+  const [view, setView] = useState<ViewMode>("Day");
 
-  const labels: Date[] = [];
-  for (let i = 0; i < days; i++) {
-    const d = new Date(from);
-    d.setDate(from.getDate() + i);
-    labels.push(d);
-  }
+  const { tasks, startBound, endBound } = useMemo(() => {
+    const tasks: Task[] = items.map((it) => {
+      const start = toDate(it.start_date);
+      const end = toDate(it.end_date);
+
+      // choose a colour by status/priority
+      const status = (it.status || "").toLowerCase();
+      let progressColor = "#22c55e"; // green
+      if (status === "paused") progressColor = "#f59e0b"; // amber
+      if (status === "draft") progressColor = "#9ca3af"; // gray
+      if (status === "completed") progressColor = "#3b82f6"; // blue
+
+      const progress =
+        status === "completed" ? 100 : status === "active" ? 100 : 60;
+
+      // Title shown on hover
+      const displayName = `${it.flight_name} ${it.priority ? `(prio ${it.priority})` : ""}`.trim();
+
+      return {
+        id: it.flight_id,
+        name: displayName,
+        start,
+        end,
+        type: "task",
+        progress,
+        styles: {
+          progressColor,
+          progressSelectedColor: progressColor,
+          backgroundColor: "#e5e7eb",
+          backgroundSelectedColor: "#e5e7eb",
+        },
+      } as Task;
+    });
+
+    // Add "project" rows per campaign (optional nice grouping)
+    const byCampaign = new Map<string, { name: string; min: Date; max: Date }>();
+    items.forEach((it) => {
+      const start = toDate(it.start_date);
+      const end = toDate(it.end_date);
+      const curr = byCampaign.get(it.campaign_id);
+      if (!curr) {
+        byCampaign.set(it.campaign_id, {
+          name: it.campaign_name,
+          min: start,
+          max: end,
+        });
+      } else {
+        if (start < curr.min) curr.min = start;
+        if (end > curr.max) curr.max = end;
+      }
+    });
+
+    byCampaign.forEach((agg, campId) => {
+      tasks.unshift({
+        id: `campaign-${campId}`,
+        name: agg.name,
+        start: agg.min,
+        end: agg.max,
+        type: "project",
+        progress: 0,
+        hideChildren: false,
+      } as Task);
+    });
+
+    const allStarts = tasks.map((t) => t.start);
+    const allEnds = tasks.map((t) => t.end);
+    const min = new Date(Math.min(...allStarts.map((d) => +d)));
+    const max = new Date(Math.max(...allEnds.map((d) => +d)));
+    const { start, end } = clampDates(from ? toDate(from) : min, to ? toDate(to) : max);
+
+    return { tasks, startBound: start, endBound: end };
+  }, [items, from, to]);
+
+  // Column width & locale tweaks so the header looks clean
+  const columnWidth = compact ? 52 : 64;
 
   return (
-    <div className="pl-2">
-      <div
-        className="grid text-[10px] text-muted-foreground"
-        style={{ gridTemplateColumns: cols }}
-      >
-        {labels.map((d) => (
-          <div
-            key={toISODate(d)}
-            className="h-6 border-r last:border-r-0 border-border/50 flex items-center justify-center"
-          >
-            {dayLabel(d)}
+    <div className="w-full">
+      {!compact && (
+        <div className="flex items-center justify-between mb-2 gap-3">
+          <div className="flex gap-2">
+            <button
+              className="px-2 py-1 rounded border text-sm"
+              onClick={() => setView("Day")}
+            >
+              Dia
+            </button>
+            <button
+              className="px-2 py-1 rounded border text-sm"
+              onClick={() => setView("Week")}
+            >
+              Semana
+            </button>
+            <button
+              className="px-2 py-1 rounded border text-sm"
+              onClick={() => setView("Month")}
+            >
+              Mês
+            </button>
           </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const FlightBar: React.FC<{
-  flight: GanttItem;
-  from: Date;
-  to: Date;
-}> = ({ flight, from, to }) => {
-  const start = clampDate(parseDate(flight.start_date), from, to);
-  const end = clampDate(parseDate(flight.end_date), from, to);
-  const offset = daysBetween(from, start);
-  const span = daysBetween(start, end) + 1;
-
-  return (
-    <div className="pl-2">
-      <div className="grid" style={{ gridTemplateColumns: `repeat(${daysBetween(from, to) + 1}, minmax(28px, 1fr))` }}>
-        <div
-          style={{ gridColumn: `${offset + 1} / span ${span}` }}
-          className={`h-6 rounded border border-white/30 shadow-sm ${statusColor(
-            flight.status
-          )}`}
-          title={`${flight.flight_name} • ${flight.start_date} → ${flight.end_date}`}
-        />
-      </div>
-    </div>
-  );
-};
-
-const FlightsGantt: React.FC<Props> = ({ items, from, to }) => {
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
-
-  const groups = useMemo(() => groupByCampaign(items), [items]);
-  const totalDays = daysBetween(from, to) + 1;
-
-  return (
-    <Card className="p-4 w-full overflow-x-auto">
-      {/* Header */}
-      <div className="min-w-[720px]">
-        <div className="flex items-center px-2 pb-2 text-xs font-medium text-muted-foreground">
-          <div className="w-80">Campaign / Flight</div>
-          <div className="flex-1">
-            <TimelineHeader from={from} to={to} />
+          <div className="text-xs text-gray-500">
+            {startBound.toLocaleDateString("pt-PT")} →{" "}
+            {endBound.toLocaleDateString("pt-PT")}
           </div>
         </div>
+      )}
 
-        {/* Body */}
-        <div className="divide-y divide-border">
-          {groups.map((g) => {
-            const isOpen = openGroups[g.id] ?? true;
-            return (
-              <div key={g.id} className="py-2">
-                <div className="flex items-center gap-2 px-2">
-                  <button
-                    onClick={() =>
-                      setOpenGroups((s) => ({ ...s, [g.id]: !isOpen }))
-                    }
-                    className="p-1 rounded hover:bg-muted"
-                    aria-label={isOpen ? "Collapse" : "Expand"}
-                  >
-                    {isOpen ? (
-                      <ChevronDown className="h-4 w-4" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4" />
-                    )}
-                  </button>
-                  <div className="w-80 pr-4">
-                    <div className="font-medium">{g.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {g.flights.length} flight{g.flights.length !== 1 ? "s" : ""}
-                    </div>
-                  </div>
-                  <div className="flex-1">
-                    {/* Campaign envelope = min start to max end */}
-                    <div className="pl-2">
-                      <div
-                        className="grid"
-                        style={{
-                          gridTemplateColumns: `repeat(${totalDays}, minmax(28px, 1fr))`,
-                        }}
-                      >
-                        {(() => {
-                          const starts = g.flights.map((f) =>
-                            clampDate(parseDate(f.start_date), from, to)
-                          );
-                          const ends = g.flights.map((f) =>
-                            clampDate(parseDate(f.end_date), from, to)
-                          );
-                          const minStart = starts.sort((a, b) => +a - +b)[0] || from;
-                          const maxEnd = ends.sort((a, b) => +b - +a)[0] || to;
-                          const off = daysBetween(from, minStart);
-                          const span = daysBetween(minStart, maxEnd) + 1;
-                          return (
-                            <div
-                              style={{ gridColumn: `${off + 1} / span ${span}` }}
-                              className="h-2 rounded bg-primary/20"
-                            />
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Flights rows */}
-                {isOpen && (
-                  <div className="mt-2 space-y-1">
-                    {g.flights
-                      .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
-                      .map((f) => (
-                        <div
-                          key={f.flight_id}
-                          className="flex items-center px-2 text-sm"
-                        >
-                          <div className="w-80 pr-4">
-                            <div className="flex items-center gap-2">
-                              <span className="truncate">{f.flight_name}</span>
-                              {typeof f.priority === "number" && (
-                                <Badge variant="secondary" className="text-[10px]">
-                                  prio {f.priority}
-                                </Badge>
-                              )}
-                              {f.status && (
-                                <Badge variant="outline" className="text-[10px] capitalize">
-                                  {f.status}
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {f.start_date} → {f.end_date}
-                            </div>
-                          </div>
-                          <div className="flex-1">
-                            <FlightBar flight={f} from={from} to={to} />
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </Card>
+      <Gantt
+        tasks={tasks}
+        viewMode={view}
+        columnWidth={columnWidth}
+        locale="pt-PT"
+        preStepsCount={2}
+        ganttHeight={compact ? 320 : 460}
+        listCellWidth={compact ? "200px" : "260px"}
+        barCornerRadius={2}
+        todayColor="#d1fae5"
+        TooltipContent={({ task }) => (
+          <div className="p-2 text-xs">
+            <div className="font-medium">{task.name}</div>
+            <div>
+              {task.start.toLocaleDateString("pt-PT")} →{" "}
+              {task.end.toLocaleDateString("pt-PT")}
+            </div>
+          </div>
+        )}
+      />
+    </div>
   );
 };
 
