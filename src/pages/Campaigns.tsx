@@ -60,14 +60,12 @@ const CampaignsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
 
-  // Filters & zoom
   const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [fromDate, setFromDate] = useState<string>("");
   const [toDate, setToDate] = useState<string>("");
   const [zoom, setZoom] = useState<"week" | "month" | "quarter" | "custom">("month");
 
-  // Modal
   const [openModal, setOpenModal] = useState(false);
   const [selectedFlight, setSelectedFlight] = useState<TimelineItem | null>(null);
   const [flightDetail, setFlightDetail] = useState<FlightDetail | null>(null);
@@ -116,7 +114,6 @@ const CampaignsPage: React.FC = () => {
     run();
   }, []);
 
-  // Filtering client-side
   const filteredItems = useMemo(() => {
     let data = [...items];
     if (selectedCampaigns.length > 0) {
@@ -126,33 +123,23 @@ const CampaignsPage: React.FC = () => {
     if (statusFilter !== "all") {
       data = data.filter((i) => (i.status || "draft").toLowerCase() === statusFilter);
     }
-    if (fromDate) {
-      data = data.filter((i) => i.end_date >= fromDate);
-    }
-    if (toDate) {
-      data = data.filter((i) => i.start_date <= toDate);
-    }
+    if (fromDate) data = data.filter((i) => i.end_date >= fromDate);
+    if (toDate) data = data.filter((i) => i.start_date <= toDate);
     return data;
   }, [items, selectedCampaigns, statusFilter, fromDate, toDate]);
 
-  // Zoom -> compute from/to
   const nowRange = useMemo(() => {
-    if (zoom === "custom" && fromDate && toDate) {
-      return { from: new Date(fromDate), to: new Date(toDate) };
-    }
+    if (zoom === "custom" && fromDate && toDate) return { from: new Date(fromDate), to: new Date(toDate) };
     const today = new Date();
     const start = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
-    let end = new Date(start);
-    if (zoom === "week") {
-      end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
-    } else if (zoom === "month") {
-      end = new Date(start);
-      end.setUTCMonth(end.getUTCMonth() + 1);
-    } else if (zoom === "quarter") {
-      end = new Date(start);
-      end.setUTCMonth(end.getUTCMonth() + 3);
-    }
-    return { from: start, to: end };
+    const addMonths = (d: Date, m: number) => {
+      const x = new Date(d);
+      x.setUTCMonth(x.getUTCMonth() + m);
+      return x;
+    };
+    if (zoom === "week") return { from: start, to: new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000) };
+    if (zoom === "quarter") return { from: start, to: addMonths(start, 3) };
+    return { from: start, to: addMonths(start, 1) };
   }, [zoom, fromDate, toDate]);
 
   const openFlight = async (t: TimelineItem) => {
@@ -169,9 +156,9 @@ const CampaignsPage: React.FC = () => {
 
   const byStatusColor = (status?: string | null) => {
     const s = (status || "").toLowerCase();
-    if (s === "active") return "bg-green-100 text-green-800";
-    if (s === "paused") return "bg-yellow-100 text-yellow-800";
-    if (s === "completed") return "bg-blue-100 text-blue-800";
+    if (s == "active") return "bg-green-100 text-green-800";
+    if (s == "paused") return "bg-yellow-100 text-yellow-800";
+    if (s == "completed") return "bg-blue-100 text-blue-800";
     return "bg-gray-100 text-gray-800";
   };
 
@@ -242,7 +229,6 @@ const CampaignsPage: React.FC = () => {
           {syncing ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Syncing…</>) : (<><RefreshCw className="mr-2 h-4 w-4" /> Sync with Platforms</>)}        </Button>
       </div>
 
-      {/* Filters & zoom */}
       <Card>
         <CardHeader>
           <CardTitle>Filtros & Zoom</CardTitle>
@@ -333,7 +319,6 @@ const CampaignsPage: React.FC = () => {
         <TabsContent value="ad-funnel" className="mt-6">{AdFunnel}</TabsContent>
       </Tabs>
 
-      {/* Flight details modal */}
       <Dialog open={openModal} onOpenChange={setOpenModal}>
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
@@ -348,44 +333,15 @@ const CampaignsPage: React.FC = () => {
             </div>
           ) : flightDetail ? (
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <div className="text-muted-foreground">Status</div>
-                <div className="font-medium">{flightDetail.status || "draft"}</div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">Priority</div>
-                <div className="font-medium">{flightDetail.priority ?? "-"}</div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">Budget</div>
-                <div className="font-medium">{flightDetail.budget ? `${flightDetail.currency || "EUR"} ${flightDetail.budget.toLocaleString()}` : "-"}</div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">Spend</div>
-                <div className="font-medium">{flightDetail.spend ? `${flightDetail.currency || "EUR"} ${flightDetail.spend.toLocaleString()}` : "-"}</div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">Impressions</div>
-                <div className="font-medium">{(flightDetail.impressions ?? 0).toLocaleString()}</div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">Clicks</div>
-                <div className="font-medium">{(flightDetail.clicks ?? 0).toLocaleString()}</div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">Conversions</div>
-                <div className="font-medium">{(flightDetail.conversions ?? 0).toLocaleString()}</div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">Ad Server</div>
-                <div className="font-medium">{flightDetail.ad_server || "-"}</div>
-              </div>
-              {flightDetail.description && (
-                <div className="col-span-2">
-                  <div className="text-muted-foreground">Description</div>
-                  <div>{flightDetail.description}</div>
-                </div>
-              )}
+              <div><div className="text-muted-foreground">Status</div><div className="font-medium">{flightDetail.status || "draft"}</div></div>
+              <div><div className="text-muted-foreground">Priority</div><div className="font-medium">{flightDetail.priority ?? "-"}</div></div>
+              <div><div className="text-muted-foreground">Budget</div><div className="font-medium">{flightDetail.budget ? `${flightDetail.currency || "EUR"} ${flightDetail.budget.toLocaleString()}` : "-"}</div></div>
+              <div><div className="text-muted-foreground">Spend</div><div className="font-medium">{flightDetail.spend ? `${flightDetail.currency || "EUR"} ${flightDetail.spend.toLocaleString()}` : "-"}</div></div>
+              <div><div className="text-muted-foreground">Impressions</div><div className="font-medium">{(flightDetail.impressions ?? 0).toLocaleString()}</div></div>
+              <div><div className="text-muted-foreground">Clicks</div><div className="font-medium">{(flightDetail.clicks ?? 0).toLocaleString()}</div></div>
+              <div><div className="text-muted-foreground">Conversions</div><div className="font-medium">{(flightDetail.conversions ?? 0).toLocaleString()}</div></div>
+              <div><div className="text-muted-foreground">Ad Server</div><div className="font-medium">{flightDetail.ad_server || "-"}</div></div>
+              {flightDetail.description && (<div className="col-span-2"><div className="text-muted-foreground">Description</div><div>{flightDetail.description}</div></div>)}
             </div>
           ) : (
             <div className="text-sm text-muted-foreground">No details found.</div>
