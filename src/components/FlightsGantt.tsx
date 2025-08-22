@@ -1,3 +1,4 @@
+
 import React, { useMemo } from "react";
 
 export type TimelineItem = {
@@ -82,9 +83,9 @@ const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to }) => {
     return (
       <div className="relative h-8">
         <div
-          className={\`absolute h-3 rounded \${color}\`}
-          style={{ left: \`\${leftPct}%\`, width: \`\${widthPct}%\`, top: "10px" }}
-          title={\`\${row.flight_name} (\${row.start_date} → \${row.end_date})\`}
+          className={`absolute h-3 rounded ${color}`}
+          style={{ left: `${leftPct}%`, width: `${widthPct}%`, top: "10px" }}
+          title={`${row.flight_name} (${row.start_date} → ${row.end_date})`}
         />
         <div className="text-xs text-muted-foreground truncate">{row.flight_name}</div>
         <div className="text-[10px] text-muted-foreground">{row.start_date} → {row.end_date}</div>
@@ -93,7 +94,9 @@ const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to }) => {
   };
 
   if (!items || items.length === 0) {
-    return <div className="text-sm text-muted-foreground">No flights to display.</div>;
+    return (
+      <div className="text-sm text-muted-foreground">No flights to display.</div>
+    );
   }
 
   return (
