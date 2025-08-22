@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 
+/** Row item rendered on the timeline */
 export type TimelineItem = {
   campaign_id: string;
   campaign_name: string;
@@ -11,179 +12,119 @@ export type TimelineItem = {
   status?: string | null;
 };
 
+/** Props for FlightsGantt component */
 export type FlightsGanttProps = {
   items: TimelineItem[];
   from?: Date;
   to?: Date;
-  rowHeight?: number;
+  /** optional click handler when a bar is clicked */
   onSelect?: (item: TimelineItem) => void;
 };
 
-/* ---------- Utils ---------- */
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-function parseISODate(d: string): Date {
+// ---- utils
+function parseISO(d: string) {
   const s = d.length >= 10 ? d.slice(0, 10) : d;
-  const [yy, mm, dd] = s.split("-").map((n) => parseInt(n, 10));
-  return new Date(Date.UTC(yy, (mm || 1) - 1, dd || 1));
+  const [y, m, day] = s.split("-").map(Number);
+  return new Date(y, (m || 1) - 1, day || 1);
 }
 
-function daysBetweenUTC(a: Date, b: Date): number {
-  const aa = Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate());
-  const bb = Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), b.getUTCDate());
-  return Math.max(0, Math.round((bb - aa) / DAY_MS));
+function daysBetween(a: Date, b: Date) {
+  const A = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+  const B = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+  const ms = 1000 * 60 * 60 * 24;
+  return Math.max(0, Math.round((B.getTime() - A.getTime()) / ms));
 }
 
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
 }
 
-function fmtTick(d: Date) {
-  const mm = (d.getUTCMonth() + 1).toString().padStart(2, "0");
-  const dd = d.getUTCDate().toString().padStart(2, "0");
-  return `${mm}/${dd}`;
-}
-
 const STATUS_COLORS: Record<string, string> = {
-  active: "#22c55e",
-  paused: "#f59e0b",
-  completed: "#3b82f6",
-  draft: "#9ca3af",
+  active: "bg-green-500",
+  paused: "bg-amber-400",
+  draft: "bg-gray-300",
+  completed: "bg-blue-500",
 };
 
-const statusToColor = (status?: string | null) =>
-  STATUS_COLORS[(status || "draft").toLowerCase()] || STATUS_COLORS.draft;
-
-const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to, rowHeight = 36, onSelect }) => {
-  const groups = useMemo(() => {
-    const map = new Map<string, { name: string; rows: any[] }>();
-    for (const it of items || []) {
-      const key = it.campaign_id || it.campaign_name || "unknown";
-      if (!map.has(key)) map.set(key, { name: it.campaign_name, rows: [] });
-      map.get(key)!.rows.push(it);
+const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to, onSelect }) => {
+  // group by campaign
+  const grouped = useMemo(() => {
+    const m = new Map<string, { name: string; rows: TimelineItem[] }>();
+    for (const it of items) {
+      const key = it.campaign_id || it.campaign_name;
+      if (!m.has(key)) m.set(key, { name: it.campaign_name, rows: [] });
+      m.get(key)!.rows.push(it);
     }
-    const arr = Array.from(map.values());
-    for (const g of arr) {
-      g.rows.sort((a, b) => {
-        const as = parseISODate(a.start_date).getTime();
-        const bs = parseISODate(b.start_date).getTime();
-        if (as !== bs) return as - bs;
-        return (a.priority ?? 99) - (b.priority ?? 99);
-      });
-    }
-    arr.sort((a, b) => a.name.localeCompare(b.name));
-    return arr;
+    return Array.from(m.values());
   }, [items]);
 
+  // viewport
   const { start, end, totalDays, ticks } = useMemo(() => {
-    if (!items || items.length === 0) {
-      const today = new Date();
-      const min = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
-      const max = new Date(min.getTime() + 7 * DAY_MS);
-      const total = Math.max(1, daysBetweenUTC(min, max));
-      const labels: string[] = [];
-      for (let i = 0; i <= total; i += 1) {
-        const d = new Date(min.getTime() + i * DAY_MS);
-        labels.push(fmtTick(d));
-      }
-      return { start: min, end: max, totalDays: total, ticks: labels };
-    }
-
-    const starts = items.map((i) => parseISODate(i.start_date).getTime());
-    const ends = items.map((i) => parseISODate(i.end_date).getTime());
-    let min = new Date(Math.min(...starts));
-    let max = new Date(Math.max(...ends));
-
-    // padding
-    min = new Date(min.getTime() - 3 * DAY_MS);
-    max = new Date(max.getTime() + 3 * DAY_MS);
-
-    if (from) {
-      const f = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()));
-      if (f < min) min = f;
-    }
-    if (to) {
-      const t = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate()));
-      if (t > max) max = t;
-    }
-
-    const total = Math.max(1, daysBetweenUTC(min, max));
-
-    const step = Math.max(1, Math.ceil(total / 18));
-    const labels: string[] = [];
+    const starts = items.map(i => parseISO(i.start_date));
+    const ends = items.map(i => parseISO(i.end_date));
+    const min = from ?? (starts.length ? new Date(Math.min(...starts.map(d => d.getTime()))) : new Date());
+    const max = to ?? (ends.length ? new Date(Math.max(...ends.map(d => d.getTime()))) : new Date(min.getTime() + 7 * 86400000));
+    const total = Math.max(1, daysBetween(min, max));
+    const tickLabels: string[] = [];
+    // Show max 14 ticks for readability
+    const step = Math.max(1, Math.floor(total / 14));
     for (let i = 0; i <= total; i += step) {
-      const d = new Date(min.getTime() + i * DAY_MS);
-      labels.push(fmtTick(d));
+      const d = new Date(min.getTime());
+      d.setDate(d.getDate() + i);
+      tickLabels.push(`${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getDate().toString().padStart(2, "0")}`);
     }
-
-    return { start: min, end: max, totalDays: total, ticks: labels };
+    return { start: min, end: max, totalDays: total, ticks: tickLabels };
   }, [items, from, to]);
 
-  const calcLeftPct = (dateStr: string) => {
-    const d = parseISODate(dateStr);
-    const offset = clamp(daysBetweenUTC(start, d), 0, totalDays);
-    return (offset / totalDays) * 100;
-  };
+  const barFor = (row: TimelineItem) => {
+    const s = parseISO(row.start_date);
+    const e = parseISO(row.end_date);
+    const leftDays = clamp(daysBetween(start, s), 0, totalDays);
+    const widthDays = clamp(daysBetween(s, e), 0, totalDays);
+    const leftPct = (leftDays / totalDays) * 100;
+    const widthPct = Math.max(0.5, (widthDays / totalDays) * 100);
+    const color = STATUS_COLORS[(row.status || "").toLowerCase()] || STATUS_COLORS["draft"];
 
-  const calcWidthPct = (startStr: string, endStr: string) => {
-    const s = parseISODate(startStr);
-    const e = parseISODate(endStr);
-    const w = clamp(daysBetweenUTC(s, e) + 1, 1, totalDays);
-    return (w / totalDays) * 100;
+    return (
+      <div className="relative h-8">
+        <div
+          className={`absolute h-3 rounded ${color}`}
+          style={{ left: `${leftPct}%`, width: `${widthPct}%`, top: "10px" }}
+          title={`${row.flight_name} (${row.start_date} → ${row.end_date})`}
+          onClick={() => onSelect?.(row)}
+        />
+        <div className="text-xs text-muted-foreground truncate">{row.flight_name}</div>
+        <div className="text-[10px] text-muted-foreground">{row.start_date} → {row.end_date}</div>
+      </div>
+    );
   };
 
   if (!items || items.length === 0) {
     return <div className="text-sm text-muted-foreground">No flights to display.</div>;
   }
 
-  const gridStyle: React.CSSProperties = {
-    backgroundImage:
-      "linear-gradient(to right, rgba(0,0,0,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.04) 1px, transparent 1px)",
-    backgroundSize: "48px 1px, 1px 32px",
-  };
-
   return (
     <div className="w-full">
-      <div className="mb-2 flex items-center justify-between">
-        <div className="flex flex-wrap gap-3 text-[10px] text-muted-foreground tabular-nums">
-          {ticks.map((t, i) => (
-            <span key={i}>{t}</span>
-          ))}
-        </div>
+      <div className="mb-2 flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
+        {ticks.map((t, i) => (
+          <span key={i} className="tabular-nums">{t}</span>
+        ))}
       </div>
 
-      <div className="rounded-lg border" style={gridStyle}>
-        <div className="p-3 space-y-6">
-          {groups.map((g, gi) => (
-            <div key={gi} className="rounded-md bg-background/80 p-3">
-              <div className="mb-2 font-medium">{g.name}</div>
-              <div className="space-y-1">
-                {g.rows.map((row) => {
-                  const left = calcLeftPct(row.start_date);
-                  const width = calcWidthPct(row.start_date, row.end_date);
-                  const color = statusToColor(row.status);
-                  return (
-                    <div key={row.flight_id} className="relative" style={{ height: rowHeight }}>
-                      <button
-                        type="button"
-                        className="absolute top-2 h-3 rounded outline-none focus:ring-2 focus:ring-offset-1"
-                        style={{ left: `${left}%`, width: `${width}%`, backgroundColor: color }}
-                        title={`${row.flight_name} • ${row.start_date} → ${row.end_date}`}
-                        onClick={() => onSelect?.(row)}
-                      />
-                      <div className="absolute left-0 right-0 top-5 flex justify-between px-1 pointer-events-none">
-                        <span className="text-xs truncate">{row.flight_name}</span>
-                        <span className="text-[10px] text-muted-foreground">
-                          {row.start_date} → {row.end_date}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+      <div className="space-y-6">
+        {grouped.map((g, gi) => (
+          <div key={gi} className="rounded-lg border p-3">
+            <div className="mb-2 font-medium">{g.name}</div>
+            <div className="space-y-2">
+              {g.rows
+                .slice()
+                .sort((a, b) => (a.priority || 99) - (b.priority || 99))
+                .map((row) => (
+                  <div key={row.flight_id}>{barFor(row)}</div>
+                ))}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
     </div>
   );
