@@ -48,32 +48,29 @@ const CampaignsPage: React.FC = () => {
           setLoading(false);
           return;
         }
-        const { data: prof, error: profErr } = await supabase
+        const { data: prof } = await supabase
           .from("profiles")
           .select("company_id")
           .eq("user_id", uid)
           .single();
-        if (profErr) console.error(profErr);
-        const cId = prof?.company_id || null;
+
+        const cId = (prof as any)?.company_id || null;
         setCompanyId(cId);
 
         // Load campaigns
-        const { data: cData, error: cErr } = await supabase
+        const { data: cData } = await supabase
           .from("campaigns")
           .select("*")
           .order("start_date", { ascending: true });
-        if (cErr) console.error(cErr);
         setCampaigns((cData as any as Campaign[]) || []);
 
-        // Load gantt items from fast view (TYPE-SAFE via manual cast)
         if (cId) {
-          const { data: gData, error: gErr } = await (supabase as any)
+          // Load gantt items (cast to avoid type-gen issues with views)
+          const { data: gData } = await (supabase as any)
             .from("v_gantt_items_fast")
-            .select(
-              "company_id,campaign_id,campaign_name,flight_id,flight_name,start_date,end_date,priority,status"
-            )
+            .select("company_id,campaign_id,campaign_name,flight_id,flight_name,start_date,end_date,priority,status")
             .eq("company_id", cId);
-          if (gErr) console.error(gErr);
+
           const rows = (gData as any as GanttRow[]) || [];
           const mapped: TimelineItem[] = rows.map((r) => ({
             campaign_id: r.campaign_id,
@@ -153,6 +150,28 @@ const CampaignsPage: React.FC = () => {
     }
   };
 
+  // Compute viewport padding for the Gantt based on loaded items
+  const { from, to } = useMemo(() => {
+    if (!items.length) return { from: undefined as Date | undefined, to: undefined as Date | undefined };
+    const parse = (s: string) => {
+      const [y, m, d] = (s.length === 10 ? s : s.slice(0, 10)).split("-").map((n) => parseInt(n, 10));
+      return new Date(Date.UTC(y, (m || 1) - 1, d || 1, 0, 0, 0));
+    };
+    const starts = items.map((i) => parse(i.start_date));
+    const ends = items.map((i) => parse(i.end_date));
+    const min = starts.reduce((a, b) => (a < b ? a : b));
+    const max = ends.reduce((a, b) => (a > b ? a : b));
+    return { from: new Date(min.getTime() - 2 * 86400000), to: new Date(max.getTime() + 2 * 86400000) };
+  }, [items]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -198,7 +217,7 @@ const CampaignsPage: React.FC = () => {
               {!companyId ? (
                 <div className="text-sm text-muted-foreground">A carregar a tua empresa…</div>
               ) : (
-                <FlightsGantt items={items} />
+                <FlightsGantt items={items} from={from} to={to} />
               )}
             </CardContent>
           </Card>
