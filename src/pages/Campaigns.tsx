@@ -352,4 +352,4 @@ const CampaignsPage: React.FC = () => {
   );
 };
 
-export default Campaigns;
+export default CampaignsPage;
