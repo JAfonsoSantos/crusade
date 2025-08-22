@@ -67,7 +67,7 @@ const CampaignsPage: React.FC = () => {
 
         // Load gantt items from fast view (TYPE-SAFE via manual cast)
         if (cId) {
-          const { data: gData, error: gErr } = await supabase
+          const { data: gData, error: gErr } = await (supabase as any)
             .from("v_gantt_items_fast")
             .select(
               "company_id,campaign_id,campaign_name,flight_id,flight_name,start_date,end_date,priority,status"
