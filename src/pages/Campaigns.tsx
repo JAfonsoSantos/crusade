@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import FlightsGantt, { TimelineItem } from "@/components/FlightsGantt";
 import { supabase } from "@/integrations/supabase/client";
 import { Calendar, BarChart3, Target, RefreshCw, Loader2 } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Campaign = {
   id: string;
@@ -38,7 +37,6 @@ const CampaignsPage: React.FC = () => {
   const [items, setItems] = useState<TimelineItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [selectedCampaignId, setSelectedCampaignId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     const run = async () => {
@@ -49,11 +47,18 @@ const CampaignsPage: React.FC = () => {
           setLoading(false);
           return;
         }
-        const { data: prof } = await supabase.from("profiles").select("company_id").eq("user_id", uid).single();
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("company_id")
+          .eq("user_id", uid)
+          .single();
         const cId = prof?.company_id || null;
         setCompanyId(cId);
 
-        const { data: cData } = await supabase.from("campaigns").select("*").order("start_date", { ascending: true });
+        const { data: cData } = await supabase
+          .from("campaigns")
+          .select("*")
+          .order("start_date", { ascending: true });
         setCampaigns((cData as any as Campaign[]) || []);
 
         if (cId) {
@@ -83,19 +88,6 @@ const CampaignsPage: React.FC = () => {
     run();
   }, []);
 
-  const byStatusColor = (status?: string | null) => {
-    const s = (status || "").toLowerCase();
-    if (s === "active") return "bg-green-100 text-green-800";
-    if (s === "paused") return "bg-yellow-100 text-yellow-800";
-    if (s === "completed") return "bg-blue-100 text-blue-800";
-    return "bg-gray-100 text-gray-800";
-  };
-
-  const filteredItems = useMemo(() => {
-    if (!selectedCampaignId) return items;
-    return items.filter((i) => i.campaign_id === selectedCampaignId);
-  }, [items, selectedCampaignId]);
-
   const CampaignsList = useMemo(
     () => (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -104,12 +96,11 @@ const CampaignsPage: React.FC = () => {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">{c.name}</CardTitle>
-                <Badge className={byStatusColor(c.status)} variant="outline">
-                  {c.status || "draft"}
-                </Badge>
+                <Badge variant="outline">{c.status || "draft"}</Badge>
               </div>
               <CardDescription>
-                {new Date(c.start_date).toLocaleDateString()} → {new Date(c.end_date).toLocaleDateString()}
+                {new Date(c.start_date).toLocaleDateString()} →{" "}
+                {new Date(c.end_date).toLocaleDateString()}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -122,29 +113,16 @@ const CampaignsPage: React.FC = () => {
     [campaigns]
   );
 
-  const AdFunnel = (
-    <Card>
-      <CardHeader>
-        <CardTitle>Ad Funnel</CardTitle>
-        <CardDescription>Demo metrics</CardDescription>
-      </CardHeader>
-      <CardContent>Coming soon…</CardContent>
-    </Card>
-  );
-
   const syncAll = async () => {
     setSyncing(true);
     try {
-      const { error } = await supabase.functions.invoke("auto-sync-kevel");
-      if (error) throw error;
+      await supabase.functions.invoke("auto-sync-kevel");
     } catch (e) {
       console.error(e);
     } finally {
       setSyncing(false);
     }
   };
-
-  const campaignSelectValue = selectedCampaignId ?? "all";
 
   return (
     <div className="space-y-6">
@@ -160,60 +138,29 @@ const CampaignsPage: React.FC = () => {
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="timeline" className="flex items-center gap-2">
-            <Calendar className="h-4 w-4" /> Timeline
-          </TabsTrigger>
-          <TabsTrigger value="campaigns" className="flex items-center gap-2">
-            <Target className="h-4 w-4" /> Campaigns
-          </TabsTrigger>
-          <TabsTrigger value="ad-funnel" className="flex items-center gap-2">
-            <BarChart3 className="h-4 w-4" /> Ad Funnel
-          </TabsTrigger>
+          <TabsTrigger value="timeline"><Calendar className="h-4 w-4" /> Timeline</TabsTrigger>
+          <TabsTrigger value="campaigns"><Target className="h-4 w-4" /> Campaigns</TabsTrigger>
+          <TabsTrigger value="ad-funnel"><BarChart3 className="h-4 w-4" /> Ad Funnel</TabsTrigger>
         </TabsList>
 
         <TabsContent value="timeline" className="mt-6">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Campaign & Flight Timeline</CardTitle>
-                  <CardDescription>Visualização Gantt por campanha</CardDescription>
-                </div>
-                <div className="w-64">
-                  <Select
-                    value={campaignSelectValue}
-                    onValueChange={(v) => setSelectedCampaignId(v === "all" ? undefined : v)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="All campaigns" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All campaigns</SelectItem>
-                      {campaigns.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+              <CardTitle>Campaign & Flight Timeline</CardTitle>
+              <CardDescription>Visualização Gantt por campanha</CardDescription>
             </CardHeader>
             <CardContent>
               {!companyId ? (
                 <div className="text-sm text-muted-foreground">A carregar a tua empresa…</div>
               ) : (
-                <FlightsGantt items={filteredItems} />
+                <FlightsGantt items={items} />
               )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="campaigns" className="mt-6">
-          {CampaignsList}
-        </TabsContent>
-
-        <TabsContent value="ad-funnel" className="mt-6">
-          {AdFunnel}
-        </TabsContent>
+        <TabsContent value="campaigns" className="mt-6">{CampaignsList}</TabsContent>
+        <TabsContent value="ad-funnel" className="mt-6"><Card><CardContent>Coming soon…</CardContent></Card></TabsContent>
       </Tabs>
     </div>
   );
