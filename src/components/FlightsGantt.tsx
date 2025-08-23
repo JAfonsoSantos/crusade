@@ -15,7 +15,7 @@ export type FlightsGanttProps = {
   items: TimelineItem[];
   from?: Date;
   to?: Date;
-  onSelect?: (t: TimelineItem) => Promise<void> | void;
+  onSelect?: (t: TimelineItem) => Promise<void>;
 };
 
 function parseISO(d: string) {
@@ -23,12 +23,14 @@ function parseISO(d: string) {
   const [y, m, day] = onlyDate.split("-").map(Number);
   return new Date(y, (m || 1) - 1, day || 1);
 }
+
 function daysBetween(a: Date, b: Date) {
   const ms = 1000 * 60 * 60 * 24;
   const aa = new Date(a.getFullYear(), a.getMonth(), a.getDate());
   const bb = new Date(b.getFullYear(), b.getMonth(), b.getDate());
   return Math.max(0, Math.round((bb.getTime() - aa.getTime()) / ms));
 }
+
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
 }
@@ -62,7 +64,9 @@ const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to, onSelect }
     for (let i = 0; i <= total; i += step) {
       const d = new Date(min.getTime());
       d.setDate(d.getDate() + i);
-      tickLabels.push(`${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getDate().toString().padStart(2, "0")}`);
+      tickLabels.push(
+        `${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getDate().toString().padStart(2, "0")}`
+      );
     }
     return { start: min, end: max, totalDays: total, ticks: tickLabels };
   }, [items, from, to]);
@@ -76,12 +80,14 @@ const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to, onSelect }
     const widthPct = Math.max(0.5, (widthDays / totalDays) * 100);
     const color = STATUS_COLORS[(row.status || "").toLowerCase()] || STATUS_COLORS["draft"];
     return (
-      <div className="relative h-8">
+      <div
+        className="relative h-8 cursor-pointer"
+        onClick={() => onSelect && onSelect(row)}
+      >
         <div
-          className={`absolute h-3 rounded ${color} cursor-pointer`}
+          className={`absolute h-3 rounded ${color}`}
           style={{ left: `${leftPct}%`, width: `${widthPct}%`, top: "10px" }}
           title={`${row.flight_name} (${row.start_date} → ${row.end_date})`}
-          onClick={() => onSelect?.(row)}
         />
         <div className="text-xs text-muted-foreground truncate">{row.flight_name}</div>
         <div className="text-[10px] text-muted-foreground">{row.start_date} → {row.end_date}</div>
