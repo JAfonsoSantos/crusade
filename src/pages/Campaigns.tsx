@@ -1,4 +1,3 @@
-
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,6 +6,14 @@ import { Badge } from "@/components/ui/badge";
 import FlightsGantt, { TimelineItem } from "@/components/FlightsGantt";
 import { supabase } from "@/integrations/supabase/client";
 import { Calendar, BarChart3, Target, RefreshCw, Loader2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Campaign = {
   id: string;
@@ -19,22 +26,6 @@ type Campaign = {
   status?: string | null;
 };
 
-type GanttRow = {
-  company_id: string;
-  campaign_id: string;
-  campaign_name: string;
-  flight_id: string;
-  flight_name: string;
-  start_date: string;
-  end_date: string;
-  priority: number | null;
-  status: string | null;
-  impressions?: number | null;
-  clicks?: number | null;
-  conversions?: number | null;
-  spend?: number | null;
-};
-
 const CampaignsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"timeline" | "campaigns" | "ad-funnel">("timeline");
   const [companyId, setCompanyId] = useState<string | null>(null);
@@ -42,6 +33,8 @@ const CampaignsPage: React.FC = () => {
   const [items, setItems] = useState<TimelineItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [campaignFilter, setCampaignFilter] = useState<string>("all");
+  const [selected, setSelected] = useState<TimelineItem | null>(null);
 
   useEffect(() => {
     const run = async () => {
@@ -57,7 +50,7 @@ const CampaignsPage: React.FC = () => {
           .select("company_id")
           .eq("user_id", uid)
           .single();
-        const cId = (prof as any)?.company_id || null;
+        const cId = prof?.company_id || null;
         setCompanyId(cId);
 
         const { data: cData } = await supabase
@@ -69,25 +62,12 @@ const CampaignsPage: React.FC = () => {
         if (cId) {
           const { data: gData } = await (supabase as any)
             .from("v_gantt_items_fast")
-            .select("company_id,campaign_id,campaign_name,flight_id,flight_name,start_date,end_date,priority,status,impressions,clicks,conversions,spend")
+            .select(
+              "company_id,campaign_id,campaign_name,flight_id,flight_name,start_date,end_date,priority,status,impressions,clicks,conversions,spend,revenue"
+            )
             .eq("company_id", cId);
-
-          const rows = (gData as any as GanttRow[]) || [];
-          const mapped: TimelineItem[] = rows.map((r) => ({
-            campaign_id: r.campaign_id,
-            campaign_name: r.campaign_name,
-            flight_id: r.flight_id,
-            flight_name: r.flight_name,
-            start_date: r.start_date,
-            end_date: r.end_date,
-            priority: r.priority,
-            status: r.status,
-            impressions: r.impressions ?? 0,
-            clicks: r.clicks ?? 0,
-            conversions: r.conversions ?? 0,
-            spend: r.spend ?? 0,
-          }));
-          setItems(mapped);
+          const rows = (gData as any as TimelineItem[]) || [];
+          setItems(rows);
         } else {
           setItems([]);
         }
@@ -155,6 +135,15 @@ const CampaignsPage: React.FC = () => {
     }
   };
 
+  const from = useMemo(() => {
+    if (items.length === 0) return undefined;
+    return new Date(Math.min(...items.map((i) => new Date(i.start_date).getTime())));
+  }, [items]);
+  const to = useMemo(() => {
+    if (items.length === 0) return undefined;
+    return new Date(Math.max(...items.map((i) => new Date(i.end_date).getTime())));
+  }, [items]);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -192,17 +181,38 @@ const CampaignsPage: React.FC = () => {
 
         <TabsContent value="timeline" className="mt-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Campaign & Flight Timeline</CardTitle>
-              <CardDescription>Gantt view by campaign</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle>Campaign & Flight Timeline</CardTitle>
+                <CardDescription>Gantt view by campaign</CardDescription>
+              </div>
+              <div className="w-56">
+                <Select value={campaignFilter} onValueChange={(v) => setCampaignFilter(v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Campaign" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All campaigns</SelectItem>
+                    {campaigns.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </CardHeader>
             <CardContent>
-              {loading ? (
-                <div className="text-sm text-muted-foreground">Loading…</div>
-              ) : !companyId ? (
-                <div className="text-sm text-muted-foreground">No company found for this user.</div>
+              {!companyId ? (
+                <div className="text-sm text-muted-foreground">A carregar a tua empresa…</div>
               ) : (
-                <FlightsGantt items={items} onSelect={(t) => console.log("select", t)} />
+                <FlightsGantt
+                  items={items}
+                  from={from}
+                  to={to}
+                  campaignFilter={campaignFilter}
+                  onSelect={(t) => setSelected(t)}
+                />
               )}
             </CardContent>
           </Card>
@@ -216,6 +226,63 @@ const CampaignsPage: React.FC = () => {
           {AdFunnel}
         </TabsContent>
       </Tabs>
+
+      {/* Details modal */}
+      <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{selected?.flight_name}</DialogTitle>
+            <DialogDescription>
+              {selected?.start_date} → {selected?.end_date}
+            </DialogDescription>
+          </DialogHeader>
+          {selected && (
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <div className="text-sm text-muted-foreground">Performance</div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>Impressions</div>
+                  <div className="text-right tabular-nums">
+                    {selected.impressions?.toLocaleString?.() ?? selected.impressions ?? "-"}
+                  </div>
+                  <div>Clicks</div>
+                  <div className="text-right tabular-nums">
+                    {selected.clicks?.toLocaleString?.() ?? selected.clicks ?? "-"}
+                  </div>
+                  <div>Conversions</div>
+                  <div className="text-right tabular-nums">
+                    {selected.conversions?.toLocaleString?.() ?? selected.conversions ?? "-"}
+                  </div>
+                  <div>Spend</div>
+                  <div className="text-right tabular-nums">
+                    {selected.spend != null ? `€${selected.spend.toFixed?.(2) ?? selected.spend}` : "-"}
+                  </div>
+                  <div>Revenue</div>
+                  <div className="text-right tabular-nums">
+                    {selected.revenue != null
+                      ? `€${selected.revenue.toFixed?.(2) ?? selected.revenue}`
+                      : "-"}
+                  </div>
+                  <div>ROAS</div>
+                  <div className="text-right tabular-nums">
+                    {selected.spend && selected.revenue
+                      ? (selected.revenue / selected.spend).toFixed(2)
+                      : "-"}
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="text-sm text-muted-foreground">Timeline</div>
+                <div className="border rounded p-3">
+                  <div className="text-xs text-muted-foreground">
+                    From {selected.start_date} to {selected.end_date}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
