@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 
 type Campaign = {
   id: string;
@@ -24,6 +24,23 @@ type Campaign = {
   budget?: number | null;
   currency?: string | null;
   status?: string | null;
+};
+
+type GanttRow = {
+  company_id: string | null;
+  campaign_id: string;
+  campaign_name: string;
+  flight_id: string;
+  flight_name: string;
+  start_date: string;
+  end_date: string;
+  priority: number | null;
+  status: string | null;
+  impressions?: number | null;
+  clicks?: number | null;
+  conversions?: number | null;
+  spend?: number | null;
+  revenue?: number | null;
 };
 
 const CampaignsPage: React.FC = () => {
@@ -66,8 +83,24 @@ const CampaignsPage: React.FC = () => {
               "company_id,campaign_id,campaign_name,flight_id,flight_name,start_date,end_date,priority,status,impressions,clicks,conversions,spend,revenue"
             )
             .eq("company_id", cId);
-          const rows = (gData as any as TimelineItem[]) || [];
-          setItems(rows);
+          const rows = (gData as any as GanttRow[]) || [];
+          const mapped: TimelineItem[] = rows.map((r) => ({
+            company_id: r.company_id,
+            campaign_id: r.campaign_id,
+            campaign_name: r.campaign_name,
+            flight_id: r.flight_id,
+            flight_name: r.flight_name,
+            start_date: r.start_date,
+            end_date: r.end_date,
+            priority: r.priority,
+            status: r.status,
+            impressions: r.impressions ?? null,
+            clicks: r.clicks ?? null,
+            conversions: r.conversions ?? null,
+            spend: r.spend ?? null,
+            revenue: r.revenue ?? null,
+          }));
+          setItems(mapped);
         } else {
           setItems([]);
         }
@@ -135,14 +168,11 @@ const CampaignsPage: React.FC = () => {
     }
   };
 
-  const from = useMemo(() => {
-    if (items.length === 0) return undefined;
-    return new Date(Math.min(...items.map((i) => new Date(i.start_date).getTime())));
-  }, [items]);
-  const to = useMemo(() => {
-    if (items.length === 0) return undefined;
-    return new Date(Math.max(...items.map((i) => new Date(i.end_date).getTime())));
-  }, [items]);
+  const campaignsForFilter = useMemo(
+    () =>
+      [{ id: "all", name: "All campaigns" }, ...campaigns.map((c) => ({ id: c.id, name: c.name }))],
+    [campaigns]
+  );
 
   return (
     <div className="space-y-6">
@@ -181,19 +211,18 @@ const CampaignsPage: React.FC = () => {
 
         <TabsContent value="timeline" className="mt-6">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardHeader className="flex items-end justify-between">
               <div>
                 <CardTitle>Campaign & Flight Timeline</CardTitle>
                 <CardDescription>Gantt view by campaign</CardDescription>
               </div>
-              <div className="w-56">
-                <Select value={campaignFilter} onValueChange={(v) => setCampaignFilter(v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Campaign" />
+              <div className="w-[260px]">
+                <Select value={campaignFilter} onValueChange={setCampaignFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All campaigns" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All campaigns</SelectItem>
-                    {campaigns.map((c) => (
+                    {campaignsForFilter.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.name}
                       </SelectItem>
@@ -208,8 +237,6 @@ const CampaignsPage: React.FC = () => {
               ) : (
                 <FlightsGantt
                   items={items}
-                  from={from}
-                  to={to}
                   campaignFilter={campaignFilter}
                   onSelect={(t) => setSelected(t)}
                 />
@@ -227,9 +254,8 @@ const CampaignsPage: React.FC = () => {
         </TabsContent>
       </Tabs>
 
-      {/* Details modal */}
       <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>{selected?.flight_name}</DialogTitle>
             <DialogDescription>
@@ -237,46 +263,28 @@ const CampaignsPage: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
           {selected && (
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <div className="text-sm text-muted-foreground">Performance</div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>Impressions</div>
-                  <div className="text-right tabular-nums">
-                    {selected.impressions?.toLocaleString?.() ?? selected.impressions ?? "-"}
-                  </div>
-                  <div>Clicks</div>
-                  <div className="text-right tabular-nums">
-                    {selected.clicks?.toLocaleString?.() ?? selected.clicks ?? "-"}
-                  </div>
-                  <div>Conversions</div>
-                  <div className="text-right tabular-nums">
-                    {selected.conversions?.toLocaleString?.() ?? selected.conversions ?? "-"}
-                  </div>
-                  <div>Spend</div>
-                  <div className="text-right tabular-nums">
-                    {selected.spend != null ? `€${selected.spend.toFixed?.(2) ?? selected.spend}` : "-"}
-                  </div>
-                  <div>Revenue</div>
-                  <div className="text-right tabular-nums">
-                    {selected.revenue != null
-                      ? `€${selected.revenue.toFixed?.(2) ?? selected.revenue}`
+                <div className="text-sm">Campaign: <span className="font-medium">{selected.campaign_name}</span></div>
+                <div className="text-sm">Status: <span className="font-medium">{selected.status || "-"}</span></div>
+                <div className="text-sm">Impressions: <span className="font-medium">{selected.impressions ?? "-"}</span></div>
+                <div className="text-sm">Clicks: <span className="font-medium">{selected.clicks ?? "-"}</span></div>
+                <div className="text-sm">Conversions: <span className="font-medium">{selected.conversions ?? "-"}</span></div>
+                <div className="text-sm">Spend: <span className="font-medium">{selected.spend ?? "-"}</span></div>
+                <div className="text-sm">Revenue: <span className="font-medium">{selected.revenue ?? "-"}</span></div>
+                <div className="text-sm">
+                  ROAS:{" "}
+                  <span className="font-medium">
+                    {selected.spend && selected.spend > 0 && selected.revenue != null
+                      ? ((selected.revenue || 0) / selected.spend).toFixed(2) + "x"
                       : "-"}
-                  </div>
-                  <div>ROAS</div>
-                  <div className="text-right tabular-nums">
-                    {selected.spend && selected.revenue
-                      ? (selected.revenue / selected.spend).toFixed(2)
-                      : "-"}
-                  </div>
+                  </span>
                 </div>
               </div>
-              <div className="space-y-2">
-                <div className="text-sm text-muted-foreground">Timeline</div>
-                <div className="border rounded p-3">
-                  <div className="text-xs text-muted-foreground">
-                    From {selected.start_date} to {selected.end_date}
-                  </div>
+              <div className="border-l pl-4">
+                <div className="text-sm text-muted-foreground mb-2">Timeline</div>
+                <div className="h-10 relative bg-muted rounded">
+                  <div className="absolute left-1 top-[10px] right-1 h-2 bg-gray-200 rounded" />
                 </div>
               </div>
             </div>
