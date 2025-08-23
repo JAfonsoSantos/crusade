@@ -1,3 +1,4 @@
+
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,7 +36,7 @@ type GanttRow = {
 };
 
 const CampaignsPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<\"timeline\" | \"campaigns\" | \"ad-funnel\">(\"timeline\");
+  const [activeTab, setActiveTab] = useState<"timeline" | "campaigns" | "ad-funnel">("timeline");
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [items, setItems] = useState<TimelineItem[]>([]);
@@ -52,21 +53,25 @@ const CampaignsPage: React.FC = () => {
           return;
         }
         const { data: prof } = await supabase
-          .from(\"profiles\")
-          .select(\"company_id\")
-          .eq(\"user_id\", uid)
+          .from("profiles")
+          .select("company_id")
+          .eq("user_id", uid)
           .single();
         const cId = (prof as any)?.company_id || null;
         setCompanyId(cId);
 
-        const { data: cData } = await supabase.from(\"campaigns\").select(\"*\").order(\"start_date\", { ascending: true });
+        const { data: cData } = await supabase
+          .from("campaigns")
+          .select("*")
+          .order("start_date", { ascending: true });
         setCampaigns((cData as any as Campaign[]) || []);
 
         if (cId) {
           const { data: gData } = await (supabase as any)
-            .from(\"v_gantt_items_fast\")
-            .select(\"company_id,campaign_id,campaign_name,flight_id,flight_name,start_date,end_date,priority,status,impressions,clicks,conversions,spend\")
-            .eq(\"company_id\", cId);
+            .from("v_gantt_items_fast")
+            .select("company_id,campaign_id,campaign_name,flight_id,flight_name,start_date,end_date,priority,status,impressions,clicks,conversions,spend")
+            .eq("company_id", cId);
+
           const rows = (gData as any as GanttRow[]) || [];
           const mapped: TimelineItem[] = rows.map((r) => ({
             campaign_id: r.campaign_id,
@@ -94,31 +99,32 @@ const CampaignsPage: React.FC = () => {
   }, []);
 
   const byStatusColor = (status?: string | null) => {
-    const s = (status || \"\").toLowerCase();
-    if (s === \"active\") return \"bg-green-100 text-green-800\";
-    if (s === \"paused\") return \"bg-yellow-100 text-yellow-800\";
-    if (s === \"completed\") return \"bg-blue-100 text-blue-800\";
-    return \"bg-gray-100 text-gray-800\";
+    const s = (status || "").toLowerCase();
+    if (s === "active") return "bg-green-100 text-green-800";
+    if (s === "paused") return "bg-yellow-100 text-yellow-800";
+    if (s === "completed") return "bg-blue-100 text-blue-800";
+    return "bg-gray-100 text-gray-800";
   };
 
   const CampaignsList = useMemo(
     () => (
-      <div className=\"grid grid-cols-1 md:grid-cols-2 gap-4\">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {campaigns.map((c) => (
           <Card key={c.id}>
             <CardHeader>
-              <div className=\"flex items-center justify-between\">
-                <CardTitle className=\"text-lg\">{c.name}</CardTitle>
-                <Badge className={byStatusColor(c.status)} variant=\"outline\">
-                  {c.status || \"draft\"}
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">{c.name}</CardTitle>
+                <Badge className={byStatusColor(c.status)} variant="outline">
+                  {c.status || "draft"}
                 </Badge>
               </div>
               <CardDescription>
-                {new Date(c.start_date).toLocaleDateString()} → {new Date(c.end_date).toLocaleDateString()}
+                {new Date(c.start_date).toLocaleDateString()} →{" "}
+                {new Date(c.end_date).toLocaleDateString()}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className=\"text-sm text-muted-foreground\">{c.description}</p>
+              <p className="text-sm text-muted-foreground">{c.description}</p>
             </CardContent>
           </Card>
         ))}
@@ -140,7 +146,7 @@ const CampaignsPage: React.FC = () => {
   const syncAll = async () => {
     setSyncing(true);
     try {
-      const { error } = await supabase.functions.invoke(\"auto-sync-kevel\");
+      const { error } = await supabase.functions.invoke("auto-sync-kevel");
       if (error) throw error;
     } catch (e) {
       console.error(e);
@@ -150,62 +156,63 @@ const CampaignsPage: React.FC = () => {
   };
 
   return (
-    <div className=\"space-y-6\">
-      <div className=\"flex items-center justify-between\">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
         <div>
-          <h2 className=\"text-3xl font-bold tracking-tight\">Campaigns & Flights</h2>
-          <p className=\"text-muted-foreground\">Manage your advertising campaigns and analyze performance</p>
+          <h2 className="text-3xl font-bold tracking-tight">Campaigns & Flights</h2>
+          <p className="text-muted-foreground">
+            Manage your advertising campaigns and analyze performance
+          </p>
         </div>
-        <Button variant=\"outline\" onClick={syncAll} disabled={syncing}>
+        <Button variant="outline" onClick={syncAll} disabled={syncing}>
           {syncing ? (
             <>
-              <Loader2 className=\"mr-2 h-4 w-4 animate-spin\" /> Syncing…
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Syncing…
             </>
           ) : (
             <>
-              <RefreshCw className=\"mr-2 h-4 w-4\" /> Sync with Platforms
+              <RefreshCw className="mr-2 h-4 w-4" /> Sync with Platforms
             </>
           )}
         </Button>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className=\"w-full\">
-        <TabsList className=\"grid w-full grid-cols-3\">
-          <TabsTrigger value=\"timeline\" className=\"flex items-center gap-2\">
-            <Calendar className=\"h-4 w-4\" /> Timeline
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="timeline" className="flex items-center gap-2">
+            <Calendar className="h-4 w-4" /> Timeline
           </TabsTrigger>
-          <TabsTrigger value=\"campaigns\" className=\"flex items-center gap-2\">
-            <Target className=\"h-4 w-4\" /> Campaigns
+          <TabsTrigger value="campaigns" className="flex items-center gap-2">
+            <Target className="h-4 w-4" /> Campaigns
           </TabsTrigger>
-          <TabsTrigger value=\"ad-funnel\" className=\"flex items-center gap-2\">
-            <BarChart3 className=\"h-4 w-4\" /> Ad Funnel
+          <TabsTrigger value="ad-funnel" className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" /> Ad Funnel
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value=\"timeline\" className=\"mt-6\">
+        <TabsContent value="timeline" className="mt-6">
           <Card>
             <CardHeader>
               <CardTitle>Campaign & Flight Timeline</CardTitle>
-              <CardDescription>Visualização Gantt por campanha</CardDescription>
+              <CardDescription>Gantt view by campaign</CardDescription>
             </CardHeader>
             <CardContent>
-              {!companyId ? (
-                <div className=\"text-sm text-muted-foreground\">A carregar a tua empresa…</div>
+              {loading ? (
+                <div className="text-sm text-muted-foreground">Loading…</div>
+              ) : !companyId ? (
+                <div className="text-sm text-muted-foreground">No company found for this user.</div>
               ) : (
-                <FlightsGantt
-                  items={items}
-                  onSelect={(t) => console.log(\"select\", t)}
-                />
+                <FlightsGantt items={items} onSelect={(t) => console.log("select", t)} />
               )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value=\"campaigns\" className=\"mt-6\">
+        <TabsContent value="campaigns" className="mt-6">
           {CampaignsList}
         </TabsContent>
 
-        <TabsContent value=\"ad-funnel\" className=\"mt-6\">
+        <TabsContent value="ad-funnel" className="mt-6">
           {AdFunnel}
         </TabsContent>
       </Tabs>
