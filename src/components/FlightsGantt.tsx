@@ -1,12 +1,13 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 
 export type TimelineItem = {
+  company_id?: string;
   campaign_id: string;
   campaign_name: string;
   flight_id: string;
   flight_name: string;
-  start_date: string;
-  end_date: string;
+  start_date: string; // YYYY-MM-DD
+  end_date: string;   // YYYY-MM-DD
   priority?: number | null;
   status?: string | null;
 };
@@ -15,7 +16,7 @@ export type FlightsGanttProps = {
   items: TimelineItem[];
   from?: Date;
   to?: Date;
-  onSelect?: (t: TimelineItem) => Promise<void>;
+  onSelect?: (t: TimelineItem) => void;
 };
 
 function parseISO(d: string) {
@@ -42,33 +43,46 @@ const STATUS_COLORS: Record<string, string> = {
   completed: "bg-blue-500",
 };
 
+function monthTicks(min: Date, max: Date) {
+  const labels: { key: string; label: string }[] = [];
+  const d = new Date(min.getFullYear(), min.getMonth(), 1);
+  while (d <= max) {
+    labels.push({
+      key: `${d.getFullYear()}-${d.getMonth() + 1}`,
+      label: `${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getFullYear().toString().slice(-2)}`,
+    });
+    d.setMonth(d.getMonth() + 1);
+  }
+  return labels;
+}
+
 const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to, onSelect }) => {
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+
   const grouped = useMemo(() => {
-    const m = new Map<string, { name: string; rows: TimelineItem[] }>();
+    const m = new Map<string, { id: string; name: string; rows: TimelineItem[] }>();
     for (const it of items) {
       const key = it.campaign_id || it.campaign_name;
-      if (!m.has(key)) m.set(key, { name: it.campaign_name, rows: [] });
+      if (!m.has(key)) m.set(key, { id: key, name: it.campaign_name, rows: [] });
       m.get(key)!.rows.push(it);
     }
-    return Array.from(m.values());
+    // stable sort by earliest start
+    const list = Array.from(m.values());
+    list.sort((a, b) => {
+      const aMin = Math.min(...a.rows.map(r => parseISO(r.start_date).getTime()));
+      const bMin = Math.min(...b.rows.map(r => parseISO(r.start_date).getTime()));
+      return aMin - bMin;
+    });
+    return list;
   }, [items]);
 
   const { start, end, totalDays, ticks } = useMemo(() => {
     const starts = items.map((i) => parseISO(i.start_date));
     const ends = items.map((i) => parseISO(i.end_date));
     const min = from ?? (starts.length ? new Date(Math.min(...starts.map((d) => d.getTime()))) : new Date());
-    const max = to ?? (ends.length ? new Date(Math.max(...ends.map((d) => d.getTime()))) : new Date(min.getTime() + 7 * 86400000));
+    const max = to ?? (ends.length ? new Date(Math.max(...ends.map((d) => d.getTime()))) : new Date(min.getTime() + 30 * 86400000));
     const total = Math.max(1, daysBetween(min, max));
-    const tickLabels: string[] = [];
-    const step = Math.max(1, Math.floor(total / 14));
-    for (let i = 0; i <= total; i += step) {
-      const d = new Date(min.getTime());
-      d.setDate(d.getDate() + i);
-      tickLabels.push(
-        `${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getDate().toString().padStart(2, "0")}`
-      );
-    }
-    return { start: min, end: max, totalDays: total, ticks: tickLabels };
+    return { start: min, end: max, totalDays: total, ticks: monthTicks(min, max) };
   }, [items, from, to]);
 
   const barFor = (row: TimelineItem) => {
@@ -77,20 +91,18 @@ const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to, onSelect }
     const leftDays = clamp(daysBetween(start, s), 0, totalDays);
     const widthDays = clamp(daysBetween(s, e), 0, totalDays);
     const leftPct = (leftDays / totalDays) * 100;
-    const widthPct = Math.max(0.5, (widthDays / totalDays) * 100);
+    const widthPct = Math.max(0.8, (widthDays / totalDays) * 100);
     const color = STATUS_COLORS[(row.status || "").toLowerCase()] || STATUS_COLORS["draft"];
     return (
-      <div
-        className="relative h-8 cursor-pointer"
-        onClick={() => onSelect && onSelect(row)}
-      >
+      <div className="relative h-7">
         <div
-          className={`absolute h-3 rounded ${color}`}
-          style={{ left: `${leftPct}%`, width: `${widthPct}%`, top: "10px" }}
+          role="button"
+          onClick={() => onSelect?.(row)}
+          className={`absolute h-3 rounded cursor-pointer ${color} hover:brightness-110 transition`}
+          style={{ left: `${leftPct}%`, width: `${widthPct}%`, top: "12px" }}
           title={`${row.flight_name} (${row.start_date} → ${row.end_date})`}
         />
-        <div className="text-xs text-muted-foreground truncate">{row.flight_name}</div>
-        <div className="text-[10px] text-muted-foreground">{row.start_date} → {row.end_date}</div>
+        <div className="text-xs tabular-nums text-muted-foreground truncate">{row.flight_name}</div>
       </div>
     );
   };
@@ -101,25 +113,37 @@ const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to, onSelect }
 
   return (
     <div className="w-full">
-      <div className="mb-2 flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
-        {ticks.map((t, i) => (
-          <span key={i} className="tabular-nums">{t}</span>
+      <div className="mb-3 flex items-center gap-6 text-[11px] text-muted-foreground">
+        {ticks.map((t) => (
+          <span key={t.key} className="tabular-nums">{t.label}</span>
         ))}
       </div>
+
       <div className="space-y-6">
-        {grouped.map((g, gi) => (
-          <div key={gi} className="rounded-lg border p-3">
-            <div className="mb-2 font-medium">{g.name}</div>
-            <div className="space-y-2">
-              {g.rows
-                .slice()
-                .sort((a, b) => (a.priority || 99) - (b.priority || 99))
-                .map((row) => (
-                  <div key={row.flight_id}>{barFor(row)}</div>
-                ))}
+        {grouped.map((g) => {
+          const isOpen = open[g.id] ?? true;
+          return (
+            <div key={g.id} className="rounded-lg border">
+              <button
+                onClick={() => setOpen((o) => ({ ...o, [g.id]: !isOpen }))}
+                className="w-full flex items-center justify-between px-3 py-2 hover:bg-muted/50"
+              >
+                <span className="font-medium">{g.name}</span>
+                <span className="text-xs text-muted-foreground">{isOpen ? "Hide flights" : "Show flights"}</span>
+              </button>
+              {isOpen && (
+                <div className="px-3 pb-3 space-y-2">
+                  {g.rows
+                    .slice()
+                    .sort((a, b) => (a.priority || 99) - (b.priority || 99))
+                    .map((row) => (
+                      <div key={row.flight_id}>{barFor(row)}</div>
+                    ))}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
