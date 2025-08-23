@@ -1,23 +1,34 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import FlightsGantt, { TimelineItem } from "@/components/FlightsGantt";
+import { supabase } from "@/integrations/supabase/client";
+import { Calendar, BarChart3, Target, RefreshCw, Loader2 } from "lucide-react";
 
-/**
- * Minimal Gantt renderer (no external libs)
- * - Left: flight + metrics
- * - Right: bars by date
- */
+type Campaign = {
+  id: string;
+  name: string;
+  description?: string | null;
+  start_date: string;
+  end_date: string;
+  budget?: number | null;
+  currency?: string | null;
+  status?: string | null;
+};
 
-export type TimelineItem = {
-  company_id?: string | null;
+type Row = {
+  company_id: string;
   campaign_id: string;
   campaign_name: string;
   flight_id: string;
   flight_name: string;
-  start_date: string; // YYYY-MM-DD
-  end_date: string;   // YYYY-MM-DD
-  status?: string | null;
-  priority?: number | null;
-
-  // Optional metrics
+  start_date: string;
+  end_date: string;
+  priority: number | null;
+  status: string | null;
   impressions?: number | null;
   clicks?: number | null;
   conversions?: number | null;
@@ -25,169 +36,225 @@ export type TimelineItem = {
   revenue?: number | null;
 };
 
-export type FlightsGanttProps = {
-  items: TimelineItem[];
-  from?: Date;
-  to?: Date;
-  campaignFilter?: string; // 'all' or campaign_id
-  onSelect?: (t: TimelineItem) => void;
-};
+const CampaignsPage: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<"timeline" | "campaigns" | "ad-funnel">("timeline");
+  const [companyId, setCompanyId] = useState<string | null>(null);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [items, setItems] = useState<TimelineItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [selected, setSelected] = useState<TimelineItem | null>(null);
+  const [campaignFilter, setCampaignFilter] = useState<string>("");
 
-function parseISO(d: string) {
-  const onlyDate = d.length === 10 ? d : d.slice(0, 10);
-  const [y, m, day] = onlyDate.split("-").map(Number);
-  return new Date(y, (m || 1) - 1, day || 1);
-}
+  // Load company and data
+  useEffect(() => {
+    const run = async () => {
+      try {
+        const { data: userRes } = await supabase.auth.getUser();
+        const uid = userRes.user?.id;
+        if (!uid) { setLoading(false); return; }
 
-function daysBetween(a: Date, b: Date) {
-  const ms = 1000 * 60 * 60 * 24;
-  const aa = new Date(a.getFullYear(), a.getMonth(), a.getDate());
-  const bb = new Date(b.getFullYear(), b.getMonth(), b.getDate());
-  return Math.max(0, Math.round((bb.getTime() - aa.getTime()) / ms));
-}
+        const { data: prof } = await supabase.from("profiles").select("company_id").eq("user_id", uid).single();
+        const cId = prof?.company_id || null;
+        setCompanyId(cId);
 
-function clamp(n: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, n));
-}
+        const { data: cData } = await supabase.from("campaigns").select("*").order("start_date", { ascending: true });
+        setCampaigns((cData as any as Campaign[]) || []);
 
-const STATUS_COLORS: Record<string, string> = {
-  active: "bg-green-500",
-  paused: "bg-amber-400",
-  draft: "bg-gray-300",
-  completed: "bg-blue-500",
-};
+        if (cId) {
+          const { data: gData } = await (supabase as any)
+            .from("v_gantt_items_fast")
+            .select("company_id,campaign_id,campaign_name,flight_id,flight_name,start_date,end_date,priority,status,impressions,clicks,conversions,spend,revenue")
+            .eq("company_id", cId);
 
-const FlightsGantt: React.FC<FlightsGanttProps> = ({
-  items,
-  from,
-  to,
-  campaignFilter = "all",
-  onSelect,
-}) => {
-  const filtered = useMemo(() => {
-    return campaignFilter === "all"
-      ? items
-      : items.filter((i) => i.campaign_id === campaignFilter);
-  }, [items, campaignFilter]);
+          const rows = (gData as any as Row[]) || [];
+          const mapped: TimelineItem[] = rows.map(r => ({
+            company_id: r.company_id,
+            campaign_id: r.campaign_id,
+            campaign_name: r.campaign_name,
+            flight_id: r.flight_id,
+            flight_name: r.flight_name,
+            start_date: r.start_date,
+            end_date: r.end_date,
+            priority: r.priority,
+            status: r.status,
+            impressions: r.impressions,
+            clicks: r.clicks,
+            conversions: r.conversions,
+            spend: r.spend,
+            revenue: r.revenue,
+          }));
+          setItems(mapped);
+        } else {
+          setItems([]);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    run();
+  }, []);
 
-  const grouped = useMemo(() => {
-    const m = new Map<string, { id: string; name: string; rows: TimelineItem[] }>();
-    for (const it of filtered) {
-      const key = it.campaign_id || it.campaign_name;
-      if (!m.has(key)) m.set(key, { id: it.campaign_id, name: it.campaign_name, rows: [] });
-      m.get(key)!.rows.push(it);
-    }
-    // sort rows by priority then start date
-    for (const g of m.values()) {
-      g.rows.sort((a, b) => {
-        const pa = a.priority ?? 999;
-        const pb = b.priority ?? 999;
-        if (pa !== pb) return pa - pb;
-        return parseISO(a.start_date).getTime() - parseISO(b.start_date).getTime();
-      });
-    }
-    return Array.from(m.values());
-  }, [filtered]);
-
-  const { start, end, totalDays, ticks } = useMemo(() => {
-    const starts = filtered.map((i) => parseISO(i.start_date));
-    const ends = filtered.map((i) => parseISO(i.end_date));
-    const min = from ?? (starts.length ? new Date(Math.min(...starts.map((d) => d.getTime()))) : new Date());
-    const max = to ?? (ends.length ? new Date(Math.max(...ends.map((d) => d.getTime()))) : new Date(min.getTime() + 7 * 86400000));
-    const total = Math.max(1, daysBetween(min, max));
-    const tickLabels: string[] = [];
-    const step = Math.max(1, Math.floor(total / 14));
-    for (let i = 0; i <= total; i += step) {
-      const d = new Date(min.getTime());
-      d.setDate(d.getDate() + i);
-      tickLabels.push(
-        `${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getDate().toString().padStart(2, "0")}`
-      );
-    }
-    return { start: min, end: max, totalDays: total, ticks: tickLabels };
-  }, [filtered, from, to]);
-
-  const barFor = (row: TimelineItem) => {
-    const s = parseISO(row.start_date);
-    const e = parseISO(row.end_date);
-    const leftDays = clamp(daysBetween(start, s), 0, totalDays);
-    const widthDays = clamp(daysBetween(s, e), 0, totalDays);
-    const leftPct = (leftDays / totalDays) * 100;
-    const widthPct = Math.max(0.75, (widthDays / totalDays) * 100);
-    const color = STATUS_COLORS[(row.status || "").toLowerCase()] || STATUS_COLORS["draft"];
-    return (
-      <div className="relative h-8">
-        <div
-          className={`absolute h-3 rounded ${color} cursor-pointer`}
-          style={{ left: `${leftPct}%`, width: `${widthPct}%`, top: "10px" }}
-          title={`${row.flight_name} (${row.start_date} → ${row.end_date})`}
-          onClick={() => onSelect?.(row)}
-        />
-      </div>
-    );
+  const byStatusColor = (status?: string | null) => {
+    const s = (status || "").toLowerCase();
+    if (s === "active") return "bg-green-100 text-green-800";
+    if (s === "paused") return "bg-yellow-100 text-yellow-800";
+    if (s === "completed") return "bg-blue-100 text-blue-800";
+    return "bg-gray-100 text-gray-800";
   };
 
-  if (!filtered.length) {
-    return <div className="text-sm text-muted-foreground">No flights to display.</div>;
-  }
+  const CampaignsList = useMemo(
+    () => (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {campaigns.map((c) => (
+          <Card key={c.id}>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">{c.name}</CardTitle>
+                <Badge className={byStatusColor(c.status)} variant="outline">
+                  {c.status || "draft"}
+                </Badge>
+              </div>
+              <CardDescription>
+                {new Date(c.start_date).toLocaleDateString()} →{" "}
+                {new Date(c.end_date).toLocaleDateString()}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">{c.description}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    ),
+    [campaigns]
+  );
+
+  const AdFunnel = (
+    <Card>
+      <CardHeader>
+        <CardTitle>Ad Funnel</CardTitle>
+        <CardDescription>Demo metrics</CardDescription>
+      </CardHeader>
+      <CardContent>Coming soon…</CardContent>
+    </Card>
+  );
+
+  const syncAll = async () => {
+    setSyncing(true);
+    try {
+      const { error } = await supabase.functions.invoke("auto-sync-kevel");
+      if (error) throw error;
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   return (
-    <div className="w-full">
-      {/* header ticks */}
-      <div className="mb-2 flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
-        {ticks.map((t, i) => (
-          <span key={i} className="tabular-nums">{t}</span>
-        ))}
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Campaigns & Flights</h2>
+          <p className="text-muted-foreground">
+            Manage your advertising campaigns and analyze performance
+          </p>
+        </div>
+        <Button variant="outline" onClick={syncAll} disabled={syncing}>
+          {syncing ? (
+            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Syncing…</>
+          ) : (
+            <><RefreshCw className="mr-2 h-4 w-4" /> Sync with Platforms</>
+          )}
+        </Button>
       </div>
 
-      <div className="space-y-6">
-        {grouped.map((g, gi) => (
-          <div key={gi} className="rounded-lg border p-0 overflow-hidden">
-            {/* campaign header */}
-            <div className="px-3 py-2 border-b bg-muted/40 font-medium">{g.name}</div>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="timeline" className="flex items-center gap-2">
+            <Calendar className="h-4 w-4" /> Timeline
+          </TabsTrigger>
+          <TabsTrigger value="campaigns" className="flex items-center gap-2">
+            <Target className="h-4 w-4" /> Campaigns
+          </TabsTrigger>
+          <TabsTrigger value="ad-funnel" className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" /> Ad Funnel
+          </TabsTrigger>
+        </TabsList>
 
-            {/* grid */}
-            <div className="grid grid-cols-12 gap-0">
-              {/* left pane (metrics) */}
-              <div className="col-span-4">
-                <div className="grid grid-cols-5 text-[11px] px-3 py-2 text-muted-foreground border-b">
-                  <div className="col-span-2">Flight</div>
-                  <div className="text-right">Imp</div>
-                  <div className="text-right">Clicks</div>
-                  <div className="text-right">ROAS</div>
+        <TabsContent value="timeline" className="mt-6">
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <CardTitle>Campaign & Flight Timeline</CardTitle>
+                  <CardDescription>Gantt view by campaign</CardDescription>
                 </div>
-                {g.rows.map((r) => {
-                  const imp = r.impressions ?? null;
-                  const clk = r.clicks ?? null;
-                  const spend = r.spend ?? 0;
-                  const rev = r.revenue ?? 0;
-                  const roas = spend > 0 ? rev / spend : null;
-                  return (
-                    <div key={r.flight_id} className="grid grid-cols-5 items-center px-3 py-1 border-b">
-                      <div className="col-span-2">
-                        <div className="text-sm">{r.flight_name}</div>
-                        <div className="text-[10px] text-muted-foreground">{r.start_date} → {r.end_date}</div>
-                      </div>
-                      <div className="text-right text-sm tabular-nums">{imp ?? "-"}</div>
-                      <div className="text-right text-sm tabular-nums">{clk ?? "-"}</div>
-                      <div className="text-right text-sm tabular-nums">{roas === null ? "-" : roas.toFixed(2)}x</div>
-                    </div>
-                  );
-                })}
+                {/* Simple campaign filter */}
+                <select
+                  className="border rounded-md px-2 py-1 text-sm"
+                  value={campaignFilter}
+                  onChange={(e) => setCampaignFilter(e.target.value)}
+                >
+                  <option value="">All campaigns</option>
+                  {[...new Map(items.map(i => [i.campaign_id, i.campaign_name])).entries()].map(([id, name]) => (
+                    <option key={id} value={id}>{name}</option>
+                  ))}
+                </select>
               </div>
+            </CardHeader>
+            <CardContent>
+              {!companyId ? (
+                <div className="text-sm text-muted-foreground">A carregar a tua empresa…</div>
+              ) : loading ? (
+                <div className="text-sm text-muted-foreground">Loading…</div>
+              ) : (
+                <FlightsGantt
+                  items={items}
+                  onSelect={(t) => setSelected(t)}
+                  campaignFilter={campaignFilter}
+                />
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-              {/* right pane (bars) */}
-              <div className="col-span-8 border-l px-2 py-2">
-                {g.rows.map((r) => (
-                  <div key={r.flight_id} className="border-b py-1">{barFor(r)}</div>
-                ))}
+        <TabsContent value="campaigns" className="mt-6">
+          {CampaignsList}
+        </TabsContent>
+
+        <TabsContent value="ad-funnel" className="mt-6">
+          {AdFunnel}
+        </TabsContent>
+      </Tabs>
+
+      {/* Modal de detalhe do flight */}
+      <Dialog open={!!selected} onOpenChange={(o) => { if (!o) setSelected(null); }}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>{selected?.flight_name}</DialogTitle>
+          </DialogHeader>
+          {selected && (
+            <div className="space-y-3">
+              <div className="text-sm text-muted-foreground">{selected.campaign_name}</div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><span className="text-muted-foreground">Start:</span> {selected.start_date}</div>
+                <div><span className="text-muted-foreground">End:</span> {selected.end_date}</div>
+                <div><span className="text-muted-foreground">Status:</span> {selected.status || "-"}</div>
+                <div><span className="text-muted-foreground">Priority:</span> {selected.priority ?? "-"}</div>
+                <div><span className="text-muted-foreground">Impressions:</span> {selected.impressions ?? "-"}</div>
+                <div><span className="text-muted-foreground">Clicks:</span> {selected.clicks ?? "-"}</div>
+                <div><span className="text-muted-foreground">Conversions:</span> {selected.conversions ?? "-"}</div>
+                <div><span className="text-muted-foreground">Spend:</span> {selected.spend ?? "-"}</div>
+                <div><span className="text-muted-foreground">Revenue:</span> {selected.revenue ?? "-"}</div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
-export default FlightsGantt;
+export default CampaignsPage;
