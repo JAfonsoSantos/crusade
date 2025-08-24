@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlusCircle, Search, Filter, BarChart3 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { OpportunityDetailModal } from "@/components/OpportunityDetailModal";
 
 type Opportunity = {
   id: string;
@@ -22,8 +23,24 @@ type Opportunity = {
   description: string | null;
   next_steps: string | null;
   created_at: string;
+  campaign_id: string | null;
+  flight_id: string | null;
   advertisers?: {
     name: string;
+  };
+  campaigns?: {
+    id: string;
+    name: string;
+    status: string;
+    start_date: string;
+    end_date: string;
+  };
+  flights?: {
+    id: string;
+    name: string;
+    status: string;
+    start_date: string;
+    end_date: string;
   };
 };
 
@@ -40,6 +57,8 @@ export default function Pipeline() {
   const [searchTerm, setSearchTerm] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
   const [view, setView] = useState<"kanban" | "list">("kanban");
+  const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const { toast } = useToast();
 
   const { data: opportunities = [], isLoading } = useQuery({
@@ -51,6 +70,20 @@ export default function Pipeline() {
           *,
           advertisers (
             name
+          ),
+          campaigns (
+            id,
+            name,
+            status,
+            start_date,
+            end_date
+          ),
+          flights (
+            id,
+            name,
+            status,
+            start_date,
+            end_date
           )
         `)
         .order("created_at", { ascending: false });
@@ -95,14 +128,32 @@ export default function Pipeline() {
     }).format(amount);
   };
 
+  const handleOpportunityClick = (opportunity: Opportunity) => {
+    setSelectedOpportunity(opportunity);
+    setIsModalOpen(true);
+  };
+
   const OpportunityCard = ({ opportunity }: { opportunity: Opportunity }) => (
-    <Card className="mb-3 hover:shadow-md transition-shadow cursor-pointer">
+    <Card 
+      className="mb-3 hover:shadow-md transition-shadow cursor-pointer" 
+      onClick={() => handleOpportunityClick(opportunity)}
+    >
       <CardContent className="p-4">
         <div className="space-y-2">
           <h4 className="font-medium text-sm truncate">{opportunity.name}</h4>
           <div className="text-xs text-muted-foreground">
             {opportunity.advertisers?.name || "No Advertiser"}
           </div>
+          {opportunity.campaigns && (
+            <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+              Campaign: {opportunity.campaigns.name}
+            </div>
+          )}
+          {opportunity.flights && (
+            <div className="text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded">
+              Flight: {opportunity.flights.name}
+            </div>
+          )}
           <div className="flex justify-between items-center">
             <span className="font-semibold text-sm">
               {opportunity.amount ? formatCurrency(opportunity.amount) : "—"}
@@ -251,12 +302,25 @@ export default function Pipeline() {
               {filteredOpportunities.map((opp) => (
                 <div
                   key={opp.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/25 transition-colors"
+                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/25 transition-colors cursor-pointer"
+                  onClick={() => handleOpportunityClick(opp)}
                 >
                   <div className="space-y-1">
                     <h4 className="font-medium">{opp.name}</h4>
                     <div className="text-sm text-muted-foreground">
                       {opp.advertisers?.name || "No Advertiser"}
+                    </div>
+                    <div className="flex gap-2 mt-1">
+                      {opp.campaigns && (
+                        <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                          {opp.campaigns.name}
+                        </span>
+                      )}
+                      {opp.flights && (
+                        <span className="text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded">
+                          {opp.flights.name}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
@@ -283,6 +347,15 @@ export default function Pipeline() {
           </CardContent>
         </Card>
       )}
+      
+      <OpportunityDetailModal
+        opportunity={selectedOpportunity}
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedOpportunity(null);
+        }}
+      />
     </div>
   );
 }
