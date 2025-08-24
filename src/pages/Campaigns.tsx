@@ -3,12 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import FlightsGantt, { TimelineItem } from "@/components/FlightsGantt";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, RefreshCw } from "lucide-react";
 
-/** Linhas vindas da view */
 type GanttRow = {
   company_id: string;
   campaign_id: string;
@@ -23,42 +21,24 @@ type GanttRow = {
   clicks: number | null;
   conversions: number | null;
   spend: number | null;
-  revenue?: number | null;
 };
-
-type Group = { id: string; name: string; rows: TimelineItem[] };
 
 const CampaignsPage: React.FC = () => {
   const [items, setItems] = useState<TimelineItem[]>([]);
   const [campaignFilter, setCampaignFilter] = useState<string>("all");
   const [loading, setLoading] = useState<boolean>(true);
   const [syncing, setSyncing] = useState<boolean>(false);
-  const [selected, setSelected] = useState<TimelineItem | null>(null);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
-  // carregar dados
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
         const { data: userRes } = await supabase.auth.getUser();
         const uid = userRes.user?.id;
-        if (!uid) {
-          setItems([]);
-          setLoading(false);
-          return;
-        }
-        const { data: prof } = await supabase
-          .from("profiles")
-          .select("company_id")
-          .eq("user_id", uid)
-          .single();
-        const cId = prof?.company_id;
-        if (!cId) {
-          setItems([]);
-          setLoading(false);
-          return;
-        }
+        if (!uid) { setItems([]); setLoading(false); return; }
+        const { data: prof } = await supabase.from("profiles").select("company_id").eq("user_id", uid).single();
+        const cId = (prof as any)?.company_id as string | null;
+        if (!cId) { setItems([]); setLoading(false); return; }
 
         const { data, error } = await (supabase as any)
           .from("v_gantt_items_fast")
@@ -67,76 +47,34 @@ const CampaignsPage: React.FC = () => {
 
         if (error) console.error(error);
         const rows: GanttRow[] = (data as any) || [];
-        const mapped: TimelineItem[] = rows.map((r) => ({ ...r }));
-        setItems(mapped);
 
-        // expande a primeira campanha por defeito
-        if (mapped.length > 0) {
-          const first = mapped[0].campaign_id;
-          setExpanded((e) => ({ ...e, [first]: true }));
-        }
+        // map to component type
+        const mapped: TimelineItem[] = rows.map(r => ({
+          campaign_id: r.campaign_id,
+          campaign_name: r.campaign_name,
+          flight_id: r.flight_id,
+          flight_name: r.flight_name,
+          start_date: r.start_date,
+          end_date: r.end_date,
+          priority: r.priority,
+          status: r.status,
+          impressions: r.impressions,
+          clicks: r.clicks,
+          conversions: r.conversions,
+          spend: r.spend,
+        }));
+        setItems(mapped);
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
-  /** Agrupar por campanha e (opcional) filtrar */
-  const groups: Group[] = useMemo(() => {
-    const fil = campaignFilter === "all"
-      ? items
-      : items.filter((i) => i.campaign_id === campaignFilter);
-    const m = new Map<string, Group>();
-    for (const it of fil) {
-      const g = m.get(it.campaign_id) ?? { id: it.campaign_id, name: it.campaign_name, rows: [] };
-      g.rows.push(it);
-      m.set(it.campaign_id, g);
-    }
-    // ordenar dentro do grupo por start_date asc, depois por prioridade
-    const arr = Array.from(m.values()).map((g) => ({
-      ...g,
-      rows: g.rows
-        .slice()
-        .sort((a, b) => (a.start_date < b.start_date ? -1 : a.start_date > b.start_date ? 1 : (a.priority || 99) - (b.priority || 99))),
-    }));
-    // ordenar grupos pelo nome
-    arr.sort((a, b) => a.name.localeCompare(b.name));
-    return arr;
-  }, [items, campaignFilter]);
-
-  /** Intervalo global (min/max de todas as datas) */
-  const { from, to, ticks } = useMemo(() => {
-    if (items.length === 0) {
-      const today = new Date();
-      const week = new Date(today.getTime() + 7 * 86400000);
-      return { from: today, to: week, ticks: [] as string[] };
-    }
-    const starts = items.map((i) => new Date(i.start_date));
-    const ends = items.map((i) => new Date(i.end_date));
-    const min = new Date(Math.min(...starts.map((d) => d.getTime())));
-    const max = new Date(Math.max(...ends.map((d) => d.getTime())));
-    // criar ticks (semanas) para o cabeçalho
-    const out: string[] = [];
-    const stepDays = 7;
-    const cur = new Date(min.getFullYear(), min.getMonth(), min.getDate());
-    const last = new Date(max.getFullYear(), max.getMonth(), max.getDate());
-    while (cur <= last) {
-      out.push(cur.toLocaleDateString(undefined, { day: "2-digit", month: "2-digit" }));
-      cur.setDate(cur.getDate() + stepDays);
-    }
-    return { from: min, to: max, ticks: out };
-  }, [items]);
-
   const campaigns = useMemo(() => {
     const m = new Map<string, string>();
     for (const it of items) m.set(it.campaign_id, it.campaign_name);
-    return Array.from(m.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    return Array.from(m.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [items]);
-
-  const toggle = (cid: string) =>
-    setExpanded((e) => ({ ...e, [cid]: !e[cid] }));
 
   const syncAll = async () => {
     setSyncing(true);
@@ -163,12 +101,12 @@ const CampaignsPage: React.FC = () => {
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-4">
+        <CardHeader className="flex items-center justify-between gap-4">
           <div>
             <CardTitle>Campaign & Flight Timeline</CardTitle>
             <CardDescription>Gantt view by campaign</CardDescription>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Badge variant="outline">{items.length} rows</Badge>
             <Select value={campaignFilter} onValueChange={(v) => setCampaignFilter(v)}>
               <SelectTrigger className="w-[220px]">
@@ -176,86 +114,26 @@ const CampaignsPage: React.FC = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All campaigns</SelectItem>
-                {campaigns.map((c) => (
+                {campaigns.map(c => (
                   <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
         </CardHeader>
-
-        <CardContent className="space-y-6">
-          {/* Cabeçalho de Ticks (datas) */}
-          <div className="text-xs text-muted-foreground flex gap-6 flex-wrap pl-[520px]">
-            {ticks.map((t, i) => (
-              <span key={i} className="tabular-nums">{t}</span>
-            ))}
-          </div>
-
+        <CardContent>
           {loading ? (
             <div className="text-sm text-muted-foreground flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading timeline…
             </div>
           ) : (
-            <div className="space-y-6">
-              {groups.map((g) => (
-                <div key={g.id} className="rounded-lg border">
-                  <div className="flex items-center justify-between p-4">
-                    <div className="font-semibold">{g.name}</div>
-                    <button
-                      className="text-sm text-primary underline underline-offset-4"
-                      onClick={() => toggle(g.id)}
-                    >
-                      {expanded[g.id] ? "Collapse" : "Expand"}
-                    </button>
-                  </div>
-                  {expanded[g.id] && (
-                    <div className="px-4 pb-4">
-                      <FlightsGantt
-                        items={g.rows}
-                        from={from}
-                        to={to}
-                        onSelect={(t) => setSelected(t)}
-                      />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+            <FlightsGantt
+              items={items}
+              campaignFilter={campaignFilter}
+            />
           )}
         </CardContent>
       </Card>
-
-      {/* Flight modal simples */}
-      <Dialog open={!!selected} onOpenChange={(v) => !v && setSelected(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{selected?.flight_name}</DialogTitle>
-          </DialogHeader>
-          {selected && (
-            <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <div className="text-sm text-muted-foreground">Campaign</div>
-                <div className="font-medium">{selected.campaign_name}</div>
-                <div className="text-sm text-muted-foreground mt-4">Dates</div>
-                <div className="font-medium">{selected.start_date} → {selected.end_date}</div>
-                <div className="flex gap-2 mt-4">
-                  {typeof selected.priority === "number" && <Badge variant="outline">prio {selected.priority}</Badge>}
-                  {selected.status && <Badge className="capitalize">{selected.status}</Badge>}
-                </div>
-              </div>
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="text-muted-foreground">Impr.</div><div className="text-right tabular-nums">{selected.impressions?.toLocaleString?.() ?? "0"}</div>
-                  <div className="text-muted-foreground">Clicks</div><div className="text-right tabular-nums">{selected.clicks?.toLocaleString?.() ?? "0"}</div>
-                  <div className="text-muted-foreground">Conv.</div><div className="text-right tabular-nums">{selected.conversions?.toLocaleString?.() ?? "0"}</div>
-                  <div className="text-muted-foreground">Spend</div><div className="text-right tabular-nums">{typeof selected.spend === "number" ? selected.spend.toLocaleString(undefined,{style:"currency",currency:"EUR"}) : "€0"}</div>
-                </div>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
