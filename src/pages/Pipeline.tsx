@@ -329,10 +329,58 @@ export default function Pipeline() {
         ref={setNodeRef}
         style={style}
         {...attributes}
-        {...listeners}
         className="mb-3"
       >
-        <OpportunityCard opportunity={opportunity} />
+        <Card 
+          className="hover:shadow-md transition-shadow cursor-pointer"
+          onClick={(e) => {
+            // Prevent click when dragging
+            if (!isDragging) {
+              handleOpportunityClick(opportunity);
+            }
+          }}
+        >
+          <CardContent className="p-4">
+            <div 
+              {...listeners}
+              className="absolute top-2 right-2 cursor-grab active:cursor-grabbing p-1 rounded hover:bg-muted"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-2 h-2 bg-muted-foreground rounded-full mb-1"></div>
+              <div className="w-2 h-2 bg-muted-foreground rounded-full mb-1"></div>
+              <div className="w-2 h-2 bg-muted-foreground rounded-full"></div>
+            </div>
+            <div className="space-y-2 pr-6">
+              <h4 className="font-medium text-sm truncate">{opportunity.name}</h4>
+              <div className="text-xs text-muted-foreground">
+                {opportunity.advertisers?.name || "No Advertiser"}
+              </div>
+              {opportunity.campaigns && (
+                <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                  Campaign: {opportunity.campaigns.name}
+                </div>
+              )}
+              {opportunity.flights && (
+                <div className="text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded">
+                  Flight: {opportunity.flights.name}
+                </div>
+              )}
+              <div className="flex justify-between items-center">
+                <span className="font-semibold text-sm">
+                  {opportunity.amount ? formatCurrency(opportunity.amount) : "—"}
+                </span>
+                <Badge variant="outline" className="text-xs">
+                  {opportunity.probability}%
+                </Badge>
+              </div>
+              {opportunity.close_date && (
+                <div className="text-xs text-muted-foreground">
+                  Close: {new Date(opportunity.close_date).toLocaleDateString("pt-PT")}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   };
