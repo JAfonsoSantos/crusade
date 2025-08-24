@@ -1,6 +1,8 @@
-import React, { useMemo } from "react";
+
+import React, { useMemo, useState } from "react";
 
 export type TimelineItem = {
+  company_id: string;
   campaign_id: string;
   campaign_name: string;
   flight_id: string;
@@ -9,31 +11,23 @@ export type TimelineItem = {
   end_date: string;   // YYYY-MM-DD
   priority?: number | null;
   status?: string | null;
-  impressions?: number;
-  clicks?: number;
-  conversions?: number;
-  spend?: number;
+  impressions?: number | null;
+  clicks?: number | null;
+  conversions?: number | null;
+  spend?: number | null;
   revenue?: number | null;
 };
 
 export type FlightsGanttProps = {
   items: TimelineItem[];
-  from?: Date;
-  to?: Date;
+  campaignFilter?: string; // "all" or campaign_id
   onSelect?: (t: TimelineItem) => void;
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  active: "bg-green-500",
-  paused: "bg-amber-400",
-  draft: "bg-gray-300",
-  completed: "bg-blue-500",
-};
-
 function parseISO(d: string) {
-  const onlyDate = d.length === 10 ? d : d.slice(0, 10);
-  const [y, m, day] = onlyDate.split("-").map(Number);
-  return new Date(y, (m || 1) - 1, day || 1);
+  const only = d.length >= 10 ? d.slice(0, 10) : d;
+  const [y, m, day] = only.split("-").map(Number);
+  return new Date(y || 1970, (m || 1) - 1, day || 1);
 }
 
 function daysBetween(a: Date, b: Date) {
@@ -43,52 +37,86 @@ function daysBetween(a: Date, b: Date) {
   return Math.max(0, Math.round((bb.getTime() - aa.getTime()) / ms));
 }
 
-const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to, onSelect }) => {
-  const grouped = useMemo(() => {
-    const m = new Map<string, { name: string; rows: TimelineItem[] }>();
-    for (const it of (Array.isArray(items) ? items : [])) {
-      const key = it.campaign_id || it.campaign_name;
-      if (!m.has(key)) m.set(key, { name: it.campaign_name, rows: [] });
-      m.get(key)!.rows.push(it);
-    }
-    return Array.from(m.values());
-  }, [items]);
+const STATUS_COLORS: Record<string, string> = {
+  active: "bg-emerald-500",
+  paused: "bg-amber-500",
+  draft: "bg-gray-300",
+  completed: "bg-blue-500",
+};
 
+const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, campaignFilter = "all", onSelect }) => {
+  // Filter by campaign if requested
+  const filtered = useMemo(
+    () => (campaignFilter && campaignFilter !== "all"
+      ? items.filter(i => i.campaign_id === campaignFilter)
+      : items),
+    [items, campaignFilter]
+  );
+
+  // Group by campaign
+  const groups = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; rows: TimelineItem[] }>();
+    for (const it of filtered) {
+      const key = it.campaign_id || it.campaign_name;
+      if (!map.has(key)) map.set(key, { id: key, name: it.campaign_name, rows: [] });
+      map.get(key)!.rows.push(it);
+    }
+    return Array.from(map.values());
+  }, [filtered]);
+
+  // Timeline bounds
   const { start, end, totalDays, ticks } = useMemo(() => {
-    const starts = items.map((i) => parseISO(i.start_date));
-    const ends = items.map((i) => parseISO(i.end_date));
-    const min = from ?? (starts.length ? new Date(Math.min(...starts.map((d) => d.getTime()))) : new Date());
-    const max = to ?? (ends.length ? new Date(Math.max(...ends.map((d) => d.getTime()))) : new Date(min.getTime() + 7 * 86400000));
-    const total = Math.max(1, daysBetween(min, max));
-    const labels: string[] = [];
+    if (filtered.length === 0) {
+      const today = new Date();
+      const end = new Date(today.getTime() + 7 * 86400000);
+      return { start: today, end, totalDays: daysBetween(today, end) || 1, ticks: [] as string[] };
+    }
+    const starts = filtered.map(i => parseISO(i.start_date));
+    const ends = filtered.map(i => parseISO(i.end_date));
+    const min = new Date(Math.min(...starts.map(d => d.getTime())));
+    const max = new Date(Math.max(...ends.map(d => d.getTime())));
+    // add 1 day buffer
+    const paddedEnd = new Date(max.getTime() + 86400000);
+    const total = Math.max(1, daysBetween(min, paddedEnd));
+    const tickLabels: string[] = [];
     const step = Math.max(1, Math.floor(total / 14));
     for (let i = 0; i <= total; i += step) {
       const d = new Date(min.getTime());
       d.setDate(d.getDate() + i);
-      labels.push(`${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getDate().toString().padStart(2, "0")}`);
+      // show DD/MM
+      tickLabels.push(`${(d.getDate()).toString().padStart(2,"0")}/${(d.getMonth()+1).toString().padStart(2,"0")}`);
     }
-    return { start: min, end: max, totalDays: total, ticks: labels };
-  }, [items, from, to]);
+    return { start: min, end: paddedEnd, totalDays: total, ticks: tickLabels };
+  }, [filtered]);
 
-  const pctFrom = (p: number) => (p / totalDays) * 100;
-  const pctWidth = (p: number) => Math.max(0.5, (p / totalDays) * 100);
+  // expand/collapse campaigns
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+
+  const header = (
+    <div className="grid grid-cols-[minmax(140px,2fr)_80px_80px_80px_120px_minmax(320px,5fr)] px-3 py-2 text-xs font-medium text-muted-foreground">
+      <div>Flight</div>
+      <div className="text-right">Impr.</div>
+      <div className="text-right">Clicks</div>
+      <div className="text-right">Conv.</div>
+      <div className="text-right">Spend</div>
+      <div>Timeline</div>
+    </div>
+  );
 
   const barFor = (row: TimelineItem) => {
     const s = parseISO(row.start_date);
     const e = parseISO(row.end_date);
-    const leftDays = Math.min(totalDays, Math.max(0, daysBetween(start, s)));
-    const widthDays = Math.min(totalDays, Math.max(0, daysBetween(s, e)));
-    const leftPct = pctFrom(leftDays);
-    const widthPct = pctWidth(widthDays);
-    const color = STATUS_COLORS[(row.status || "").toLowerCase()] || STATUS_COLORS["draft"];
+    const leftDays = Math.max(0, daysBetween(start, s));
+    const widthDays = Math.max(1, daysBetween(s, e));
+    const leftPct = (leftDays / totalDays) * 100;
+    const widthPct = (widthDays / totalDays) * 100;
+    const color = STATUS_COLORS[(row.status || "draft").toLowerCase()] || STATUS_COLORS["draft"];
     return (
-      <div className="relative h-8">
-        <div className="text-xs text-muted-foreground truncate">{row.flight_name}</div>
+      <div className="relative h-8 w-full">
         <div
-          className={`absolute h-3 rounded ${color}`}
-          style={{ left: `${leftPct}%`, width: `${widthPct}%`, top: "10px" }}
+          className={`absolute top-2 h-3 rounded ${color}`}
+          style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
           title={`${row.flight_name} (${row.start_date} → ${row.end_date})`}
-          onClick={() => onSelect?.(row)}
         />
       </div>
     );
@@ -99,30 +127,59 @@ const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to, onSelect }
   }
 
   return (
-    <div className="w-full">
-      {/* header ticks */}
-      <div className="mb-2 flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
-        {ticks.map((t, i) => (
-          <span key={i} className="tabular-nums">{t}</span>
-        ))}
+    <div className="w-full space-y-6">
+      {/* timeline ticks */}
+      <div className="px-3 text-[10px] text-muted-foreground flex gap-3 flex-wrap">
+        {ticks.map((t, i) => (<span key={i} className="tabular-nums">{t}</span>))}
       </div>
 
-      {/* groups */}
-      <div className="space-y-6">
-        {grouped.map((g, gi) => (
-          <div key={gi} className="rounded-lg border p-3">
-            <div className="mb-2 font-medium">{g.name}</div>
-            <div className="space-y-2">
-              {g.rows
-                .slice()
-                .sort((a, b) => (a.priority || 99) - (b.priority || 99))
-                .map((row) => (
-                  <div key={row.flight_id}>{barFor(row)}</div>
-                ))}
+      {groups.map(g => {
+        const isOpen = open[g.id] ?? false;
+        return (
+          <div key={g.id} className="rounded-lg border">
+            <div className="flex items-center justify-between px-3 py-2">
+              <div className="font-medium">{g.name}</div>
+              <button
+                className="text-xs text-primary hover:underline"
+                onClick={() => setOpen(o => ({ ...o, [g.id]: !isOpen }))}
+              >
+                {isOpen ? "Collapse" : "Expand"}
+              </button>
             </div>
+
+            {isOpen && (
+              <div className="border-t">
+                {header}
+                {g.rows
+                  .slice()
+                  .sort((a, b) => (a.priority || 99) - (b.priority || 99))
+                  .map(row => (
+                  <div key={row.flight_id} className="grid grid-cols-[minmax(140px,2fr)_80px_80px_80px_120px_minmax(320px,5fr)] items-center px-3 py-2 text-sm">
+                    <div className="truncate">
+                      <button
+                        className="text-left hover:underline"
+                        onClick={() => onSelect && onSelect(row)}
+                      >
+                        {row.flight_name}
+                      </button>
+                      <div className="text-[10px] text-muted-foreground">
+                        {row.start_date} → {row.end_date}
+                      </div>
+                    </div>
+                    <div className="text-right tabular-nums">{row.impressions ?? 0}</div>
+                    <div className="text-right tabular-nums">{row.clicks ?? 0}</div>
+                    <div className="text-right tabular-nums">{row.conversions ?? 0}</div>
+                    <div className="text-right tabular-nums">
+                      {typeof row.spend === "number" ? row.spend.toLocaleString(undefined, { style: "currency", currency: "EUR" }) : "€0"}
+                    </div>
+                    <div>{barFor(row)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 };
