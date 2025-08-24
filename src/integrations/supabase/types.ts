@@ -2466,6 +2466,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      is_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
       refresh_all_materialized: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -2473,6 +2477,10 @@ export type Database = {
       refresh_gantt_fast: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      user_belongs_to_company: {
+        Args: { company_uuid: string }
+        Returns: boolean
       }
     }
     Enums: {
