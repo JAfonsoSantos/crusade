@@ -172,18 +172,21 @@
 
     return (
       <div className="w-full">
-        {/* header scale */}
-        <div className="relative mb-3 h-8">
-          {ticks.map(t => (
-            <div
-              key={t.key}
-              className="absolute text-[10px] text-muted-foreground -translate-x-1/2"
-              style={{ left: `${t.leftPct}%` }}
-            >
-              {t.label}
-            </div>
-          ))}
-          <div className="absolute bottom-0 left-0 right-0 border-b border-border" />
+        {/* header scale - aligned with timeline column */}
+        <div className="grid grid-cols-7 gap-2 px-3 mb-3">
+          <div className="col-span-5" /> {/* empty space for first 5 columns */}
+          <div className="col-span-2 relative h-8">
+            {ticks.map(t => (
+              <div
+                key={t.key}
+                className="absolute text-[10px] text-muted-foreground -translate-x-1/2"
+                style={{ left: `${t.leftPct}%` }}
+              >
+                {t.label}
+              </div>
+            ))}
+            <div className="absolute bottom-0 left-0 right-0 border-b border-border" />
+          </div>
         </div>
 
         {/* groups */}
