@@ -48,7 +48,6 @@ const Layout = () => {
     { name: 'Pipeline', href: '/pipeline', icon: Users },
     { name: 'Campaigns', href: '/campaigns', icon: Megaphone },
     { name: 'Forecast', href: '/forecast', icon: TrendingUp },
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Spaces', href: '/spaces', icon: Target },
     { name: 'Integrations', href: '/integrations', icon: Settings },
     { name: 'Demo Site', href: '/demo-site', icon: Target },
@@ -73,7 +72,12 @@ const Layout = () => {
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-14 items-center">
           <div className="mr-4 flex">
-            <h1 className="text-lg font-semibold">Crusade CRM</h1>
+            <button 
+              onClick={() => navigate('/dashboard')}
+              className="text-lg font-semibold hover:text-foreground/80 transition-colors"
+            >
+              Crusade CRM
+            </button>
           </div>
           
           <nav className="flex items-center space-x-6 text-sm font-medium">
