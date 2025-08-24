@@ -42,7 +42,7 @@ const CampaignsPage: React.FC = () => {
         const cId = prof?.company_id;
         if (!cId) { setCampaigns([]); setLoading(false); return; }
 
-        // Get campaigns without advertiser info for now
+        // Get campaigns with advertiser info
         const { data, error } = await supabase
           .from("campaigns")
           .select(`
@@ -51,6 +51,8 @@ const CampaignsPage: React.FC = () => {
             start_date,
             end_date,
             status,
+            advertiser_id,
+            advertisers(name),
             flights(
               impressions,
               clicks,
@@ -67,7 +69,7 @@ const CampaignsPage: React.FC = () => {
           return {
             campaign_id: campaign.id,
             campaign_name: campaign.name,
-            advertiser_name: "No Advertiser", // Temporarily set to default
+            advertiser_name: campaign.advertisers?.name || "No Advertiser",
             flight_count: flightData.length,
             total_impressions: flightData.reduce((sum, f) => sum + (f.impressions || 0), 0),
             total_clicks: flightData.reduce((sum, f) => sum + (f.clicks || 0), 0),
@@ -209,8 +211,8 @@ const CampaignsPage: React.FC = () => {
           )}
         </DialogContent>
       </Dialog>
-      </div>
-    );
-  };
+    </div>
+  );
+};
 
-  export default CampaignsPage;
+export default CampaignsPage;
