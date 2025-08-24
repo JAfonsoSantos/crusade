@@ -236,25 +236,28 @@ export default function Pipeline() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header with Pipeline Selector */}
       <div className="flex justify-between items-start mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Sales Pipelines</h1>
-          <p className="text-muted-foreground">
-            Manage your retail media opportunities across different sales pipelines
-          </p>
+        <div className="flex-1">
+          <PipelineSelector
+            pipelines={pipelines}
+            selectedPipelineId={selectedPipelineId}
+            onPipelineChange={setSelectedPipelineId}
+            opportunityCount={opportunities.length}
+          />
+          {currentPipeline?.description && (
+            <p className="text-muted-foreground mt-2">
+              {currentPipeline.description}
+            </p>
+          )}
         </div>
-        <CreatePipelineModal />
-      </div>
-
-      {/* Pipeline Selector */}
-      <div className="mb-6">
-        <PipelineSelector
-          pipelines={pipelines}
-          selectedPipelineId={selectedPipelineId}
-          onPipelineChange={setSelectedPipelineId}
-          opportunityCount={opportunities.length}
-        />
+        
+        {selectedPipelineId && (
+          <Button className="gap-2">
+            <PlusCircle className="h-4 w-4" />
+            New Opportunity
+          </Button>
+        )}
       </div>
 
       {!selectedPipelineId ? (
@@ -263,20 +266,6 @@ export default function Pipeline() {
         </div>
       ) : (
         <>
-          {/* Header */}
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h2 className="text-2xl font-semibold">{currentPipeline?.name}</h2>
-              {currentPipeline?.description && (
-                <p className="text-muted-foreground">{currentPipeline.description}</p>
-              )}
-            </div>
-            <Button className="gap-2">
-              <PlusCircle className="h-4 w-4" />
-              New Opportunity
-            </Button>
-          </div>
-
           {/* Pipeline Summary */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <Card>
