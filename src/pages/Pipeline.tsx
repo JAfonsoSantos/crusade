@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,25 @@ import { useToast } from "@/hooks/use-toast";
 import { OpportunityDetailModal } from "@/components/OpportunityDetailModal";
 import { PipelineSelector } from "@/components/PipelineSelector";
 import { CreatePipelineModal } from "@/components/CreatePipelineModal";
+import { 
+  DndContext, 
+  DragOverlay,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  useDroppable,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 type Pipeline = {
   id: string;
@@ -70,7 +89,16 @@ export default function Pipeline() {
   const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // Fetch pipelines
   const { data: pipelines = [], isLoading: pipelinesLoading } = useQuery({
@@ -155,6 +183,57 @@ export default function Pipeline() {
       return matchesSearch && matchesStage;
     });
   }, [opportunities, searchTerm, stageFilter]);
+  // Mutation to update opportunity stage
+  const updateOpportunityMutation = useMutation({
+    mutationFn: async ({ opportunityId, newStage }: { opportunityId: string, newStage: string }) => {
+      const { error } = await supabase
+        .from("opportunities")
+        .update({ stage: newStage })
+        .eq("id", opportunityId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Opportunity moved successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["opportunities", selectedPipelineId] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error", 
+        description: "Failed to move opportunity",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Handle drag end
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+
+    if (!over || active.id === over.id) return;
+
+    const activeOpportunity = filteredOpportunities.find(opp => opp.id === active.id);
+    if (!activeOpportunity) return;
+
+    // Check if dropped over a stage column
+    const newStage = over.id as string;
+    const validStage = currentStages.find(stage => stage.key === newStage);
+    
+    if (validStage && activeOpportunity.stage !== newStage) {
+      updateOpportunityMutation.mutate({
+        opportunityId: activeOpportunity.id,
+        newStage: newStage
+      });
+    }
+  };
+
+  const handleDragStart = (event: any) => {
+    setActiveId(event.active.id);
+  };
 
   const stageMetrics = useMemo(() => {
     return currentStages.map((stage) => {
@@ -167,7 +246,7 @@ export default function Pipeline() {
         opportunities: stageOpps,
       };
     });
-  }, [filteredOpportunities]);
+  }, [filteredOpportunities, currentStages]);
 
   const totalPipelineValue = useMemo(() => {
     return filteredOpportunities
@@ -185,6 +264,69 @@ export default function Pipeline() {
   const handleOpportunityClick = (opportunity: Opportunity) => {
     setSelectedOpportunity(opportunity);
     setIsModalOpen(true);
+  };
+
+  // Droppable Stage Column
+  const DroppableStageColumn = ({ stage, opportunities }: { stage: any, opportunities: Opportunity[] }) => {
+    const { setNodeRef, isOver } = useDroppable({
+      id: stage.key,
+    });
+
+    return (
+      <div 
+        ref={setNodeRef}
+        className={`space-y-3 min-h-[200px] p-2 border-2 border-dashed transition-colors ${
+          isOver ? 'border-primary bg-primary/5' : 'border-transparent'
+        }`}
+      >
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <div className={`w-3 h-3 rounded-full ${stage.color}`} />
+            <h3 className="font-medium text-sm">{stage.label}</h3>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {stage.count} deals • {formatCurrency(stage.value)}
+          </div>
+        </div>
+        <SortableContext items={opportunities.map(opp => opp.id)} strategy={verticalListSortingStrategy}>
+          <div className="space-y-2">
+            {opportunities.map((opp) => (
+              <DraggableOpportunityCard key={opp.id} opportunity={opp} />
+            ))}
+          </div>
+        </SortableContext>
+      </div>
+    );
+  };
+
+  // Draggable Opportunity Card
+  const DraggableOpportunityCard = ({ opportunity }: { opportunity: Opportunity }) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id: opportunity.id });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        {...attributes}
+        {...listeners}
+        className="mb-3"
+      >
+        <OpportunityCard opportunity={opportunity} />
+      </div>
+    );
   };
 
   const OpportunityCard = ({ opportunity }: { opportunity: Opportunity }) => (
@@ -341,28 +483,31 @@ export default function Pipeline() {
           </div>
 
           {/* Pipeline Content */}
-          {view === "kanban" ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              {stageMetrics.map((stage) => (
-                <div key={stage.key} className="space-y-3">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-3 h-3 rounded-full ${stage.color}`} />
-                      <h3 className="font-medium text-sm">{stage.label}</h3>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {stage.count} deals • {formatCurrency(stage.value)}
-                    </div>
-                  </div>
-                  <div className="space-y-2 min-h-[200px]">
-                    {stage.opportunities.map((opp) => (
-                      <OpportunityCard key={opp.id} opportunity={opp} />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+            onDragStart={handleDragStart}
+          >
+            {view === "kanban" ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                {stageMetrics.map((stage) => (
+                  <DroppableStageColumn 
+                    key={stage.key} 
+                    stage={stage} 
+                    opportunities={stage.opportunities}
+                  />
+                ))}
+                
+                <DragOverlay>
+                  {activeId ? (
+                    <OpportunityCard
+                      opportunity={filteredOpportunities.find(opp => opp.id === activeId)!}
+                    />
+                  ) : null}
+                </DragOverlay>
+              </div>
+            ) : (
             <Card>
               <CardHeader>
                 <CardTitle>All Opportunities</CardTitle>
@@ -415,8 +560,9 @@ export default function Pipeline() {
                   ))}
                 </div>
               </CardContent>
-            </Card>
-          )}
+              </Card>
+            )}
+          </DndContext>
         </>
       )}
       
@@ -427,6 +573,7 @@ export default function Pipeline() {
           setIsModalOpen(false);
           setSelectedOpportunity(null);
         }}
+        onUpdate={() => queryClient.invalidateQueries({ queryKey: ["opportunities", selectedPipelineId] })}
       />
     </div>
   );

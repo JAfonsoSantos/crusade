@@ -1,9 +1,17 @@
-import React from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import React, { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Calendar, DollarSign, Target, User, Briefcase, Zap } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Calendar, DollarSign, Target, User, Briefcase, Zap, Edit, Save, X } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 type OpportunityDetail = {
   id: string;
@@ -38,6 +46,7 @@ interface OpportunityDetailModalProps {
   opportunity: OpportunityDetail | null;
   isOpen: boolean;
   onClose: () => void;
+  onUpdate?: () => void;
 }
 
 const PIPELINE_STAGES = [
@@ -49,8 +58,85 @@ const PIPELINE_STAGES = [
   { key: "closed_lost", label: "Closed Lost", color: "bg-red-500" },
 ];
 
-export function OpportunityDetailModal({ opportunity, isOpen, onClose }: OpportunityDetailModalProps) {
+export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate }: OpportunityDetailModalProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState({
+    name: opportunity?.name || "",
+    amount: opportunity?.amount?.toString() || "",
+    stage: opportunity?.stage || "",
+    probability: opportunity?.probability?.toString() || "",
+    close_date: opportunity?.close_date || "",
+    description: opportunity?.description || "",
+  });
+  
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
   if (!opportunity) return null;
+
+  // Update editData when opportunity changes
+  React.useEffect(() => {
+    if (opportunity) {
+      setEditData({
+        name: opportunity.name,
+        amount: opportunity.amount?.toString() || "",
+        stage: opportunity.stage,
+        probability: opportunity.probability?.toString() || "",
+        close_date: opportunity.close_date || "",
+        description: opportunity.description || "",
+      });
+    }
+  }, [opportunity]);
+
+  const updateOpportunityMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const { error } = await supabase
+        .from("opportunities")
+        .update({
+          name: data.name,
+          amount: data.amount ? parseFloat(data.amount) : null,
+          stage: data.stage,
+          probability: parseInt(data.probability),
+          close_date: data.close_date || null,
+          description: data.description || null,
+        })
+        .eq("id", opportunity.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Opportunity updated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["opportunities"] });
+      setIsEditing(false);
+      onUpdate?.();
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to update opportunity",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSave = () => {
+    updateOpportunityMutation.mutate(editData);
+  };
+
+  const handleCancel = () => {
+    setEditData({
+      name: opportunity.name,
+      amount: opportunity.amount?.toString() || "",
+      stage: opportunity.stage,
+      probability: opportunity.probability?.toString() || "",
+      close_date: opportunity.close_date || "",
+      description: opportunity.description || "",
+    });
+    setIsEditing(false);
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("pt-PT", {
@@ -65,7 +151,36 @@ export function OpportunityDetailModal({ opportunity, isOpen, onClose }: Opportu
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">{opportunity.name}</DialogTitle>
+          <DialogTitle className="text-2xl font-bold flex items-center justify-between">
+            {isEditing ? (
+              <Input
+                value={editData.name}
+                onChange={(e) => setEditData(prev => ({ ...prev, name: e.target.value }))}
+                className="text-2xl font-bold border-none p-0 h-auto"
+              />
+            ) : (
+              opportunity.name
+            )}
+            <div className="flex gap-2">
+              {isEditing ? (
+                <>
+                  <Button size="sm" onClick={handleSave} disabled={updateOpportunityMutation.isPending}>
+                    <Save className="h-4 w-4" />
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={handleCancel}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </>
+              ) : (
+                <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}>
+                  <Edit className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </DialogTitle>
+          <DialogDescription>
+            {isEditing ? "Edit opportunity details" : "View and manage opportunity information"}
+          </DialogDescription>
         </DialogHeader>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -80,34 +195,83 @@ export function OpportunityDetailModal({ opportunity, isOpen, onClose }: Opportu
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Value:</span>
-                <span className="font-semibold text-lg">
-                  {opportunity.amount ? formatCurrency(opportunity.amount) : "—"}
-                </span>
+                {isEditing ? (
+                  <Input
+                    type="number"
+                    value={editData.amount}
+                    onChange={(e) => setEditData(prev => ({ ...prev, amount: e.target.value }))}
+                    placeholder="0.00"
+                    className="w-32 text-right"
+                  />
+                ) : (
+                  <span className="font-semibold text-lg">
+                    {opportunity.amount ? formatCurrency(opportunity.amount) : "—"}
+                  </span>
+                )}
               </div>
               
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Stage:</span>
-                <Badge className={`${currentStage?.color || "bg-gray-500"} text-white`}>
-                  {currentStage?.label || opportunity.stage}
-                </Badge>
+                {isEditing ? (
+                  <Select 
+                    value={editData.stage} 
+                    onValueChange={(value) => setEditData(prev => ({ ...prev, stage: value }))}
+                  >
+                    <SelectTrigger className="w-48">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PIPELINE_STAGES.map((stage) => (
+                        <SelectItem key={stage.key} value={stage.key}>
+                          {stage.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Badge className={`${currentStage?.color || "bg-gray-500"} text-white`}>
+                    {currentStage?.label || opportunity.stage}
+                  </Badge>
+                )}
               </div>
               
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Probability:</span>
-                <Badge variant="outline" className="font-semibold">
-                  {opportunity.probability}%
-                </Badge>
+                {isEditing ? (
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={editData.probability}
+                    onChange={(e) => setEditData(prev => ({ ...prev, probability: e.target.value }))}
+                    placeholder="50"
+                    className="w-20 text-right"
+                  />
+                ) : (
+                  <Badge variant="outline" className="font-semibold">
+                    {opportunity.probability}%
+                  </Badge>
+                )}
               </div>
               
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Close Date:</span>
-                <span className="flex items-center gap-1">
-                  <Calendar className="h-4 w-4" />
-                  {opportunity.close_date 
-                    ? new Date(opportunity.close_date).toLocaleDateString("pt-PT")
-                    : "Not set"
-                  }
-                </span>
+                {isEditing ? (
+                  <Input
+                    type="date"
+                    value={editData.close_date}
+                    onChange={(e) => setEditData(prev => ({ ...prev, close_date: e.target.value }))}
+                    className="w-40"
+                  />
+                ) : (
+                  <span className="flex items-center gap-1">
+                    <Calendar className="h-4 w-4" />
+                    {opportunity.close_date 
+                      ? new Date(opportunity.close_date).toLocaleDateString("pt-PT")
+                      : "Not set"
+                    }
+                  </span>
+                )}
               </div>
               
               <div className="flex items-center justify-between">
@@ -115,12 +279,22 @@ export function OpportunityDetailModal({ opportunity, isOpen, onClose }: Opportu
                 <span>{new Date(opportunity.created_at).toLocaleDateString("pt-PT")}</span>
               </div>
               
-              {opportunity.description && (
+              {(opportunity.description || isEditing) && (
                 <>
                   <Separator />
                   <div>
                     <span className="text-sm text-muted-foreground">Description:</span>
-                    <p className="mt-1 text-sm">{opportunity.description}</p>
+                    {isEditing ? (
+                      <Textarea
+                        value={editData.description}
+                        onChange={(e) => setEditData(prev => ({ ...prev, description: e.target.value }))}
+                        placeholder="Enter description..."
+                        className="mt-1"
+                        rows={3}
+                      />
+                    ) : (
+                      <p className="mt-1 text-sm">{opportunity.description}</p>
+                    )}
                   </div>
                 </>
               )}
