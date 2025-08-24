@@ -9,6 +9,7 @@ import ResetPassword from "./pages/ResetPassword";
 import Pipeline from "./pages/Pipeline";
 import Spaces from "./pages/Spaces";
 import Campaigns from "./pages/Campaigns";
+import Forecast from "./pages/Forecast";
 import Integrations from "./pages/Integrations";
 import PersonalSettings from "./pages/PersonalSettings";
 import BusinessSettings from "./pages/BusinessSettings";
@@ -32,6 +33,7 @@ const App = () => (
             <Route path="pipeline" element={<Pipeline />} />
             <Route path="spaces" element={<Spaces />} />
             <Route path="campaigns" element={<Campaigns />} />
+            <Route path="forecast" element={<Forecast />} />
             <Route path="integrations" element={<Integrations />} />
             <Route path="demo-site" element={<DemoSite />} />
             <Route path="personal-settings" element={<PersonalSettings />} />

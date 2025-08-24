@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { supabase } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
-import { LayoutDashboard, Target, Megaphone, Settings, ChevronDown, User as UserIcon, Building2, LogOut, Users } from 'lucide-react';
+import { LayoutDashboard, Target, Megaphone, Settings, ChevronDown, User as UserIcon, Building2, LogOut, Users, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const Layout = () => {
@@ -45,10 +45,11 @@ const Layout = () => {
   };
 
   const navigation = [
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Pipeline', href: '/pipeline', icon: Users },
-    { name: 'Spaces', href: '/spaces', icon: Target },
     { name: 'Campaigns', href: '/campaigns', icon: Megaphone },
+    { name: 'Forecast', href: '/forecast', icon: TrendingUp },
+    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Spaces', href: '/spaces', icon: Target },
     { name: 'Integrations', href: '/integrations', icon: Settings },
     { name: 'Demo Site', href: '/demo-site', icon: Target },
   ];
