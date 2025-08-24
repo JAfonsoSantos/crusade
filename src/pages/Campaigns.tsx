@@ -1,3 +1,4 @@
+
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +9,22 @@ import FlightsGantt, { TimelineItem } from "@/components/FlightsGantt";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, RefreshCw } from "lucide-react";
 
-type GanttRow = TimelineItem;
+type GanttRow = {
+  company_id: string;
+  campaign_id: string;
+  campaign_name: string;
+  flight_id: string;
+  flight_name: string;
+  start_date: string;
+  end_date: string;
+  priority: number | null;
+  status: string | null;
+  impressions: number | null;
+  clicks: number | null;
+  conversions: number | null;
+  spend: number | null;
+  revenue: number | null;
+};
 
 const CampaignsPage: React.FC = () => {
   const [items, setItems] = useState<TimelineItem[]>([]);
@@ -24,16 +40,14 @@ const CampaignsPage: React.FC = () => {
         const { data: userRes } = await supabase.auth.getUser();
         const uid = userRes.user?.id;
         if (!uid) { setItems([]); setLoading(false); return; }
-
         const { data: prof } = await supabase.from("profiles").select("company_id").eq("user_id", uid).single();
-        const cId = (prof as any)?.company_id;
+        const cId = prof?.company_id;
         if (!cId) { setItems([]); setLoading(false); return; }
 
         const { data, error } = await (supabase as any)
           .from("v_gantt_items_fast")
           .select("company_id,campaign_id,campaign_name,flight_id,flight_name,start_date,end_date,priority,status,impressions,clicks,conversions,spend,revenue")
           .eq("company_id", cId);
-
         if (error) console.error(error);
         const rows: GanttRow[] = (data as any) || [];
         setItems(rows.map(r => ({ ...r })));
@@ -121,17 +135,19 @@ const CampaignsPage: React.FC = () => {
                 <div className="font-medium">{selected.campaign_name}</div>
                 <div className="text-sm text-muted-foreground mt-4">Dates</div>
                 <div className="font-medium">{selected.start_date} → {selected.end_date}</div>
-                <div className="flex gap-2 mt-4">
-                  {typeof selected.priority === "number" && <span className="text-xs rounded border px-2 py-0.5">prio {selected.priority}</span>}
-                  {selected.status && <span className="text-xs rounded bg-muted px-2 py-0.5 capitalize">{selected.status}</span>}
-                </div>
               </div>
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className="text-muted-foreground">Impr.</div><div className="text-right tabular-nums">{selected.impressions ?? 0}</div>
                   <div className="text-muted-foreground">Clicks</div><div className="text-right tabular-nums">{selected.clicks ?? 0}</div>
                   <div className="text-muted-foreground">Conv.</div><div className="text-right tabular-nums">{selected.conversions ?? 0}</div>
-                  <div className="text-muted-foreground">Spend</div><div className="text-right tabular-nums">{typeof selected.spend === "number" ? selected.spend.toLocaleString(undefined, { style: "currency", currency: "EUR" }) : "€0"}</div>
+                  <div className="text-muted-foreground">Spend</div><div className="text-right tabular-nums">{typeof selected.spend === "number" ? selected.spend.toLocaleString(undefined,{style:"currency",currency:"EUR"}) : "€0"}</div>
+                  {typeof selected.revenue === "number" && (
+                    <>
+                      <div className="text-muted-foreground">Revenue</div>
+                      <div className="text-right tabular-nums">{selected.revenue.toLocaleString(undefined,{style:"currency",currency:"EUR"})}</div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
