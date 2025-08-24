@@ -340,7 +340,12 @@ import { ChevronRight, ChevronDown } from "lucide-react";
                   {isExpanded && group.rows.map(row => (
                     <div key={row.flight_id} className="flex hover:bg-muted/25 transition-colors">
                       <div className="w-80 p-3 border-r border-border">
-                        <div className="text-sm truncate ml-6">{row.flight_name}</div>
+                        <div className="text-sm ml-6">
+                          <div className="truncate font-medium">{row.flight_name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {row.start_date} → {row.end_date}
+                          </div>
+                        </div>
                         <div className="flex gap-4 text-xs text-muted-foreground mt-1 ml-6">
                           <span>{row.impressions?.toLocaleString?.() ?? "—"} imp</span>
                           <span>{row.clicks?.toLocaleString?.() ?? "—"} clicks</span>
