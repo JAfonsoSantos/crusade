@@ -15,7 +15,8 @@ import { CreatePipelineModal } from "@/components/CreatePipelineModal";
 import { 
   DndContext, 
   DragOverlay,
-  closestCenter,
+  pointerWithin,
+  closestCorners,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -219,14 +220,21 @@ export default function Pipeline() {
     const activeOpportunity = filteredOpportunities.find(opp => opp.id === active.id);
     if (!activeOpportunity) return;
 
-    // Check if dropped over a stage column
-    const newStage = over.id as string;
-    const validStage = currentStages.find(stage => stage.key === newStage);
-    
-    if (validStage && activeOpportunity.stage !== newStage) {
+    // Determine target stage: either a column id or the stage of the card we dropped over
+    let targetStageKey: string | null = null;
+    const overId = String(over.id);
+
+    if (currentStages.some(s => s.key === overId)) {
+      targetStageKey = overId;
+    } else {
+      const overOpp = filteredOpportunities.find(o => o.id === overId);
+      if (overOpp) targetStageKey = overOpp.stage;
+    }
+
+    if (targetStageKey && activeOpportunity.stage !== targetStageKey) {
       updateOpportunityMutation.mutate({
         opportunityId: activeOpportunity.id,
-        newStage: newStage
+        newStage: targetStageKey,
       });
     }
   };
@@ -485,7 +493,7 @@ export default function Pipeline() {
           {/* Pipeline Content */}
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCenter}
+            collisionDetection={pointerWithin}
             onDragEnd={handleDragEnd}
             onDragStart={handleDragStart}
           >
