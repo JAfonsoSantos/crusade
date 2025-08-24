@@ -61,12 +61,12 @@ const PIPELINE_STAGES = [
 export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate }: OpportunityDetailModalProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({
-    name: opportunity?.name || "",
-    amount: opportunity?.amount?.toString() || "",
-    stage: opportunity?.stage || "",
-    probability: opportunity?.probability?.toString() || "",
-    close_date: opportunity?.close_date || "",
-    description: opportunity?.description || "",
+    name: "",
+    amount: "",
+    stage: "",
+    probability: "",
+    close_date: "",
+    description: "",
   });
   
   const { toast } = useToast();
@@ -74,9 +74,9 @@ export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate 
 
   if (!opportunity) return null;
 
-  // Update editData when opportunity changes
+  // Reset editData when opportunity changes or when modal opens/editing starts
   React.useEffect(() => {
-    if (opportunity) {
+    if (opportunity && isOpen) {
       setEditData({
         name: opportunity.name,
         amount: opportunity.amount?.toString() || "",
@@ -85,8 +85,9 @@ export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate 
         close_date: opportunity.close_date || "",
         description: opportunity.description || "",
       });
+      setIsEditing(false); // Reset editing state when modal opens
     }
-  }, [opportunity]);
+  }, [opportunity?.id, isOpen]); // Only depend on opportunity ID and modal open state
 
   const updateOpportunityMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -127,14 +128,16 @@ export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate 
   };
 
   const handleCancel = () => {
-    setEditData({
-      name: opportunity.name,
-      amount: opportunity.amount?.toString() || "",
-      stage: opportunity.stage,
-      probability: opportunity.probability?.toString() || "",
-      close_date: opportunity.close_date || "",
-      description: opportunity.description || "",
-    });
+    if (opportunity) {
+      setEditData({
+        name: opportunity.name,
+        amount: opportunity.amount?.toString() || "",
+        stage: opportunity.stage,
+        probability: opportunity.probability?.toString() || "",
+        close_date: opportunity.close_date || "",
+        description: opportunity.description || "",
+      });
+    }
     setIsEditing(false);
   };
 
