@@ -971,6 +971,7 @@ export type Database = {
           name: string
           next_steps: string | null
           owner_id: string | null
+          pipeline_id: string | null
           probability: number | null
           source: string | null
           stage: string
@@ -992,6 +993,7 @@ export type Database = {
           name: string
           next_steps?: string | null
           owner_id?: string | null
+          pipeline_id?: string | null
           probability?: number | null
           source?: string | null
           stage?: string
@@ -1013,6 +1015,7 @@ export type Database = {
           name?: string
           next_steps?: string | null
           owner_id?: string | null
+          pipeline_id?: string | null
           probability?: number | null
           source?: string | null
           stage?: string
@@ -1145,6 +1148,13 @@ export type Database = {
             referencedRelation: "v_gantt_items_fast"
             referencedColumns: ["flight_id"]
           },
+          {
+            foreignKeyName: "opportunities_pipeline_id_fkey"
+            columns: ["pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "pipelines"
+            referencedColumns: ["id"]
+          },
         ]
       }
       opportunity_activities: {
@@ -1178,6 +1188,59 @@ export type Database = {
             columns: ["opportunity_id"]
             isOneToOne: false
             referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pipelines: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          external_id: string | null
+          id: string
+          is_active: boolean | null
+          is_default: boolean | null
+          name: string
+          source: string | null
+          stages: Json | null
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          external_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          name: string
+          source?: string | null
+          stages?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          external_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          name?: string
+          source?: string | null
+          stages?: Json | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pipelines_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
