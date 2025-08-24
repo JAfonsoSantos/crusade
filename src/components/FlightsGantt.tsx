@@ -142,11 +142,19 @@ const formatShortDate = (dateStr: string) => {
       let maxD = new Date(e);
       
       if (zoomLevel === "day") {
+        // For daily view, show only 2 weeks around the data
+        const dataRange = Math.max(e - s, 14 * DAY_MS);
+        const centerTime = s + (e - s) / 2;
+        minD = new Date(centerTime - DAY_MS * 7);
+        maxD = new Date(centerTime + DAY_MS * 7);
+      } else if (zoomLevel === "week") {
+        // For weekly view, show 8 weeks around the data
         minD = startOfWeek(minD);
         maxD = addWeeks(startOfWeek(maxD), 2);
-      } else if (zoomLevel === "week") {
-        minD = startOfWeek(minD);
-        maxD = addWeeks(startOfWeek(maxD), 4);
+        const totalWeeks = Math.max(8, (maxD.getTime() - minD.getTime()) / (7 * DAY_MS));
+        if (totalWeeks > 12) {
+          maxD = addWeeks(minD, 12);
+        }
       } else { // month
         minD = startOfMonth(minD);
         maxD = addMonths(startOfMonth(maxD), 2);
@@ -202,7 +210,10 @@ const formatShortDate = (dateStr: string) => {
       const sMs = clamp(s.getTime(), min.getTime(), max.getTime());
       const eMs = clamp(e.getTime(), min.getTime(), max.getTime());
       const leftPct = ((sMs - min.getTime()) / totalMs) * 100;
-      const widthPct = Math.max(0.5, ((eMs - sMs) / totalMs) * 100);
+      const widthPct = Math.max(
+        zoomLevel === "day" ? 2 : zoomLevel === "week" ? 1 : 0.5, 
+        ((eMs - sMs) / totalMs) * 100
+      );
       const c = colors[(row.status || "draft").toLowerCase()] || colors["draft"];
       
       return (
@@ -212,7 +223,7 @@ const formatShortDate = (dateStr: string) => {
           onClick={() => onSelect?.(row)}
           title={`${row.flight_name} (${row.start_date} → ${row.end_date})`}
         >
-          {widthPct > 8 && (
+          {widthPct > (zoomLevel === "day" ? 5 : zoomLevel === "week" ? 3 : 8) && (
             <span className="text-white text-xs font-medium truncate">
               {row.flight_name}
             </span>
@@ -229,7 +240,10 @@ const formatShortDate = (dateStr: string) => {
       const sMs = clamp(s.getTime(), min.getTime(), max.getTime());
       const eMs = clamp(e.getTime(), min.getTime(), max.getTime());
       const leftPct = ((sMs - min.getTime()) / totalMs) * 100;
-      const widthPct = Math.max(0.5, ((eMs - sMs) / totalMs) * 100);
+      const widthPct = Math.max(
+        zoomLevel === "day" ? 2 : zoomLevel === "week" ? 1 : 0.5, 
+        ((eMs - sMs) / totalMs) * 100
+      );
       
       // Use mixed color for campaign bar
       const c = "bg-primary";
@@ -244,7 +258,7 @@ const formatShortDate = (dateStr: string) => {
           style={{ left: `${leftPct}%`, width: `${widthPct}%`, top: "4px" }}
           title={`${group.name} Campaign (${s.toISOString().split('T')[0]} → ${e.toISOString().split('T')[0]})`}
         >
-          {widthPct > 8 && (
+          {widthPct > (zoomLevel === "day" ? 5 : zoomLevel === "week" ? 3 : 8) && (
             <span className="text-white text-xs font-medium truncate">
               {group.rows.length} flights
             </span>
