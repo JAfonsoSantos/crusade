@@ -251,35 +251,7 @@ export type Database = {
             foreignKeyName: "campaign_ad_spaces_campaign_id_fkey"
             columns: ["campaign_id"]
             isOneToOne: false
-            referencedRelation: "mv_campaign_pacing"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "campaign_ad_spaces_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "mv_campaign_performance"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "campaign_ad_spaces_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "mv_gantt_items"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "campaign_ad_spaces_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_campaign_pacing"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "campaign_ad_spaces_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_campaign_performance"
+            referencedRelation: "v_campaign_performance_secure"
             referencedColumns: ["campaign_id"]
           },
           {
@@ -316,27 +288,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "flights"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_campaign_ad_spaces_flight"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "mv_flight_performance"
-            referencedColumns: ["flight_id"]
-          },
-          {
-            foreignKeyName: "fk_campaign_ad_spaces_flight"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "mv_gantt_items"
-            referencedColumns: ["flight_id"]
-          },
-          {
-            foreignKeyName: "fk_campaign_ad_spaces_flight"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "v_flight_performance"
-            referencedColumns: ["flight_id"]
           },
           {
             foreignKeyName: "fk_campaign_ad_spaces_flight"
@@ -513,27 +464,6 @@ export type Database = {
             foreignKeyName: "creatives_flight_id_fkey"
             columns: ["flight_id"]
             isOneToOne: false
-            referencedRelation: "mv_flight_performance"
-            referencedColumns: ["flight_id"]
-          },
-          {
-            foreignKeyName: "creatives_flight_id_fkey"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "mv_gantt_items"
-            referencedColumns: ["flight_id"]
-          },
-          {
-            foreignKeyName: "creatives_flight_id_fkey"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "v_flight_performance"
-            referencedColumns: ["flight_id"]
-          },
-          {
-            foreignKeyName: "creatives_flight_id_fkey"
-            columns: ["flight_id"]
-            isOneToOne: false
             referencedRelation: "v_flights_gantt"
             referencedColumns: ["flight_id"]
           },
@@ -579,27 +509,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "flights"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "flight_products_flight_id_fkey"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "mv_flight_performance"
-            referencedColumns: ["flight_id"]
-          },
-          {
-            foreignKeyName: "flight_products_flight_id_fkey"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "mv_gantt_items"
-            referencedColumns: ["flight_id"]
-          },
-          {
-            foreignKeyName: "flight_products_flight_id_fkey"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "v_flight_performance"
-            referencedColumns: ["flight_id"]
           },
           {
             foreignKeyName: "flight_products_flight_id_fkey"
@@ -707,35 +616,7 @@ export type Database = {
             foreignKeyName: "flights_campaign_id_fkey"
             columns: ["campaign_id"]
             isOneToOne: false
-            referencedRelation: "mv_campaign_pacing"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "mv_campaign_performance"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "mv_gantt_items"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_campaign_pacing"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_campaign_performance"
+            referencedRelation: "v_campaign_performance_secure"
             referencedColumns: ["campaign_id"]
           },
           {
@@ -904,35 +785,7 @@ export type Database = {
             foreignKeyName: "metrics_daily_campaign_id_fkey"
             columns: ["campaign_id"]
             isOneToOne: false
-            referencedRelation: "mv_campaign_pacing"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "metrics_daily_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "mv_campaign_performance"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "metrics_daily_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "mv_gantt_items"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "metrics_daily_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_campaign_pacing"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "metrics_daily_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_campaign_performance"
+            referencedRelation: "v_campaign_performance_secure"
             referencedColumns: ["campaign_id"]
           },
           {
@@ -983,27 +836,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "flights"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "metrics_daily_flight_id_fkey"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "mv_flight_performance"
-            referencedColumns: ["flight_id"]
-          },
-          {
-            foreignKeyName: "metrics_daily_flight_id_fkey"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "mv_gantt_items"
-            referencedColumns: ["flight_id"]
-          },
-          {
-            foreignKeyName: "metrics_daily_flight_id_fkey"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "v_flight_performance"
-            referencedColumns: ["flight_id"]
           },
           {
             foreignKeyName: "metrics_daily_flight_id_fkey"
@@ -1121,35 +953,7 @@ export type Database = {
             foreignKeyName: "opportunities_campaign_id_fkey"
             columns: ["campaign_id"]
             isOneToOne: false
-            referencedRelation: "mv_campaign_pacing"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "opportunities_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "mv_campaign_performance"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "opportunities_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "mv_gantt_items"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "opportunities_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_campaign_pacing"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "opportunities_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_campaign_performance"
+            referencedRelation: "v_campaign_performance_secure"
             referencedColumns: ["campaign_id"]
           },
           {
@@ -1186,27 +990,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "flights"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "opportunities_flight_id_fkey"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "mv_flight_performance"
-            referencedColumns: ["flight_id"]
-          },
-          {
-            foreignKeyName: "opportunities_flight_id_fkey"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "mv_gantt_items"
-            referencedColumns: ["flight_id"]
-          },
-          {
-            foreignKeyName: "opportunities_flight_id_fkey"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "v_flight_performance"
-            referencedColumns: ["flight_id"]
           },
           {
             foreignKeyName: "opportunities_flight_id_fkey"
@@ -1594,182 +1377,6 @@ export type Database = {
       }
     }
     Views: {
-      mv_campaign_pacing: {
-        Row: {
-          budget: number | null
-          campaign_id: string | null
-          campaign_name: string | null
-          company_id: string | null
-          currency: string | null
-          days_elapsed: number | null
-          days_total: number | null
-          end_date: string | null
-          pacing_index_pct: number | null
-          pct_budget_spent: number | null
-          pct_time_elapsed: number | null
-          spend: number | null
-          start_date: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "campaigns_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      mv_campaign_performance: {
-        Row: {
-          budget: number | null
-          campaign_id: string | null
-          campaign_name: string | null
-          clicks: number | null
-          company_id: string | null
-          conversions: number | null
-          ctr_pct: number | null
-          currency: string | null
-          cvr_pct: number | null
-          end_date: string | null
-          impressions: number | null
-          spend: number | null
-          start_date: string | null
-          status: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "campaigns_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      mv_flight_performance: {
-        Row: {
-          ad_server: string | null
-          campaign_id: string | null
-          clicks: number | null
-          company_id: string | null
-          conversions: number | null
-          cpa: number | null
-          cpc: number | null
-          ctr_pct: number | null
-          cvr_pct: number | null
-          end_date: string | null
-          flight_id: string | null
-          flight_name: string | null
-          impressions: number | null
-          priority: number | null
-          spend: number | null
-          start_date: string | null
-          status: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "campaigns_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "campaigns"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "mv_campaign_pacing"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "mv_campaign_performance"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "mv_gantt_items"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_campaign_pacing"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_campaign_performance"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_campaign_totals"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_flights_gantt"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_gantt_items"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_gantt_items_fast"
-            referencedColumns: ["campaign_id"]
-          },
-        ]
-      }
-      mv_gantt_items: {
-        Row: {
-          ad_server: string | null
-          campaign_id: string | null
-          campaign_name: string | null
-          company_id: string | null
-          end_date: string | null
-          flight_id: string | null
-          flight_name: string | null
-          priority: number | null
-          start_date: string | null
-          status: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "campaigns_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       v_campaign_kpis_30d: {
         Row: {
           campaign_id: string | null
@@ -1793,35 +1400,7 @@ export type Database = {
             foreignKeyName: "metrics_daily_campaign_id_fkey"
             columns: ["campaign_id"]
             isOneToOne: false
-            referencedRelation: "mv_campaign_pacing"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "metrics_daily_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "mv_campaign_performance"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "metrics_daily_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "mv_gantt_items"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "metrics_daily_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_campaign_pacing"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "metrics_daily_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_campaign_performance"
+            referencedRelation: "v_campaign_performance_secure"
             referencedColumns: ["campaign_id"]
           },
           {
@@ -1861,33 +1440,7 @@ export type Database = {
           },
         ]
       }
-      v_campaign_pacing: {
-        Row: {
-          budget: number | null
-          campaign_id: string | null
-          campaign_name: string | null
-          company_id: string | null
-          currency: string | null
-          days_elapsed: number | null
-          days_total: number | null
-          end_date: string | null
-          pacing_index_pct: number | null
-          pct_budget_spent: number | null
-          pct_time_elapsed: number | null
-          spend: number | null
-          start_date: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "campaigns_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      v_campaign_performance: {
+      v_campaign_performance_secure: {
         Row: {
           budget: number | null
           campaign_id: string | null
@@ -1939,106 +1492,6 @@ export type Database = {
           },
         ]
       }
-      v_flight_performance: {
-        Row: {
-          ad_server: string | null
-          campaign_id: string | null
-          clicks: number | null
-          company_id: string | null
-          conversions: number | null
-          cpa: number | null
-          cpc: number | null
-          ctr_pct: number | null
-          cvr_pct: number | null
-          end_date: string | null
-          flight_id: string | null
-          flight_name: string | null
-          impressions: number | null
-          priority: number | null
-          spend: number | null
-          start_date: string | null
-          status: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "campaigns_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "campaigns"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "mv_campaign_pacing"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "mv_campaign_performance"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "mv_gantt_items"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_campaign_pacing"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_campaign_performance"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_campaign_totals"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_flights_gantt"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_gantt_items"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "flights_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_gantt_items_fast"
-            referencedColumns: ["campaign_id"]
-          },
-        ]
-      }
       v_flight_products_count: {
         Row: {
           flight_id: string | null
@@ -2051,27 +1504,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "flights"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "flight_products_flight_id_fkey"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "mv_flight_performance"
-            referencedColumns: ["flight_id"]
-          },
-          {
-            foreignKeyName: "flight_products_flight_id_fkey"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "mv_gantt_items"
-            referencedColumns: ["flight_id"]
-          },
-          {
-            foreignKeyName: "flight_products_flight_id_fkey"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "v_flight_performance"
-            referencedColumns: ["flight_id"]
           },
           {
             foreignKeyName: "flight_products_flight_id_fkey"
@@ -2125,35 +1557,7 @@ export type Database = {
             foreignKeyName: "campaign_ad_spaces_campaign_id_fkey"
             columns: ["campaign_id"]
             isOneToOne: false
-            referencedRelation: "mv_campaign_pacing"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "campaign_ad_spaces_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "mv_campaign_performance"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "campaign_ad_spaces_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "mv_gantt_items"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "campaign_ad_spaces_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_campaign_pacing"
-            referencedColumns: ["campaign_id"]
-          },
-          {
-            foreignKeyName: "campaign_ad_spaces_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "v_campaign_performance"
+            referencedRelation: "v_campaign_performance_secure"
             referencedColumns: ["campaign_id"]
           },
           {
@@ -2197,27 +1601,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "flights"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_campaign_ad_spaces_flight"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "mv_flight_performance"
-            referencedColumns: ["flight_id"]
-          },
-          {
-            foreignKeyName: "fk_campaign_ad_spaces_flight"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "mv_gantt_items"
-            referencedColumns: ["flight_id"]
-          },
-          {
-            foreignKeyName: "fk_campaign_ad_spaces_flight"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "v_flight_performance"
-            referencedColumns: ["flight_id"]
           },
           {
             foreignKeyName: "fk_campaign_ad_spaces_flight"
@@ -2267,27 +1650,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "flights"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "metrics_daily_flight_id_fkey"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "mv_flight_performance"
-            referencedColumns: ["flight_id"]
-          },
-          {
-            foreignKeyName: "metrics_daily_flight_id_fkey"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "mv_gantt_items"
-            referencedColumns: ["flight_id"]
-          },
-          {
-            foreignKeyName: "metrics_daily_flight_id_fkey"
-            columns: ["flight_id"]
-            isOneToOne: false
-            referencedRelation: "v_flight_performance"
-            referencedColumns: ["flight_id"]
           },
           {
             foreignKeyName: "metrics_daily_flight_id_fkey"
