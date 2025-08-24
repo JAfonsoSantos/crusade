@@ -121,7 +121,12 @@ const handler = async (req: Request): Promise<Response> => {
       `,
     });
 
-    console.log("Password reset email sent successfully:", emailResponse);
+    // Log successful attempt
+    await supabase
+      .from('password_reset_attempts')
+      .insert({ email, ip_address: userIp, success: true });
+
+    console.log("Password reset email sent successfully");
 
     return new Response(JSON.stringify({ 
       success: true, 
