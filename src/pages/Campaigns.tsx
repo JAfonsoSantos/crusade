@@ -1,32 +1,18 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, Building } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-
-type CampaignData = {
-  campaign_id: string;
-  campaign_name: string;
-  advertiser_name: string | null;
-  flight_count: number;
-  total_impressions: number;
-  total_clicks: number;
-  total_conversions: number;
-  total_spend: number;
-  start_date: string;
-  end_date: string;
-  status: string;
-};
+import FlightsGantt, { TimelineItem } from "@/components/FlightsGantt";
 
 const CampaignsPage: React.FC = () => {
-  const [campaigns, setCampaigns] = useState<CampaignData[]>([]);
-  const [advertiserFilter, setAdvertiserFilter] = useState<string>("all");
+  const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
+  const [campaignFilter, setCampaignFilter] = useState<string>("all");
   const [loading, setLoading] = useState<boolean>(true);
-  const [selected, setSelected] = useState<CampaignData | null>(null);
+  const [selectedItem, setSelectedItem] = useState<TimelineItem | null>(null);
 
-  // load campaign data by advertiser
+  // Load campaigns and flights data for timeline
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -34,97 +20,99 @@ const CampaignsPage: React.FC = () => {
         const { data: userRes } = await supabase.auth.getUser();
         const uid = userRes.user?.id;
         if (!uid) {
-          setCampaigns([]);
+          setTimelineItems([]);
           setLoading(false);
           return;
         }
+        
         const { data: prof } = await supabase.from("profiles").select("company_id").eq("user_id", uid).single();
         const cId = prof?.company_id;
-        if (!cId) { setCampaigns([]); setLoading(false); return; }
+        if (!cId) { 
+          setTimelineItems([]); 
+          setLoading(false); 
+          return; 
+        }
 
-        // Get campaigns with advertiser info
+        // Get flights with campaign data for timeline view
         const { data, error } = await supabase
-          .from("campaigns")
+          .from("flights")
           .select(`
             id,
             name,
             start_date,
             end_date,
             status,
-            advertiser_id,
-            advertisers(name),
-            flights(
-              impressions,
-              clicks,
-              conversions,
-              spend
+            impressions,
+            clicks,
+            conversions,
+            spend,
+            priority,
+            campaigns!inner(
+              id,
+              name,
+              company_id
             )
           `)
-          .eq("company_id", cId);
+          .eq("campaigns.company_id", cId);
 
-        if (error) console.error(error);
+        if (error) {
+          console.error("Error fetching flights:", error);
+          setTimelineItems([]);
+          setLoading(false);
+          return;
+        }
         
-        const campaignData: CampaignData[] = (data || []).map(campaign => {
-          const flightData = campaign.flights || [];
-          return {
-            campaign_id: campaign.id,
-            campaign_name: campaign.name,
-            advertiser_name: campaign.advertisers?.name || "No Advertiser",
-            flight_count: flightData.length,
-            total_impressions: flightData.reduce((sum, f) => sum + (f.impressions || 0), 0),
-            total_clicks: flightData.reduce((sum, f) => sum + (f.clicks || 0), 0),
-            total_conversions: flightData.reduce((sum, f) => sum + (f.conversions || 0), 0),
-            total_spend: flightData.reduce((sum, f) => sum + (f.spend || 0), 0),
-            start_date: campaign.start_date,
-            end_date: campaign.end_date,
-            status: campaign.status
-          };
-        });
+        const items: TimelineItem[] = (data || []).map(flight => ({
+          id: flight.id,
+          name: flight.name,
+          flight_name: flight.name,
+          flight_id: flight.id,
+          campaign_id: flight.campaigns.id,
+          campaign_name: flight.campaigns.name,
+          start_date: flight.start_date,
+          end_date: flight.end_date,
+          status: flight.status,
+          impressions: flight.impressions || 0,
+          clicks: flight.clicks || 0,
+          conversions: flight.conversions || 0,
+          spend: flight.spend || 0,
+          priority: flight.priority || 1,
+          company_id: flight.campaigns.company_id
+        }));
         
-        setCampaigns(campaignData);
+        setTimelineItems(items);
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
-  const advertisers = useMemo(() => {
-    const unique = [...new Set(campaigns.map(c => c.advertiser_name))];
+  const campaigns = useMemo(() => {
+    const unique = [...new Set(timelineItems.map(item => item.campaign_name))];
     return unique.sort();
-  }, [campaigns]);
+  }, [timelineItems]);
 
-  const filteredCampaigns = useMemo(() => {
-    if (advertiserFilter === "all") return campaigns;
-    return campaigns.filter(c => c.advertiser_name === advertiserFilter);
-  }, [campaigns, advertiserFilter]);
-
-  const campaignsByAdvertiser = useMemo(() => {
-    const grouped = filteredCampaigns.reduce((acc, campaign) => {
-      const advertiser = campaign.advertiser_name || "No Advertiser";
-      if (!acc[advertiser]) acc[advertiser] = [];
-      acc[advertiser].push(campaign);
-      return acc;
-    }, {} as Record<string, CampaignData[]>);
-    return grouped;
-  }, [filteredCampaigns]);
+  const handleItemSelect = (item: TimelineItem) => {
+    setSelectedItem(item);
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Campaigns by Advertiser</h2>
-          <p className="text-muted-foreground">View campaigns organized by advertiser</p>
+          <h2 className="text-3xl font-bold tracking-tight">Campaigns Timeline</h2>
+          <p className="text-muted-foreground">View campaign flights in timeline format</p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="outline">{campaigns.length} campaigns</Badge>
-          <Select value={advertiserFilter} onValueChange={(v) => setAdvertiserFilter(v)}>
+          <Badge variant="outline">{timelineItems.length} flights</Badge>
+          <Select value={campaignFilter} onValueChange={setCampaignFilter}>
             <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="All advertisers" />
+              <SelectValue placeholder="All campaigns" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All advertisers</SelectItem>
-              {advertisers.map(advertiser => (
-                <SelectItem key={advertiser} value={advertiser}>{advertiser}</SelectItem>
+              <SelectItem value="all">All campaigns</SelectItem>
+              {campaigns.map(campaign => (
+                <SelectItem key={campaign} value={campaign}>{campaign}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -134,83 +122,58 @@ const CampaignsPage: React.FC = () => {
       {loading ? (
         <div className="text-center py-12">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading campaigns...</p>
+          <p className="text-muted-foreground">Loading timeline...</p>
         </div>
       ) : (
-        <div className="space-y-6">
-          {Object.entries(campaignsByAdvertiser).map(([advertiser, advertiserCampaigns]) => (
-            <Card key={advertiser}>
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <Building className="h-5 w-5" />
-                  <CardTitle>{advertiser}</CardTitle>
-                  <Badge variant="secondary">{advertiserCampaigns.length} campaigns</Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4">
-                  {advertiserCampaigns.map(campaign => (
-                    <div 
-                      key={campaign.campaign_id}
-                      className="border rounded-lg p-4 hover:bg-muted/50 cursor-pointer transition-colors"
-                      onClick={() => setSelected(campaign)}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="space-y-1">
-                          <h4 className="font-medium">{campaign.campaign_name}</h4>
-                          <p className="text-sm text-muted-foreground">
-                            {campaign.start_date} → {campaign.end_date}
-                          </p>
-                          <div className="flex gap-2">
-                            <Badge variant="outline" className="capitalize">{campaign.status}</Badge>
-                            <Badge variant="secondary">{campaign.flight_count} flights</Badge>
-                          </div>
-                        </div>
-                        <div className="text-right text-sm space-y-1">
-                          <div>Impressions: {campaign.total_impressions.toLocaleString()}</div>
-                          <div>Clicks: {campaign.total_clicks.toLocaleString()}</div>
-                          <div>Spend: €{campaign.total_spend.toLocaleString()}</div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Flight Timeline</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <FlightsGantt 
+              items={timelineItems} 
+              campaignFilter={campaignFilter === "all" ? undefined : campaignFilter}
+              onSelect={handleItemSelect}
+            />
+          </CardContent>
+        </Card>
       )}
 
-      {/* Campaign modal */}
-      <Dialog open={!!selected} onOpenChange={(v) => !v && setSelected(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{selected?.campaign_name}</DialogTitle>
-          </DialogHeader>
-          {selected && (
+      {selectedItem && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{selectedItem.flight_name}</CardTitle>
+          </CardHeader>
+          <CardContent>
             <div className="grid grid-cols-2 gap-6">
               <div className="space-y-2">
-                <div className="text-sm text-muted-foreground">Advertiser</div>
-                <div className="font-medium">{selected.advertiser_name}</div>
+                <div className="text-sm text-muted-foreground">Campaign</div>
+                <div className="font-medium">{selectedItem.campaign_name}</div>
                 <div className="text-sm text-muted-foreground mt-4">Dates</div>
-                <div className="font-medium">{selected.start_date} → {selected.end_date}</div>
+                <div className="font-medium">
+                  {new Date(selectedItem.start_date).toLocaleDateString()} → {new Date(selectedItem.end_date).toLocaleDateString()}
+                </div>
                 <div className="flex gap-2 mt-4">
-                  <Badge className="capitalize">{selected.status}</Badge>
-                  <Badge variant="secondary">{selected.flight_count} flights</Badge>
+                  <Badge className="capitalize">{selectedItem.status}</Badge>
+                  <Badge variant="secondary">Priority {selectedItem.priority}</Badge>
                 </div>
               </div>
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="text-muted-foreground">Impressions</div><div className="text-right tabular-nums">{selected.total_impressions.toLocaleString()}</div>
-                  <div className="text-muted-foreground">Clicks</div><div className="text-right tabular-nums">{selected.total_clicks.toLocaleString()}</div>
-                  <div className="text-muted-foreground">Conversions</div><div className="text-right tabular-nums">{selected.total_conversions.toLocaleString()}</div>
-                  <div className="text-muted-foreground">Spend</div><div className="text-right tabular-nums">€{selected.total_spend.toLocaleString()}</div>
+                  <div className="text-muted-foreground">Impressions</div>
+                  <div className="text-right tabular-nums">{selectedItem.impressions.toLocaleString()}</div>
+                  <div className="text-muted-foreground">Clicks</div>
+                  <div className="text-right tabular-nums">{selectedItem.clicks.toLocaleString()}</div>
+                  <div className="text-muted-foreground">Conversions</div>
+                  <div className="text-right tabular-nums">{selectedItem.conversions.toLocaleString()}</div>
+                  <div className="text-muted-foreground">Spend</div>
+                  <div className="text-right tabular-nums">€{selectedItem.spend.toLocaleString()}</div>
                 </div>
               </div>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
