@@ -695,7 +695,78 @@ export type Database = {
           targeting_criteria?: Json | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "mv_campaign_pacing"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "mv_campaign_performance"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "mv_gantt_items"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_campaign_pacing"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_campaign_performance"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_campaign_totals"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_flights_gantt"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_gantt_items"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_gantt_items_fast"
+            referencedColumns: ["campaign_id"]
+          },
+        ]
       }
       integration_sync_history: {
         Row: {
@@ -1580,6 +1651,76 @@ export type Database = {
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "mv_campaign_pacing"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "mv_campaign_performance"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "mv_gantt_items"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_campaign_pacing"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_campaign_performance"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_campaign_totals"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_flights_gantt"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_gantt_items"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_gantt_items_fast"
+            referencedColumns: ["campaign_id"]
+          },
         ]
       }
       mv_gantt_items: {
@@ -1801,6 +1942,76 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "mv_campaign_pacing"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "mv_campaign_performance"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "mv_gantt_items"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_campaign_pacing"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_campaign_performance"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_campaign_totals"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_flights_gantt"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_gantt_items"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "flights_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_gantt_items_fast"
+            referencedColumns: ["campaign_id"]
           },
         ]
       }
