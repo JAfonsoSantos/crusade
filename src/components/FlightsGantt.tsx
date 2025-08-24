@@ -20,8 +20,6 @@
     items: TimelineItem[];
     /** optional campaign filter (id) */
     campaignFilter?: string;
-    /** drilldown: month | week | day */
-    view?: "month" | "week" | "day";
     /** when a bar (flight) is clicked */
     onSelect?: (t: TimelineItem) => void;
   };
@@ -33,8 +31,10 @@
     return new Date(y, (m || 1) - 1, d || 1);
   };
   const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
-  const fmt = new Intl.DateTimeFormat(undefined, { month: "short", day: "2-digit" });
   const fmtMonth = new Intl.DateTimeFormat(undefined, { month: "short" });
+  const fmtWeek = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+  const fmtDay = new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric" });
+  
   const colors: Record<string, string> = {
     active: "bg-emerald-500",
     paused: "bg-amber-500",
@@ -76,9 +76,16 @@
   export default function FlightsGantt({
     items,
     campaignFilter,
-    view = "month",
     onSelect,
   }: FlightsGanttProps) {
+    const [zoomLevel, setZoomLevel] = useState<"month" | "week" | "day">("month");
+    
+    const handleZoomClick = () => {
+      if (zoomLevel === "month") setZoomLevel("week");
+      else if (zoomLevel === "week") setZoomLevel("day");
+      else setZoomLevel("month");
+    };
+
     const filtered = useMemo(() => {
       const arr = campaignFilter && campaignFilter !== "all"
         ? items.filter(i => i.campaign_id === campaignFilter)
@@ -101,7 +108,7 @@
       return Array.from(m.entries()).map(([id, g]) => ({ id, ...g }));
     }, [filtered]);
 
-    // viewport (shared for header + bars)
+    // viewport calculation
     const { min, max } = useMemo(() => {
       if (!filtered.length) {
         const today = new Date();
@@ -111,42 +118,61 @@
       const e = Math.max(...filtered.map(r => toDate(r.end_date).getTime()));
       let minD = new Date(s);
       let maxD = new Date(e);
-      if (view === "day") {
+      
+      if (zoomLevel === "day") {
         minD = startOfWeek(minD);
-        maxD = addWeeks(startOfWeek(maxD), 1);
-      } else if (view === "week") {
+        maxD = addWeeks(startOfWeek(maxD), 2);
+      } else if (zoomLevel === "week") {
         minD = startOfWeek(minD);
-        maxD = addWeeks(startOfWeek(maxD), 1);
+        maxD = addWeeks(startOfWeek(maxD), 4);
       } else { // month
         minD = startOfMonth(minD);
-        maxD = addMonths(startOfMonth(maxD), 1);
+        maxD = addMonths(startOfMonth(maxD), 2);
       }
       return { min: minD, max: maxD };
-    }, [filtered, view]);
+    }, [filtered, zoomLevel]);
 
     const totalMs = Math.max(1, max.getTime() - min.getTime());
 
+    // timeline ticks based on zoom level
     const ticks = useMemo(() => {
-      const out: { key: string; label: string; leftPct: number }[] = [];
-      if (view === "day") {
+      const out: { key: string; label: string; leftPct: number; isMainTick?: boolean }[] = [];
+      
+      if (zoomLevel === "day") {
         for (let d = new Date(min); d < max; d = addDays(d, 1)) {
           const left = ((d.getTime() - min.getTime()) / totalMs) * 100;
-          out.push({ key: d.toISOString(), label: fmt.format(d), leftPct: left });
+          const isMonday = d.getDay() === 1;
+          out.push({ 
+            key: d.toISOString(), 
+            label: fmtDay.format(d), 
+            leftPct: left,
+            isMainTick: isMonday
+          });
         }
-      } else if (view === "week") {
+      } else if (zoomLevel === "week") {
         for (let d = new Date(min); d < max; d = addWeeks(d, 1)) {
           const left = ((d.getTime() - min.getTime()) / totalMs) * 100;
-          const end = addDays(addWeeks(d,1), -1);
-          out.push({ key: d.toISOString(), label: `${fmt.format(d)} – ${fmt.format(end)}`, leftPct: left });
+          const isFirstOfMonth = d.getDate() <= 7;
+          out.push({ 
+            key: d.toISOString(), 
+            label: fmtWeek.format(d), 
+            leftPct: left,
+            isMainTick: isFirstOfMonth
+          });
         }
       } else {
         for (let d = new Date(min); d < max; d = addMonths(d, 1)) {
           const left = ((d.getTime() - min.getTime()) / totalMs) * 100;
-          out.push({ key: d.toISOString(), label: fmtMonth.format(d), leftPct: left });
+          out.push({ 
+            key: d.toISOString(), 
+            label: fmtMonth.format(d), 
+            leftPct: left,
+            isMainTick: true
+          });
         }
       }
       return out;
-    }, [min, max, totalMs, view]);
+    }, [min, max, totalMs, zoomLevel]);
 
     const barFor = (row: TimelineItem) => {
       const s = toDate(row.start_date);
@@ -156,71 +182,110 @@
       const leftPct = ((sMs - min.getTime()) / totalMs) * 100;
       const widthPct = Math.max(0.5, ((eMs - sMs) / totalMs) * 100);
       const c = colors[(row.status || "draft").toLowerCase()] || colors["draft"];
+      
       return (
-        <div className="relative h-5 w-full">
-          <div
-            className={`absolute h-2 rounded ${c}`}
-            style={{ left: `${leftPct}%`, width: `${widthPct}%`, top: "6px" }}
-            role="button"
-            aria-label={`${row.flight_name} ${row.start_date} to ${row.end_date}`}
-            onClick={() => onSelect?.(row)}
-            title={`${row.flight_name} (${row.start_date} → ${row.end_date})`}
-          />
+        <div
+          className={`absolute h-4 rounded-sm ${c} cursor-pointer hover:opacity-80 transition-opacity flex items-center px-1`}
+          style={{ left: `${leftPct}%`, width: `${widthPct}%`, top: "4px" }}
+          onClick={() => onSelect?.(row)}
+          title={`${row.flight_name} (${row.start_date} → ${row.end_date})`}
+        >
+          {widthPct > 8 && (
+            <span className="text-white text-xs font-medium truncate">
+              {row.flight_name}
+            </span>
+          )}
         </div>
       );
     };
 
     return (
-      <div className="w-full">
-        {/* header scale - aligned with timeline column */}
-        <div className="grid grid-cols-7 gap-2 px-3 mb-3">
-          <div className="col-span-5" /> {/* empty space for first 5 columns */}
-          <div className="col-span-2 relative h-8">
-            {ticks.map(t => (
-              <div
-                key={t.key}
-                className="absolute text-[10px] text-muted-foreground -translate-x-1/2"
-                style={{ left: `${t.leftPct}%` }}
-              >
-                {t.label}
-              </div>
-            ))}
-            <div className="absolute bottom-0 left-0 right-0 border-b border-border" />
-          </div>
+      <div className="w-full bg-background">
+        {/* Header with zoom control */}
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">Campaign Timeline</h3>
+          <button
+            onClick={handleZoomClick}
+            className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
+          >
+            {zoomLevel === "month" ? "Monthly View" : zoomLevel === "week" ? "Weekly View" : "Daily View"}
+          </button>
         </div>
 
-        {/* groups */}
-        <div className="space-y-6">
-          {groups.map(g => (
-            <div key={g.id} className="rounded-lg border">
-              <div className="px-3 py-2 text-sm font-medium">{g.name}</div>
-              <div className="divide-y">
-                {/* header row */}
-                <div className="grid grid-cols-7 gap-2 px-3 py-2 text-xs text-muted-foreground">
-                  <div>Flight</div>
-                  <div className="text-right">Impr.</div>
-                  <div className="text-right">Clicks</div>
-                  <div className="text-right">Conv.</div>
-                  <div className="text-right">Spend</div>
-                  <div className="col-span-2">Timeline</div>
+        <div className="border border-border rounded-lg overflow-hidden">
+          {/* Timeline header */}
+          <div className="flex bg-muted">
+            <div className="w-80 p-3 border-r border-border">
+              <div className="text-sm font-medium">Campaign / Flight</div>
+            </div>
+            <div className="flex-1 relative h-16">
+              {/* Grid lines */}
+              {ticks.map(t => (
+                <div
+                  key={`grid-${t.key}`}
+                  className={`absolute top-0 bottom-0 ${t.isMainTick ? 'border-l-2 border-border' : 'border-l border-border/50'}`}
+                  style={{ left: `${t.leftPct}%` }}
+                />
+              ))}
+              
+              {/* Timeline labels */}
+              {ticks.map(t => (
+                <div
+                  key={t.key}
+                  className={`absolute top-2 text-xs ${t.isMainTick ? 'font-medium text-foreground' : 'text-muted-foreground'}`}
+                  style={{ left: `${t.leftPct}%`, transform: 'translateX(-50%)' }}
+                >
+                  {t.label}
                 </div>
-                {g.rows.map(r => (
-                  <div key={r.flight_id} className="grid grid-cols-7 gap-2 items-center px-3 py-2">
-                    <div className="truncate">{r.flight_name}</div>
-                    <div className="text-right tabular-nums">{r.impressions?.toLocaleString?.() ?? "—"}</div>
-                    <div className="text-right tabular-nums">{r.clicks?.toLocaleString?.() ?? "—"}</div>
-                    <div className="text-right tabular-nums">{r.conversions?.toLocaleString?.() ?? "—"}</div>
-                    <div className="text-right tabular-nums">
-                      {typeof r.spend === "number"
-                        ? r.spend.toLocaleString(undefined, { style: "currency", currency: "EUR" })
-                        : "—"}
+              ))}
+            </div>
+          </div>
+
+          {/* Timeline body */}
+          <div className="divide-y divide-border">
+            {groups.map(group => (
+              <div key={group.id}>
+                {/* Campaign header */}
+                <div className="flex bg-muted/50">
+                  <div className="w-80 p-2 border-r border-border font-medium text-sm">
+                    {group.name}
+                  </div>
+                  <div className="flex-1" />
+                </div>
+                
+                {/* Flight rows */}
+                {group.rows.map(row => (
+                  <div key={row.flight_id} className="flex hover:bg-muted/25 transition-colors">
+                    <div className="w-80 p-3 border-r border-border">
+                      <div className="text-sm truncate">{row.flight_name}</div>
+                      <div className="flex gap-4 text-xs text-muted-foreground mt-1">
+                        <span>{row.impressions?.toLocaleString?.() ?? "—"} imp</span>
+                        <span>{row.clicks?.toLocaleString?.() ?? "—"} clicks</span>
+                        <span>
+                          {typeof row.spend === "number"
+                            ? row.spend.toLocaleString(undefined, { style: "currency", currency: "EUR" })
+                            : "—"}
+                        </span>
+                      </div>
                     </div>
-                    <div className="col-span-2">{barFor(r)}</div>
+                    <div className="flex-1 relative h-12">
+                      {/* Grid lines */}
+                      {ticks.map(t => (
+                        <div
+                          key={`row-grid-${t.key}`}
+                          className={`absolute top-0 bottom-0 ${t.isMainTick ? 'border-l border-border' : 'border-l border-border/30'}`}
+                          style={{ left: `${t.leftPct}%` }}
+                        />
+                      ))}
+                      
+                      {/* Flight bar */}
+                      {barFor(row)}
+                    </div>
                   </div>
                 ))}
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     );
