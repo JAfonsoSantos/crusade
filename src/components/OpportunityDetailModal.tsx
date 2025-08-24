@@ -71,19 +71,6 @@ export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate 
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
-
-  if (!opportunity) return null;
-
-  // NO useEffect - initialize data directly in render when needed
-  const currentEditData = isEditing ? editData : {
-    name: opportunity.name || "",
-    amount: opportunity.amount?.toString() || "",
-    stage: opportunity.stage || "",
-    probability: opportunity.probability?.toString() || "",
-    close_date: opportunity.close_date || "",
-    description: opportunity.description || "",
-  };
-
   const updateOpportunityMutation = useMutation({
     mutationFn: async (data: any) => {
       const { error } = await supabase
@@ -96,7 +83,7 @@ export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate 
           close_date: data.close_date || null,
           description: data.description || null,
         })
-        .eq("id", opportunity.id);
+        .eq("id", data.id);
 
       if (error) throw error;
     },
@@ -119,9 +106,21 @@ export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate 
   });
 
   const handleSave = () => {
-    updateOpportunityMutation.mutate(editData);
+    updateOpportunityMutation.mutate({ ...editData, id: opportunity?.id });
   };
 
+  // Ensure hooks run before any conditional return
+  if (!opportunity) return null;
+
+  // Compute view model after ensuring opportunity exists
+  const currentEditData = isEditing ? editData : {
+    name: opportunity.name || "",
+    amount: opportunity.amount?.toString() || "",
+    stage: opportunity.stage || "",
+    probability: opportunity.probability?.toString() || "",
+    close_date: opportunity.close_date || "",
+    description: opportunity.description || "",
+  };
   const handleEdit = () => {
     setEditData({
       name: opportunity.name || "",
