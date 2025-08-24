@@ -60,34 +60,29 @@ const PIPELINE_STAGES = [
 
 export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate }: OpportunityDetailModalProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [editData, setEditData] = useState({
-    name: "",
-    amount: "",
-    stage: "",
-    probability: "",
-    close_date: "",
-    description: "",
-  });
+  const [editData, setEditData] = useState(() => ({
+    name: opportunity?.name || "",
+    amount: opportunity?.amount?.toString() || "",
+    stage: opportunity?.stage || "",
+    probability: opportunity?.probability?.toString() || "",
+    close_date: opportunity?.close_date || "",
+    description: opportunity?.description || "",
+  }));
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   if (!opportunity) return null;
 
-  // Reset when modal opens - simplified without callbacks
-  React.useEffect(() => {
-    if (isOpen && opportunity) {
-      setEditData({
-        name: opportunity.name || "",
-        amount: opportunity.amount?.toString() || "",
-        stage: opportunity.stage || "",
-        probability: opportunity.probability?.toString() || "",
-        close_date: opportunity.close_date || "",
-        description: opportunity.description || "",
-      });
-      setIsEditing(false);
-    }
-  }, [isOpen]); // Only depend on modal open state
+  // NO useEffect - initialize data directly in render when needed
+  const currentEditData = isEditing ? editData : {
+    name: opportunity.name || "",
+    amount: opportunity.amount?.toString() || "",
+    stage: opportunity.stage || "",
+    probability: opportunity.probability?.toString() || "",
+    close_date: opportunity.close_date || "",
+    description: opportunity.description || "",
+  };
 
   const updateOpportunityMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -127,17 +122,19 @@ export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate 
     updateOpportunityMutation.mutate(editData);
   };
 
+  const handleEdit = () => {
+    setEditData({
+      name: opportunity.name || "",
+      amount: opportunity.amount?.toString() || "",
+      stage: opportunity.stage || "",
+      probability: opportunity.probability?.toString() || "",
+      close_date: opportunity.close_date || "",
+      description: opportunity.description || "",
+    });
+    setIsEditing(true);
+  };
+
   const handleCancel = () => {
-    if (opportunity) {
-      setEditData({
-        name: opportunity.name,
-        amount: opportunity.amount?.toString() || "",
-        stage: opportunity.stage,
-        probability: opportunity.probability?.toString() || "",
-        close_date: opportunity.close_date || "",
-        description: opportunity.description || "",
-      });
-    }
     setIsEditing(false);
   };
 
@@ -157,7 +154,7 @@ export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate 
           <DialogTitle className="text-2xl font-bold flex items-center justify-between">
             {isEditing ? (
               <Input
-                value={editData.name}
+                value={currentEditData.name}
                 onChange={(e) => setEditData(prev => ({ ...prev, name: e.target.value }))}
                 className="text-2xl font-bold border-none p-0 h-auto"
               />
@@ -175,7 +172,7 @@ export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate 
                   </Button>
                 </>
               ) : (
-                <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}>
+                <Button size="sm" variant="outline" onClick={handleEdit}>
                   <Edit className="h-4 w-4" />
                 </Button>
               )}
@@ -201,7 +198,7 @@ export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate 
                 {isEditing ? (
                   <Input
                     type="number"
-                    value={editData.amount}
+                    value={currentEditData.amount}
                     onChange={(e) => setEditData(prev => ({ ...prev, amount: e.target.value }))}
                     placeholder="0.00"
                     className="w-32 text-right"
@@ -217,7 +214,7 @@ export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate 
                 <span className="text-sm text-muted-foreground">Stage:</span>
                 {isEditing ? (
                   <Select 
-                    value={editData.stage} 
+                    value={currentEditData.stage} 
                     onValueChange={(value) => setEditData(prev => ({ ...prev, stage: value }))}
                   >
                     <SelectTrigger className="w-48">
@@ -245,7 +242,7 @@ export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate 
                     type="number"
                     min="0"
                     max="100"
-                    value={editData.probability}
+                    value={currentEditData.probability}
                     onChange={(e) => setEditData(prev => ({ ...prev, probability: e.target.value }))}
                     placeholder="50"
                     className="w-20 text-right"
@@ -262,7 +259,7 @@ export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate 
                 {isEditing ? (
                   <Input
                     type="date"
-                    value={editData.close_date}
+                    value={currentEditData.close_date}
                     onChange={(e) => setEditData(prev => ({ ...prev, close_date: e.target.value }))}
                     className="w-40"
                   />
@@ -289,7 +286,7 @@ export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate 
                     <span className="text-sm text-muted-foreground">Description:</span>
                     {isEditing ? (
                       <Textarea
-                        value={editData.description}
+                        value={currentEditData.description}
                         onChange={(e) => setEditData(prev => ({ ...prev, description: e.target.value }))}
                         placeholder="Enter description..."
                         className="mt-1"

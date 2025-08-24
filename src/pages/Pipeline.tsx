@@ -123,7 +123,7 @@ export default function Pipeline() {
       const defaultPipeline = pipelines.find(p => p.is_default) || pipelines[0];
       setSelectedPipelineId(defaultPipeline.id);
     }
-  }, [pipelines, selectedPipelineId]);
+  }, [pipelines.length]); // Only depend on length, not the full array
 
   // Fetch opportunities for selected pipeline
   const { data: opportunities = [], isLoading } = useQuery({
