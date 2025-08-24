@@ -1,4 +1,3 @@
-
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +8,21 @@ import FlightsGantt, { TimelineItem } from "@/components/FlightsGantt";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, RefreshCw } from "lucide-react";
 
-type GanttRow = TimelineItem;
+type GanttRow = {
+  company_id: string;
+  campaign_id: string;
+  campaign_name: string;
+  flight_id: string;
+  flight_name: string;
+  start_date: string;
+  end_date: string;
+  priority: number | null;
+  status: string | null;
+  impressions: number | null;
+  clicks: number | null;
+  conversions: number | null;
+  spend: number | null;
+};
 
 const CampaignsPage: React.FC = () => {
   const [items, setItems] = useState<TimelineItem[]>([]);
@@ -18,16 +31,20 @@ const CampaignsPage: React.FC = () => {
   const [syncing, setSyncing] = useState<boolean>(false);
   const [selected, setSelected] = useState<TimelineItem | null>(null);
 
+  // load data
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
         const { data: userRes } = await supabase.auth.getUser();
         const uid = userRes.user?.id;
-        if (!uid) { setItems([]); setLoading(false); return; }
-
+        if (!uid) {
+          setItems([]);
+          setLoading(false);
+          return;
+        }
         const { data: prof } = await supabase.from("profiles").select("company_id").eq("user_id", uid).single();
-        const cId = (prof as any)?.company_id;
+        const cId = prof?.company_id;
         if (!cId) { setItems([]); setLoading(false); return; }
 
         const { data, error } = await (supabase as any)
@@ -37,7 +54,20 @@ const CampaignsPage: React.FC = () => {
 
         if (error) console.error(error);
         const rows: GanttRow[] = (data as any) || [];
-        setItems(rows.map(r => ({ ...r })));
+        setItems(rows.map(r => ({
+          campaign_id: r.campaign_id,
+          campaign_name: r.campaign_name,
+          flight_id: r.flight_id,
+          flight_name: r.flight_name,
+          start_date: r.start_date,
+          end_date: r.end_date,
+          priority: r.priority ?? undefined,
+          status: r.status ?? undefined,
+          impressions: r.impressions ?? undefined,
+          clicks: r.clicks ?? undefined,
+          conversions: r.conversions ?? undefined,
+          spend: r.spend ?? undefined,
+        })));
       } finally {
         setLoading(false);
       }
@@ -110,6 +140,7 @@ const CampaignsPage: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* Flight modal */}
       <Dialog open={!!selected} onOpenChange={(v) => !v && setSelected(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -129,12 +160,10 @@ const CampaignsPage: React.FC = () => {
               </div>
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="text-muted-foreground">Impr.</div><div className="text-right tabular-nums">{selected.impressions ?? 0}</div>
-                  <div className="text-muted-foreground">Clicks</div><div className="text-right tabular-nums">{selected.clicks ?? 0}</div>
-                  <div className="text-muted-foreground">Conv.</div><div className="text-right tabular-nums">{selected.conversions ?? 0}</div>
-                  <div className="text-muted-foreground">Spend</div><div className="text-right tabular-nums">
-                    {typeof selected.spend === "number" ? selected.spend.toLocaleString(undefined, { style: "currency", currency: "EUR" }) : "€0"}
-                  </div>
+                  <div className="text-muted-foreground">Impr.</div><div className="text-right tabular-nums">{selected.impressions?.toLocaleString?.() ?? "0"}</div>
+                  <div className="text-muted-foreground">Clicks</div><div className="text-right tabular-nums">{selected.clicks?.toLocaleString?.() ?? "0"}</div>
+                  <div className="text-muted-foreground">Conv.</div><div className="text-right tabular-nums">{selected.conversions?.toLocaleString?.() ?? "0"}</div>
+                  <div className="text-muted-foreground">Spend</div><div className="text-right tabular-nums">{typeof selected.spend === "number" ? selected.spend.toLocaleString(undefined,{style:"currency",currency:"EUR"}) : "€0"}</div>
                 </div>
               </div>
             </div>
