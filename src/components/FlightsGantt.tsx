@@ -1,4 +1,5 @@
-  import React, { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
+import { ChevronRight, ChevronDown } from "lucide-react";
 
   export type TimelineItem = {
     company_id: string;
@@ -79,11 +80,24 @@
     onSelect,
   }: FlightsGanttProps) {
     const [zoomLevel, setZoomLevel] = useState<"month" | "week" | "day">("month");
+    const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
     
     const handleZoomClick = () => {
       if (zoomLevel === "month") setZoomLevel("week");
       else if (zoomLevel === "week") setZoomLevel("day");
       else setZoomLevel("month");
+    };
+
+    const toggleCampaign = (campaignId: string) => {
+      setExpandedCampaigns(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(campaignId)) {
+          newSet.delete(campaignId);
+        } else {
+          newSet.add(campaignId);
+        }
+        return newSet;
+      });
     };
 
     const filtered = useMemo(() => {
@@ -199,6 +213,38 @@
       );
     };
 
+    const campaignBarFor = (group: { id: string; name: string; rows: TimelineItem[] }) => {
+      const allDates = group.rows.flatMap(r => [toDate(r.start_date), toDate(r.end_date)]);
+      const s = new Date(Math.min(...allDates.map(d => d.getTime())));
+      const e = new Date(Math.max(...allDates.map(d => d.getTime())));
+      
+      const sMs = clamp(s.getTime(), min.getTime(), max.getTime());
+      const eMs = clamp(e.getTime(), min.getTime(), max.getTime());
+      const leftPct = ((sMs - min.getTime()) / totalMs) * 100;
+      const widthPct = Math.max(0.5, ((eMs - sMs) / totalMs) * 100);
+      
+      // Use mixed color for campaign bar
+      const c = "bg-primary";
+      
+      const totalImpressions = group.rows.reduce((sum, r) => sum + (r.impressions || 0), 0);
+      const totalClicks = group.rows.reduce((sum, r) => sum + (r.clicks || 0), 0);
+      const totalSpend = group.rows.reduce((sum, r) => sum + (r.spend || 0), 0);
+      
+      return (
+        <div
+          className={`absolute h-4 rounded-sm ${c} cursor-pointer hover:opacity-80 transition-opacity flex items-center px-1`}
+          style={{ left: `${leftPct}%`, width: `${widthPct}%`, top: "4px" }}
+          title={`${group.name} Campaign (${s.toISOString().split('T')[0]} → ${e.toISOString().split('T')[0]})`}
+        >
+          {widthPct > 8 && (
+            <span className="text-white text-xs font-medium truncate">
+              {group.rows.length} flights
+            </span>
+          )}
+        </div>
+      );
+    };
+
     return (
       <div className="w-full bg-background">
         {/* Header with zoom control */}
@@ -243,28 +289,35 @@
 
           {/* Timeline body */}
           <div className="divide-y divide-border">
-            {groups.map(group => (
-              <div key={group.id}>
-                {/* Campaign header */}
-                <div className="flex bg-muted/50">
-                  <div className="w-80 p-2 border-r border-border font-medium text-sm">
-                    {group.name}
-                  </div>
-                  <div className="flex-1" />
-                </div>
-                
-                {/* Flight rows */}
-                {group.rows.map(row => (
-                  <div key={row.flight_id} className="flex hover:bg-muted/25 transition-colors">
+            {groups.map(group => {
+              const isExpanded = expandedCampaigns.has(group.id);
+              const totalImpressions = group.rows.reduce((sum, r) => sum + (r.impressions || 0), 0);
+              const totalClicks = group.rows.reduce((sum, r) => sum + (r.clicks || 0), 0);
+              const totalSpend = group.rows.reduce((sum, r) => sum + (r.spend || 0), 0);
+              
+              return (
+                <div key={group.id}>
+                  {/* Campaign row */}
+                  <div className="flex hover:bg-muted/25 transition-colors">
                     <div className="w-80 p-3 border-r border-border">
-                      <div className="text-sm truncate">{row.flight_name}</div>
-                      <div className="flex gap-4 text-xs text-muted-foreground mt-1">
-                        <span>{row.impressions?.toLocaleString?.() ?? "—"} imp</span>
-                        <span>{row.clicks?.toLocaleString?.() ?? "—"} clicks</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => toggleCampaign(group.id)}
+                          className="p-0.5 hover:bg-muted/50 rounded"
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </button>
+                        <div className="text-sm font-medium truncate">{group.name}</div>
+                      </div>
+                      <div className="flex gap-4 text-xs text-muted-foreground mt-1 ml-6">
+                        <span>{totalImpressions.toLocaleString()} imp</span>
+                        <span>{totalClicks.toLocaleString()} clicks</span>
                         <span>
-                          {typeof row.spend === "number"
-                            ? row.spend.toLocaleString(undefined, { style: "currency", currency: "EUR" })
-                            : "—"}
+                          {totalSpend.toLocaleString(undefined, { style: "currency", currency: "EUR" })}
                         </span>
                       </div>
                     </div>
@@ -272,19 +325,50 @@
                       {/* Grid lines */}
                       {ticks.map(t => (
                         <div
-                          key={`row-grid-${t.key}`}
+                          key={`campaign-grid-${t.key}`}
                           className={`absolute top-0 bottom-0 ${t.isMainTick ? 'border-l border-border' : 'border-l border-border/30'}`}
                           style={{ left: `${t.leftPct}%` }}
                         />
                       ))}
                       
-                      {/* Flight bar */}
-                      {barFor(row)}
+                      {/* Campaign bar */}
+                      {campaignBarFor(group)}
                     </div>
                   </div>
-                ))}
-              </div>
-            ))}
+                  
+                  {/* Flight rows (when expanded) */}
+                  {isExpanded && group.rows.map(row => (
+                    <div key={row.flight_id} className="flex hover:bg-muted/25 transition-colors">
+                      <div className="w-80 p-3 border-r border-border">
+                        <div className="text-sm truncate ml-6">{row.flight_name}</div>
+                        <div className="flex gap-4 text-xs text-muted-foreground mt-1 ml-6">
+                          <span>{row.impressions?.toLocaleString?.() ?? "—"} imp</span>
+                          <span>{row.clicks?.toLocaleString?.() ?? "—"} clicks</span>
+                          <span>
+                            {typeof row.spend === "number"
+                              ? row.spend.toLocaleString(undefined, { style: "currency", currency: "EUR" })
+                              : "—"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex-1 relative h-12">
+                        {/* Grid lines */}
+                        {ticks.map(t => (
+                          <div
+                            key={`row-grid-${t.key}`}
+                            className={`absolute top-0 bottom-0 ${t.isMainTick ? 'border-l border-border' : 'border-l border-border/30'}`}
+                            style={{ left: `${t.leftPct}%` }}
+                          />
+                        ))}
+                        
+                        {/* Flight bar */}
+                        {barFor(row)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
