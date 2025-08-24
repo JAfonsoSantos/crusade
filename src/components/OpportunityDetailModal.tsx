@@ -74,20 +74,20 @@ export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate 
 
   if (!opportunity) return null;
 
-  // Reset editData when opportunity changes or when modal opens/editing starts
+  // Reset when modal opens - simplified without callbacks
   React.useEffect(() => {
-    if (opportunity && isOpen) {
+    if (isOpen && opportunity) {
       setEditData({
-        name: opportunity.name,
+        name: opportunity.name || "",
         amount: opportunity.amount?.toString() || "",
-        stage: opportunity.stage,
+        stage: opportunity.stage || "",
         probability: opportunity.probability?.toString() || "",
         close_date: opportunity.close_date || "",
         description: opportunity.description || "",
       });
-      setIsEditing(false); // Reset editing state when modal opens
+      setIsEditing(false);
     }
-  }, [opportunity?.id, isOpen]); // Only depend on opportunity ID and modal open state
+  }, [isOpen]); // Only depend on modal open state
 
   const updateOpportunityMutation = useMutation({
     mutationFn: async (data: any) => {
