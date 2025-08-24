@@ -1,150 +1,205 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 
-/** Tipos de dados usados no Gantt */
+/** Timeline row coming from the DB view */
 export type TimelineItem = {
-  company_id: string;
   campaign_id: string;
   campaign_name: string;
-
   flight_id: string;
   flight_name: string;
-
-  start_date: string; // "YYYY-MM-DD"
-  end_date: string;   // "YYYY-MM-DD"
-
+  start_date: string; // YYYY-MM-DD
+  end_date: string;   // YYYY-MM-DD
   priority?: number | null;
   status?: string | null;
-
   impressions?: number | null;
   clicks?: number | null;
   conversions?: number | null;
-
   spend?: number | null;
-  revenue?: number | null;
 };
 
 export type FlightsGanttProps = {
-  /** Linhas (todas da MESMA campanha quando usado pela página) */
   items: TimelineItem[];
-  /** Intervalo global (o mesmo para todas as campanhas) */
-  from: Date;
-  to: Date;
-  /** Callback ao clicar numa barra/linha */
+  /** Optional filter by campaign_id ("all" shows every campaign) */
+  campaignFilter?: string;
+  /** Optional callback when a bar is clicked */
   onSelect?: (t: TimelineItem) => void;
 };
 
-/** Utilitários */
-function parseISODay(d: string) {
-  // tolera "YYYY-MM-DD" e iso longos
-  const iso = d.length > 10 ? d.slice(0, 10) : d;
-  const [y, m, day] = iso.split("-").map(Number);
+/** --- Small date helpers --- */
+function parseISO(d: string) {
+  // tolerate YYYY-MM-DD or full ISO
+  const only = d.length >= 10 ? d.slice(0, 10) : d;
+  const [y, m, day] = only.split("-").map(Number);
   return new Date(y, (m || 1) - 1, day || 1);
 }
-function clamp(n: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, n));
-}
-function diffDays(a: Date, b: Date) {
+function daysBetween(a: Date, b: Date) {
   const ms = 1000 * 60 * 60 * 24;
   const aa = new Date(a.getFullYear(), a.getMonth(), a.getDate());
   const bb = new Date(b.getFullYear(), b.getMonth(), b.getDate());
   return Math.max(0, Math.round((bb.getTime() - aa.getTime()) / ms));
 }
+function clamp(n: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, n));
+}
 
-/** Cores por status */
-const STATUS_COLORS: Record<string, string> = {
-  active: "bg-emerald-500",
-  paused: "bg-amber-500",
-  draft: "bg-slate-300",
-  completed: "bg-blue-500",
+const STATUS_COLOR: Record<string, string> = {
+  active: "#16a34a",     // green-600
+  paused: "#f59e0b",     // amber-500
+  completed: "#3b82f6",  // blue-500
+  draft: "#a3a3a3",      // neutral-400
 };
 
-const numberOrDash = (n?: number | null) =>
-  typeof n === "number" ? n.toLocaleString() : "–";
+const FlightsGantt: React.FC<FlightsGanttProps> = ({
+  items,
+  campaignFilter = "all",
+  onSelect,
+}) => {
+  // ---- group rows by campaign ----
+  const grouped = useMemo(() => {
+    const selected = campaignFilter === "all"
+      ? items
+      : items.filter(i => i.campaign_id === campaignFilter);
 
-const moneyOrDash = (n?: number | null) =>
-  typeof n === "number" ? n.toLocaleString(undefined, { style: "currency", currency: "EUR" }) : "–";
+    const by = new Map<string, { name: string; rows: TimelineItem[] }>();
+    for (const it of selected) {
+      const key = it.campaign_id || it.campaign_name;
+      if (!by.has(key)) by.set(key, { name: it.campaign_name, rows: [] });
+      by.get(key)!.rows.push(it);
+    }
+    // sort rows within each campaign by start date + priority
+    for (const g of by.values()) {
+      g.rows.sort((a, b) => {
+        const ad = parseISO(a.start_date).getTime() - parseISO(b.start_date).getTime();
+        if (ad !== 0) return ad;
+        return (a.priority || 99) - (b.priority || 99);
+      });
+    }
+    // natural sort campaigns by name
+    return Array.from(by.entries())
+      .sort((a, b) => a[1].name.localeCompare(b[1].name))
+      .map(([id, g]) => ({ id, ...g }));
+  }, [items, campaignFilter]);
 
-/** Componente: renderiza as LINHAS (grid) para um conjunto de flights */
-const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, from, to, onSelect }) => {
-  const totalDays = useMemo(() => Math.max(1, diffDays(from, to)), [from, to]);
+  // ---- global time window for header scale ----
+  const { minDate, maxDate, totalDays, headerTicks } = useMemo(() => {
+    if (items.length === 0) {
+      const today = new Date();
+      const nextWeek = new Date(today); nextWeek.setDate(today.getDate() + 7);
+      return {
+        minDate: today,
+        maxDate: nextWeek,
+        totalDays: daysBetween(today, nextWeek),
+        headerTicks: [] as string[],
+      };
+    }
+    const starts = items.map(i => parseISO(i.start_date).getTime());
+    const ends = items.map(i => parseISO(i.end_date).getTime());
+    const min = new Date(Math.min(...starts));
+    const max = new Date(Math.max(...ends));
 
-  const Row: React.FC<{ row: TimelineItem }> = ({ row }) => {
-    const s = parseISODay(row.start_date);
-    const e = parseISODay(row.end_date);
+    const total = Math.max(1, daysBetween(min, max));
+    // build header ticks similar to the reference UI (weekly-ish / sparse)
+    const ticks: string[] = [];
+    const approx = 24; // around 24 labels
+    const step = Math.max(1, Math.round(total / approx));
+    for (let i = 0; i <= total; i += step) {
+      const d = new Date(min.getTime());
+      d.setDate(d.getDate() + i);
+      const day = d.getDate().toString().padStart(2, "0");
+      const mon = (d.getMonth() + 1).toString().padStart(2, "0");
+      ticks.push(`${day}/${mon}`);
+    }
+    return { minDate: min, maxDate: max, totalDays: total, headerTicks: ticks };
+  }, [items]);
 
-    const leftDays = clamp(diffDays(from, s), 0, totalDays);
-    const widthDays = Math.max(1, clamp(diffDays(s, e), 0, totalDays)); // pelo menos 1 dia para barra visível
+  // track expand/collapse per-campaign
+  const [open, setOpen] = useState<Record<string, boolean>>({});
 
+  const renderBar = (row: TimelineItem) => {
+    const s = parseISO(row.start_date);
+    const e = parseISO(row.end_date);
+    const leftDays = clamp(daysBetween(minDate, s), 0, totalDays);
+    const widthDays = clamp(daysBetween(s, e), 0, totalDays);
     const leftPct = (leftDays / totalDays) * 100;
-    const widthPct = (widthDays / totalDays) * 100;
-
-    const color =
-      STATUS_COLORS[(row.status || "").toLowerCase()] ?? STATUS_COLORS["draft"];
-
+    const widthPct = Math.max(1.5, (widthDays / totalDays) * 100);
+    const color = STATUS_COLOR[(row.status || "").toLowerCase()] ?? STATUS_COLOR["draft"];
     return (
-      <div
-        className="grid items-center py-3 border-t first:border-t-0"
-        style={{
-          gridTemplateColumns:
-            "minmax(160px, 1fr) 110px 100px 90px 130px minmax(260px, 3fr)",
-          columnGap: "12px",
-        }}
-      >
-        {/* Nome do flight + meta */}
-        <div className="min-w-0">
-          <div className="truncate font-medium">{row.flight_name}</div>
-          <div className="text-xs text-muted-foreground">
-            {row.start_date} → {row.end_date}
-          </div>
-        </div>
-
-        {/* Métricas */}
-        <div className="tabular-nums text-right">{numberOrDash(row.impressions)}</div>
-        <div className="tabular-nums text-right">{numberOrDash(row.clicks)}</div>
-        <div className="tabular-nums text-right">{numberOrDash(row.conversions)}</div>
-        <div className="tabular-nums text-right">{moneyOrDash(row.spend)}</div>
-
-        {/* Timeline */}
-        <div className="relative h-6 rounded bg-slate-100 overflow-hidden">
-          <div
-            className={`absolute top-1/2 -translate-y-1/2 h-2 rounded ${color} cursor-pointer`}
-            style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
-            title={`${row.flight_name} (${row.start_date} → ${row.end_date})`}
-            onClick={() => onSelect?.(row)}
-          />
-        </div>
+      <div className="relative w-full h-7">
+        <div
+          onClick={() => onSelect?.(row)}
+          className="absolute top-2 h-3 rounded-full cursor-pointer transition-opacity hover:opacity-85"
+          style={{ left: `${leftPct}%`, width: `${widthPct}%`, backgroundColor: color }}
+          title={`${row.flight_name} (${row.start_date} → ${row.end_date})`}
+        />
       </div>
     );
   };
 
   if (!items || items.length === 0) {
-    return <div className="text-sm text-muted-foreground">No flights.</div>;
+    return <div className="text-sm text-muted-foreground">No flights to display.</div>;
   }
 
   return (
     <div className="w-full">
-      {/* Cabeçalho das colunas */}
-      <div
-        className="grid text-xs text-muted-foreground pb-2"
-        style={{
-          gridTemplateColumns:
-            "minmax(160px, 1fr) 110px 100px 90px 130px minmax(260px, 3fr)",
-          columnGap: "12px",
-        }}
-      >
-        <div>Flight</div>
-        <div className="text-right">Impr.</div>
-        <div className="text-right">Clicks</div>
-        <div className="text-right">Conv.</div>
-        <div className="text-right">Spend</div>
-        <div className="text-right pr-1">Timeline</div>
+      {/* Header axis */}
+      <div className="flex flex-wrap gap-4 text-[11px] text-muted-foreground mb-4">
+        {headerTicks.map((t, i) => (
+          <span key={i} className="tabular-nums">{t}</span>
+        ))}
       </div>
 
-      {/* Linhas */}
-      <div className="divide-y rounded-md border bg-white">
-        {items.map((it) => (
-          <Row key={it.flight_id} row={it} />
-        ))}
+      {/* Campaign groups */}
+      <div className="space-y-6">
+        {grouped.map(g => {
+          const isOpen = open[g.id] ?? true;
+          return (
+            <div key={g.id} className="rounded-xl border">
+              <div className="flex items-center justify-between px-4 py-3">
+                <div className="font-medium">{g.name}</div>
+                <button
+                  className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-2"
+                  onClick={() => setOpen(o => ({ ...o, [g.id]: !isOpen }))}
+                >
+                  {isOpen ? "Collapse" : "Expand"}
+                </button>
+              </div>
+
+              {isOpen && (
+                <div className="px-4 pb-4">
+                  {/* header row */}
+                  <div className="grid grid-cols-[minmax(180px,1fr)_100px_100px_100px_140px_minmax(240px,1fr)] gap-3 px-2 py-2 text-xs text-muted-foreground">
+                    <div>Flight</div>
+                    <div className="text-right">Impr.</div>
+                    <div className="text-right">Clicks</div>
+                    <div className="text-right">Conv.</div>
+                    <div className="text-right">Spend</div>
+                    <div>Timeline</div>
+                  </div>
+
+                  {g.rows.map(r => (
+                    <div
+                      key={r.flight_id}
+                      className="grid grid-cols-[minmax(180px,1fr)_100px_100px_100px_140px_minmax(240px,1fr)] gap-3 items-center rounded-md px-2 py-3 hover:bg-muted/40"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate">{r.flight_name}</div>
+                        <div className="text-[11px] text-muted-foreground">{r.start_date} → {r.end_date}</div>
+                      </div>
+                      <div className="text-right tabular-nums">{r.impressions?.toLocaleString?.() ?? 0}</div>
+                      <div className="text-right tabular-nums">{r.clicks?.toLocaleString?.() ?? 0}</div>
+                      <div className="text-right tabular-nums">{r.conversions?.toLocaleString?.() ?? 0}</div>
+                      <div className="text-right tabular-nums">
+                        {typeof r.spend === "number"
+                          ? r.spend.toLocaleString(undefined, { style: "currency", currency: "EUR" })
+                          : "€0.00"}
+                      </div>
+                      <div>{renderBar(r)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
