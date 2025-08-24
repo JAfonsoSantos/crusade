@@ -1,8 +1,6 @@
-
 import React, { useMemo, useState } from "react";
 
 export type TimelineItem = {
-  company_id: string;
   campaign_id: string;
   campaign_name: string;
   flight_id: string;
@@ -23,9 +21,9 @@ export type FlightsGanttProps = {
   onSelect?: (t: TimelineItem) => void;
 };
 
+// utils
 function parseISO(d: string) {
-  const only = d.length >= 10 ? d.slice(0, 10) : d;
-  const [y, m, day] = only.split("-").map((n) => Number(n));
+  const [y, m, day] = (d.length === 10 ? d : d.slice(0, 10)).split("-").map(Number);
   return new Date(y, (m || 1) - 1, day || 1);
 }
 
@@ -36,131 +34,147 @@ function daysBetween(a: Date, b: Date) {
   return Math.max(0, Math.round((bb.getTime() - aa.getTime()) / ms));
 }
 
+function clamp(n: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, n));
+}
+
 const STATUS_COLOR: Record<string, string> = {
-  active: "bg-emerald-500",
-  paused: "bg-amber-500",
-  draft: "bg-slate-300",
-  completed: "bg-sky-500",
+  active: "bg-green-500",
+  paused: "bg-amber-400",
+  draft: "bg-gray-300",
+  completed: "bg-blue-500",
 };
 
 const FlightsGantt: React.FC<FlightsGanttProps> = ({ items, campaignFilter = "all", onSelect }) => {
-  // Group by campaign
-  const groups = useMemo(() => {
-    const map = new Map<string, { name: string; rows: TimelineItem[] }>();
-    for (const it of items) {
-      if (campaignFilter !== "all" && it.campaign_id !== campaignFilter) continue;
-      const key = it.campaign_id;
-      if (!map.has(key)) map.set(key, { name: it.campaign_name, rows: [] });
-      map.get(key)!.rows.push(it);
-    }
-    return Array.from(map.entries()).map(([id, g]) => ({
-      id, name: g.name, rows: g.rows.sort((a, b) => (a.priority || 99) - (b.priority || 99)),
-    })).sort((a, b) => a.name.localeCompare(b.name));
+  // filter by campaign if needed
+  const filtered = useMemo(() => {
+    if (!items || !Array.isArray(items)) return [];
+    return campaignFilter === "all" ? items : items.filter(i => i.campaign_id === campaignFilter);
   }, [items, campaignFilter]);
 
-  // Global range for header ticks
-  const { start, end, ticks, total } = useMemo(() => {
-    if (items.length === 0) {
-      const today = new Date();
-      const end = new Date(today.getTime() + 7 * 86400000);
-      return { start: today, end, total: 7, ticks: [] as string[] };
+  // campaign -> rows
+  const grouped = useMemo(() => {
+    const m = new Map<string, { name: string; rows: TimelineItem[]; open: boolean }>();
+    for (const it of filtered) {
+      if (!m.has(it.campaign_id)) m.set(it.campaign_id, { name: it.campaign_name, rows: [], open: false });
+      m.get(it.campaign_id)!.rows.push(it);
     }
-    const min = new Date(Math.min(...items.map((i) => parseISO(i.start_date).getTime())));
-    const max = new Date(Math.max(...items.map((i) => parseISO(i.end_date).getTime())));
-    const totalDays = Math.max(1, daysBetween(min, max));
+    return Array.from(m.entries()).map(([id, g]) => ({ id, ...g }));
+  }, [filtered]);
+
+  // viewport: min start to max end across filtered
+  const { start, end, totalDays, ticks } = useMemo(() => {
+    const s = filtered.map(i => parseISO(i.start_date));
+    const e = filtered.map(i => parseISO(i.end_date));
+    const min = s.length ? new Date(Math.min(...s.map(d => d.getTime()))) : new Date();
+    const max = e.length ? new Date(Math.max(...e.map(d => d.getTime()))) : new Date(min.getTime() + 7 * 86400000);
+    const total = Math.max(1, daysBetween(min, max));
     const labels: string[] = [];
-    const step = Math.max(1, Math.floor(totalDays / 14)); // up to 14 ticks
-    for (let i = 0; i <= totalDays; i += step) {
-      const d = new Date(min.getTime());
-      d.setDate(d.getDate() + i);
-      labels.push(`${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`);
+    // pick ~14 evenly spaced ticks
+    const step = Math.max(1, Math.floor(total / 14));
+    for (let i = 0; i <= total; i += step) {
+      const d = new Date(min.getTime()); d.setDate(d.getDate() + i);
+      labels.push(`${d.toLocaleDateString(undefined, { day: "2-digit", month: "2-digit" })}`);
     }
-    return { start: min, end: max, ticks: labels, total: totalDays };
-  }, [items]);
+    return { start: min, end: max, totalDays: total, ticks: labels };
+  }, [filtered]);
 
-  // Collapsed state by campaign id
-  const [open, setOpen] = useState<Record<string, boolean>>({});
-
-  const bar = (row: TimelineItem) => {
+  const Bar: React.FC<{ row: TimelineItem }> = ({ row }) => {
     const s = parseISO(row.start_date);
     const e = parseISO(row.end_date);
-    const leftDays = Math.max(0, daysBetween(start, s));
-    const widthDays = Math.max(1, daysBetween(s, e));
-    const leftPct = (leftDays / (total || 1)) * 100;
-    const widthPct = (widthDays / (total || 1)) * 100;
-    const color = STATUS_COLOR[(row.status || "draft").toLowerCase()] || STATUS_COLOR["draft"];
+    const leftDays = clamp(daysBetween(start, s), 0, totalDays);
+    const widthDays = clamp(daysBetween(s, e), 0, totalDays);
+    const leftPct = (leftDays / totalDays) * 100;
+    const widthPct = Math.max(1, (widthDays / totalDays) * 100);
+    const color = STATUS_COLOR[(row.status || "").toLowerCase()] || STATUS_COLOR["draft"];
     return (
       <div className="relative h-6">
         <div
-          className={`absolute h-3 rounded ${color}`}
-          style={{ left: `${leftPct}%`, width: `${widthPct}%`, top: "6px" }}
+          className={`absolute top-1 h-3 rounded ${color}`}
+          style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
           title={`${row.flight_name} (${row.start_date} → ${row.end_date})`}
-          onClick={() => onSelect && onSelect(row)}
-          role={onSelect ? "button" : undefined}
         />
       </div>
     );
   };
 
-  if (!items || items.length === 0) {
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+
+  const toggle = (id: string) => setOpen((p) => ({ ...p, [id]: !p[id] }));
+
+  if (!filtered.length) {
     return <div className="text-sm text-muted-foreground">No flights to display.</div>;
   }
 
   return (
-    <div className="w-full space-y-6">
-      {/* header ticks */}
-      <div className="flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
+    <div className="w-full">
+      {/* timeline ticks */}
+      <div className="mb-3 flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
         {ticks.map((t, i) => (
           <span key={i} className="tabular-nums">{t}</span>
         ))}
       </div>
 
-      {/* groups */}
-      {groups.map((g) => {
-        const isOpen = open[g.id] ?? false;
-        return (
+      <div className="space-y-6">
+        {grouped.sort((a,b) => a.name.localeCompare(b.name)).map(g => (
           <div key={g.id} className="rounded-lg border">
-            <div className="flex items-center justify-between p-3">
+            <div className="flex items-center justify-between p-4">
               <div className="font-medium">{g.name}</div>
               <button
-                className="text-xs underline text-muted-foreground"
-                onClick={() => setOpen((p) => ({ ...p, [g.id]: !isOpen }))}
+                onClick={() => toggle(g.id)}
+                className="text-sm text-primary hover:underline focus:outline-none"
               >
-                {isOpen ? "Collapse" : "Expand"}
+                {open[g.id] ? "Collapse" : "Expand"}
               </button>
             </div>
-            {isOpen && (
-              <div className="px-3 pb-3">
-                <div className="grid grid-cols-12 gap-2 text-xs text-muted-foreground px-2 py-1">
-                  <div className="col-span-4">Flight</div>
-                  <div className="col-span-1 text-right">Impr.</div>
-                  <div className="col-span-1 text-right">Clicks</div>
-                  <div className="col-span-1 text-right">Conv.</div>
-                  <div className="col-span-2 text-right">Spend</div>
-                  <div className="col-span-3">Timeline</div>
+
+            {open[g.id] && (
+              <div className="px-4 pb-4">
+                {/* header row */}
+                <div className="grid grid-cols-[minmax(180px,1fr)_90px_90px_90px_140px_minmax(220px,1.5fr)] items-center px-2 py-2 text-xs text-muted-foreground">
+                  <div>Flight</div>
+                  <div className="text-right">Impr.</div>
+                  <div className="text-right">Clicks</div>
+                  <div className="text-right">Conv.</div>
+                  <div className="text-right">Spend</div>
+                  <div>Timeline</div>
                 </div>
+
                 <div className="divide-y">
-                  {g.rows.map((r) => (
-                    <div key={r.flight_id} className="grid grid-cols-12 gap-2 items-center px-2 py-2">
-                      <div className="col-span-4">
-                        <div className="font-medium truncate">{r.flight_name}</div>
-                        <div className="text-[10px] text-muted-foreground">{r.start_date} → {r.end_date}</div>
-                      </div>
-                      <div className="col-span-1 text-right tabular-nums">{r.impressions ?? 0}</div>
-                      <div className="col-span-1 text-right tabular-nums">{r.clicks ?? 0}</div>
-                      <div className="col-span-1 text-right tabular-nums">{r.conversions ?? 0}</div>
-                      <div className="col-span-2 text-right tabular-nums">
-                        {typeof r.spend === "number" ? r.spend.toLocaleString(undefined, { style: "currency", currency: "EUR" }) : "€0"}
-                      </div>
-                      <div className="col-span-3">{bar(r)}</div>
-                    </div>
-                  ))}
+                  {g.rows
+                    .slice()
+                    .sort((a, b) => (a.priority || 99) - (b.priority || 99))
+                    .map(row => (
+                      <button
+                        key={row.flight_id}
+                        onClick={() => onSelect?.(row)}
+                        className="w-full text-left hover:bg-muted/40 focus:bg-muted/40 rounded transition"
+                      >
+                        <div className="grid grid-cols-[minmax(180px,1fr)_90px_90px_90px_140px_minmax(220px,1.5fr)] items-center px-2 py-3">
+                          <div>
+                            <div className="font-medium">{row.flight_name}</div>
+                            <div className="text-[11px] text-muted-foreground">
+                              {row.start_date} → {row.end_date}
+                            </div>
+                          </div>
+                          <div className="text-right tabular-nums">{row.impressions?.toLocaleString?.() ?? "0"}</div>
+                          <div className="text-right tabular-nums">{row.clicks?.toLocaleString?.() ?? "0"}</div>
+                          <div className="text-right tabular-nums">{row.conversions?.toLocaleString?.() ?? "0"}</div>
+                          <div className="text-right tabular-nums">
+                            {typeof row.spend === "number"
+                              ? row.spend.toLocaleString(undefined, { style: "currency", currency: "EUR" })
+                              : "€0"}
+                          </div>
+                          <div><Bar row={row} /></div>
+                        </div>
+                      </button>
+                    ))}
                 </div>
               </div>
             )}
           </div>
-        );
-      })}
+        ))}
+      </div>
     </div>
   );
 };
