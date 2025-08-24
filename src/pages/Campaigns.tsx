@@ -86,9 +86,6 @@
             <h2 className="text-3xl font-bold tracking-tight">Campaigns & Flights</h2>
             <p className="text-muted-foreground">Manage campaigns and analyze performance</p>
           </div>
-          <Button variant="outline" onClick={syncAll} disabled={syncing}>
-            {syncing ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Syncing…</>) : (<><RefreshCw className="mr-2 h-4 w-4" /> Sync with Platforms</>)}
-          </Button>
         </div>
 
         <Card>

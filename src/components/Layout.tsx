@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { supabase } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
-import { LayoutDashboard, Target, Megaphone, Settings, ChevronDown, User as UserIcon, Building2, LogOut, Users, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, Target, Megaphone, Settings, ChevronDown, User as UserIcon, Building2, LogOut, Users, TrendingUp, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const Layout = () => {
@@ -101,6 +101,14 @@ const Layout = () => {
           </nav>
           
           <div className="flex flex-1 items-center justify-end space-x-2">
+            <Button 
+              variant="ghost" 
+              size="sm"
+              className="h-8 w-8 p-0"
+              title="Sync with Platforms"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center space-x-2">
