@@ -958,12 +958,14 @@ export type Database = {
         Row: {
           advertiser_id: string | null
           amount: number | null
+          campaign_id: string | null
           close_date: string | null
           company_id: string
           created_at: string
           created_by: string | null
           currency: string | null
           description: string | null
+          flight_id: string | null
           id: string
           last_activity_date: string | null
           name: string
@@ -977,12 +979,14 @@ export type Database = {
         Insert: {
           advertiser_id?: string | null
           amount?: number | null
+          campaign_id?: string | null
           close_date?: string | null
           company_id: string
           created_at?: string
           created_by?: string | null
           currency?: string | null
           description?: string | null
+          flight_id?: string | null
           id?: string
           last_activity_date?: string | null
           name: string
@@ -996,12 +1000,14 @@ export type Database = {
         Update: {
           advertiser_id?: string | null
           amount?: number | null
+          campaign_id?: string | null
           close_date?: string | null
           company_id?: string
           created_at?: string
           created_by?: string | null
           currency?: string | null
           description?: string | null
+          flight_id?: string | null
           id?: string
           last_activity_date?: string | null
           name?: string
@@ -1019,6 +1025,125 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "advertisers"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "mv_campaign_pacing"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "opportunities_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "mv_campaign_performance"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "opportunities_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "mv_gantt_items"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "opportunities_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_campaign_pacing"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "opportunities_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_campaign_performance"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "opportunities_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_campaign_totals"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "opportunities_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_flights_gantt"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "opportunities_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_gantt_items"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "opportunities_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "v_gantt_items_fast"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "opportunities_flight_id_fkey"
+            columns: ["flight_id"]
+            isOneToOne: false
+            referencedRelation: "flights"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_flight_id_fkey"
+            columns: ["flight_id"]
+            isOneToOne: false
+            referencedRelation: "mv_flight_performance"
+            referencedColumns: ["flight_id"]
+          },
+          {
+            foreignKeyName: "opportunities_flight_id_fkey"
+            columns: ["flight_id"]
+            isOneToOne: false
+            referencedRelation: "mv_gantt_items"
+            referencedColumns: ["flight_id"]
+          },
+          {
+            foreignKeyName: "opportunities_flight_id_fkey"
+            columns: ["flight_id"]
+            isOneToOne: false
+            referencedRelation: "v_flight_performance"
+            referencedColumns: ["flight_id"]
+          },
+          {
+            foreignKeyName: "opportunities_flight_id_fkey"
+            columns: ["flight_id"]
+            isOneToOne: false
+            referencedRelation: "v_flights_gantt"
+            referencedColumns: ["flight_id"]
+          },
+          {
+            foreignKeyName: "opportunities_flight_id_fkey"
+            columns: ["flight_id"]
+            isOneToOne: false
+            referencedRelation: "v_gantt_items"
+            referencedColumns: ["flight_id"]
+          },
+          {
+            foreignKeyName: "opportunities_flight_id_fkey"
+            columns: ["flight_id"]
+            isOneToOne: false
+            referencedRelation: "v_gantt_items_fast"
+            referencedColumns: ["flight_id"]
           },
         ]
       }
