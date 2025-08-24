@@ -6,7 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
-import Dashboard from "./pages/Dashboard";
+import Pipeline from "./pages/Pipeline";
 import Spaces from "./pages/Spaces";
 import Campaigns from "./pages/Campaigns";
 import Integrations from "./pages/Integrations";
@@ -29,7 +29,7 @@ const App = () => (
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/" element={<Layout />}>
             <Route index element={<Index />} />
-            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="pipeline" element={<Pipeline />} />
             <Route path="spaces" element={<Spaces />} />
             <Route path="campaigns" element={<Campaigns />} />
             <Route path="integrations" element={<Integrations />} />
