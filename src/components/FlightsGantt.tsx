@@ -1,224 +1,164 @@
-import React, { useMemo, useState } from "react";
+  import React, { useEffect, useMemo, useState } from "react";
+  import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+  import { Badge } from "@/components/ui/badge";
+  import { Button } from "@/components/ui/button";
+  import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+  import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+  import { Loader2, RefreshCw } from "lucide-react";
+  import FlightsGantt, { TimelineItem } from "@/components/FlightsGantt";
+  import { supabase } from "@/integrations/supabase/client";
 
-export type TimelineItem = {
-  company_id: string;
-  campaign_id: string;
-  campaign_name: string;
-  flight_id: string;
-  flight_name: string;
-  start_date: string; // YYYY-MM-DD
-  end_date: string;   // YYYY-MM-DD
-  priority?: number | null;
-  status?: string | null;
-  impressions?: number | null;
-  clicks?: number | null;
-  conversions?: number | null;
-  spend?: number | null;
-};
+  type GanttRow = {
+    company_id: string;
+    campaign_id: string;
+    campaign_name: string;
+    flight_id: string;
+    flight_name: string;
+    start_date: string;
+    end_date: string;
+    priority: number | null;
+    status: string | null;
+    impressions: number | null;
+    clicks: number | null;
+    conversions: number | null;
+    spend: number | null;
+  };
 
-export type FlightsGanttProps = {
-  items: TimelineItem[];
-  /** optional campaign filter (id) */
-  campaignFilter?: string;
-  /** drilldown: month | week | day */
-  view?: "month" | "week" | "day";
-  /** when a bar (flight) is clicked */
-  onSelect?: (t: TimelineItem) => void;
-};
+  const CampaignsPage: React.FC = () => {
+    const [items, setItems] = useState<TimelineItem[]>([]);
+    const [campaignFilter, setCampaignFilter] = useState<string>("all");
+    const [loading, setLoading] = useState<boolean>(true);
+    const [syncing, setSyncing] = useState<boolean>(false);
+    const [selected, setSelected] = useState<TimelineItem | null>(null);
 
-// ---- utils
-const DAY_MS = 86400000;
-const toDate = (iso: string) => {
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y, (m || 1) - 1, d || 1);
-};
-const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
-const fmt = new Intl.DateTimeFormat(undefined, { month: "short", day: "2-digit" });
-const fmtMonth = new Intl.DateTimeFormat(undefined, { month: "short" });
-const colors: Record<string, string> = {
-  active: "bg-emerald-500",
-  paused: "bg-amber-500",
-  draft: "bg-slate-400",
-  completed: "bg-blue-500",
-};
+    // load data
+    useEffect(() => {
+      (async () => {
+        setLoading(true);
+        try {
+          const { data: userRes } = await supabase.auth.getUser();
+          const uid = userRes.user?.id;
+          if (!uid) {
+            setItems([]);
+            setLoading(false);
+            return;
+          }
+          const { data: prof } = await supabase.from("profiles").select("company_id").eq("user_id", uid).single();
+          const cId = prof?.company_id;
+          if (!cId) { setItems([]); setLoading(false); return; }
 
-function startOfWeek(d: Date) {
-  const nd = new Date(d);
-  const dow = nd.getDay(); // 0..6
-  const diff = (dow + 6) % 7; // make Monday=0
-  nd.setDate(nd.getDate() - diff);
-  nd.setHours(0,0,0,0);
-  return nd;
-}
+          const { data, error } = await (supabase as any)
+            .from("v_gantt_items_fast")
+            .select("company_id,campaign_id,campaign_name,flight_id,flight_name,start_date,end_date,priority,status,impressions,clicks,conversions,spend")
+            .eq("company_id", cId);
 
-function startOfMonth(d: Date) {
-  const nd = new Date(d.getFullYear(), d.getMonth(), 1);
-  nd.setHours(0,0,0,0);
-  return nd;
-}
+          if (error) console.error(error);
+          const rows: GanttRow[] = (data as any) || [];
+          setItems(rows.map(r => ({ ...r })));
+        } finally {
+          setLoading(false);
+        }
+      })();
+    }, []);
 
-function addDays(d: Date, n: number) {
-  const nd = new Date(d);
-  nd.setDate(nd.getDate() + n);
-  return nd;
-}
+    const campaigns = useMemo(() => {
+      const m = new Map<string, string>();
+      for (const it of items) m.set(it.campaign_id, it.campaign_name);
+      return Array.from(m.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+    }, [items]);
 
-function addWeeks(d: Date, n: number) {
-  return addDays(d, n*7);
-}
-
-function addMonths(d: Date, n: number) {
-  const nd = new Date(d);
-  nd.setMonth(nd.getMonth() + n);
-  return nd;
-}
-
-export default function FlightsGantt({
-  items,
-  campaignFilter,
-  view = "month",
-  onSelect,
-}: FlightsGanttProps) {
-  const filtered = useMemo(() => {
-    const arr = campaignFilter && campaignFilter !== "all"
-      ? items.filter(i => i.campaign_id === campaignFilter)
-      : items.slice();
-    return arr.sort((a, b) => (a.campaign_name || "").localeCompare(b.campaign_name || ""));
-  }, [items, campaignFilter]);
-
-  // groups by campaign
-  const groups = useMemo(() => {
-    const m = new Map<string, { name: string; rows: TimelineItem[] }>();
-    for (const it of filtered) {
-      const k = it.campaign_id || it.campaign_name;
-      if (!m.has(k)) m.set(k, { name: it.campaign_name, rows: [] });
-      m.get(k)!.rows.push(it);
-    }
-    // sort rows by start date
-    for (const g of m.values()) {
-      g.rows.sort((a,b) => toDate(a.start_date).getTime() - toDate(b.start_date).getTime());
-    }
-    return Array.from(m.entries()).map(([id, g]) => ({ id, ...g }));
-  }, [filtered]);
-
-  // viewport (shared for header + bars)
-  const { min, max } = useMemo(() => {
-    if (!filtered.length) {
-      const today = new Date();
-      return { min: startOfMonth(today), max: addMonths(startOfMonth(today), 1) };
-    }
-    const s = Math.min(...filtered.map(r => toDate(r.start_date).getTime()));
-    const e = Math.max(...filtered.map(r => toDate(r.end_date).getTime()));
-    let minD = new Date(s);
-    let maxD = new Date(e);
-    if (view === "day") {
-      minD = startOfWeek(minD);
-      maxD = addWeeks(startOfWeek(maxD), 1);
-    } else if (view === "week") {
-      minD = startOfWeek(minD);
-      maxD = addWeeks(startOfWeek(maxD), 1);
-    } else { // month
-      minD = startOfMonth(minD);
-      maxD = addMonths(startOfMonth(maxD), 1);
-    }
-    return { min: minD, max: maxD };
-  }, [filtered, view]);
-
-  const totalMs = Math.max(1, max.getTime() - min.getTime());
-
-  const ticks = useMemo(() => {
-    const out: { key: string; label: string; leftPct: number }[] = [];
-    if (view === "day") {
-      for (let d = new Date(min); d < max; d = addDays(d, 1)) {
-        const left = ((d.getTime() - min.getTime()) / totalMs) * 100;
-        out.push({ key: d.toISOString(), label: fmt.format(d), leftPct: left });
+    const syncAll = async () => {
+      setSyncing(true);
+      try {
+        const { error } = await supabase.functions.invoke("auto-sync-kevel");
+        if (error) throw error;
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setSyncing(false);
       }
-    } else if (view === "week") {
-      for (let d = new Date(min); d < max; d = addWeeks(d, 1)) {
-        const left = ((d.getTime() - min.getTime()) / totalMs) * 100;
-        const end = addDays(addWeeks(d,1), -1);
-        out.push({ key: d.toISOString(), label: `${fmt.format(d)} – ${fmt.format(end)}`, leftPct: left });
-      }
-    } else {
-      for (let d = new Date(min); d < max; d = addMonths(d, 1)) {
-        const left = ((d.getTime() - min.getTime()) / totalMs) * 100;
-        out.push({ key: d.toISOString(), label: fmtMonth.format(d), leftPct: left });
-      }
-    }
-    return out;
-  }, [min, max, totalMs, view]);
+    };
 
-  const barFor = (row: TimelineItem) => {
-    const s = toDate(row.start_date);
-    const e = toDate(row.end_date);
-    const sMs = clamp(s.getTime(), min.getTime(), max.getTime());
-    const eMs = clamp(e.getTime(), min.getTime(), max.getTime());
-    const leftPct = ((sMs - min.getTime()) / totalMs) * 100;
-    const widthPct = Math.max(0.5, ((eMs - sMs) / totalMs) * 100);
-    const c = colors[(row.status || "draft").toLowerCase()] || colors["draft"];
     return (
-      <div className="relative h-5 w-full">
-        <div
-          className={`absolute h-2 rounded ${c}`}
-          style={{ left: `${leftPct}%`, width: `${widthPct}%`, top: "6px" }}
-          role="button"
-          aria-label={`${row.flight_name} ${row.start_date} to ${row.end_date}`}
-          onClick={() => onSelect?.(row)}
-          title={`${row.flight_name} (${row.start_date} → ${row.end_date})`}
-        />
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">Campaigns & Flights</h2>
+            <p className="text-muted-foreground">Manage campaigns and analyze performance</p>
+          </div>
+          <Button variant="outline" onClick={syncAll} disabled={syncing}>
+            {syncing ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Syncing…</>) : (<><RefreshCw className="mr-2 h-4 w-4" /> Sync with Platforms</>)}
+          </Button>
+        </div>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Timeline</CardTitle>
+              <CardDescription>Gantt by campaign</CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline">{items.length} rows</Badge>
+              <Select value={campaignFilter} onValueChange={(v) => setCampaignFilter(v)}>
+                <SelectTrigger className="w-[220px]">
+                  <SelectValue placeholder="All campaigns" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All campaigns</SelectItem>
+                  {campaigns.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="text-sm text-muted-foreground flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading timeline…
+              </div>
+            ) : (
+              <FlightsGantt
+                items={items}
+                campaignFilter={campaignFilter}
+                onSelect={(t) => setSelected(t)}
+              />
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Flight modal */}
+        <Dialog open={!!selected} onOpenChange={(v) => !v && setSelected(null)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{selected?.flight_name}</DialogTitle>
+            </DialogHeader>
+            {selected && (
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <div className="text-sm text-muted-foreground">Campaign</div>
+                  <div className="font-medium">{selected.campaign_name}</div>
+                  <div className="text-sm text-muted-foreground mt-4">Dates</div>
+                  <div className="font-medium">{selected.start_date} → {selected.end_date}</div>
+                  <div className="flex gap-2 mt-4">
+                    {typeof selected.priority === "number" && <Badge variant="outline">prio {selected.priority}</Badge>}
+                    {selected.status && <Badge className="capitalize">{selected.status}</Badge>}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="text-muted-foreground">Impr.</div><div className="text-right tabular-nums">{selected.impressions?.toLocaleString?.() ?? "0"}</div>
+                    <div className="text-muted-foreground">Clicks</div><div className="text-right tabular-nums">{selected.clicks?.toLocaleString?.() ?? "0"}</div>
+                    <div className="text-muted-foreground">Conv.</div><div className="text-right tabular-nums">{selected.conversions?.toLocaleString?.() ?? "0"}</div>
+                    <div className="text-muted-foreground">Spend</div><div className="text-right tabular-nums">{typeof selected.spend === "number" ? selected.spend.toLocaleString(undefined,{style:"currency",currency:"EUR"}) : "€0"}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     );
   };
 
-  return (
-    <div className="w-full">
-      {/* header scale */}
-      <div className="relative mb-3 h-8">
-        {ticks.map(t => (
-          <div
-            key={t.key}
-            className="absolute text-[10px] text-muted-foreground -translate-x-1/2"
-            style={{ left: `${t.leftPct}%` }}
-          >
-            {t.label}
-          </div>
-        ))}
-        <div className="absolute bottom-0 left-0 right-0 border-b border-border" />
-      </div>
-
-      {/* groups */}
-      <div className="space-y-6">
-        {groups.map(g => (
-          <div key={g.id} className="rounded-lg border">
-            <div className="px-3 py-2 text-sm font-medium">{g.name}</div>
-            <div className="divide-y">
-              {/* header row */}
-              <div className="grid grid-cols-7 gap-2 px-3 py-2 text-xs text-muted-foreground">
-                <div>Flight</div>
-                <div className="text-right">Impr.</div>
-                <div className="text-right">Clicks</div>
-                <div className="text-right">Conv.</div>
-                <div className="text-right">Spend</div>
-                <div className="col-span-2">Timeline</div>
-              </div>
-              {g.rows.map(r => (
-                <div key={r.flight_id} className="grid grid-cols-7 gap-2 items-center px-3 py-2">
-                  <div className="truncate">{r.flight_name}</div>
-                  <div className="text-right tabular-nums">{r.impressions?.toLocaleString?.() ?? "—"}</div>
-                  <div className="text-right tabular-nums">{r.clicks?.toLocaleString?.() ?? "—"}</div>
-                  <div className="text-right tabular-nums">{r.conversions?.toLocaleString?.() ?? "—"}</div>
-                  <div className="text-right tabular-nums">
-                    {typeof r.spend === "number"
-                      ? r.spend.toLocaleString(undefined, { style: "currency", currency: "EUR" })
-                      : "—"}
-                  </div>
-                  <div className="col-span-2">{barFor(r)}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+  export default CampaignsPage;
