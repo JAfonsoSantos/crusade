@@ -1273,6 +1273,30 @@ export type Database = {
           },
         ]
       }
+      password_reset_attempts: {
+        Row: {
+          attempted_at: string | null
+          email: string
+          id: string
+          ip_address: string | null
+          success: boolean | null
+        }
+        Insert: {
+          attempted_at?: string | null
+          email: string
+          id?: string
+          ip_address?: string | null
+          success?: boolean | null
+        }
+        Update: {
+          attempted_at?: string | null
+          email?: string
+          id?: string
+          ip_address?: string | null
+          success?: boolean | null
+        }
+        Relationships: []
+      }
       pipelines: {
         Row: {
           company_id: string
@@ -2457,6 +2481,10 @@ export type Database = {
       _drop_policy_if_exists: {
         Args: { pol: unknown; tbl: unknown }
         Returns: undefined
+      }
+      cleanup_password_reset_attempts: {
+        Args: Record<PropertyKey, never>
+        Returns: number
       }
       current_company_id: {
         Args: Record<PropertyKey, never>

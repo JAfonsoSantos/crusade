@@ -1,10 +1,11 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "npm:resend@2.0.0";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": "https://bzqjxkmkrzvsigimnwwc.lovable.app",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
@@ -28,7 +29,31 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("Email and reset URL are required");
     }
 
-    console.log(`Sending password reset email to: ${email}`);
+    // Rate limiting check - create Supabase client for logging
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    const userIp = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    
+    // Check rate limit (max 5 attempts per email per hour)
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { data: recentAttempts } = await supabase
+      .from('password_reset_attempts')
+      .select('id')
+      .eq('email', email)
+      .gte('attempted_at', oneHourAgo);
+
+    if (recentAttempts && recentAttempts.length >= 5) {
+      await supabase
+        .from('password_reset_attempts')
+        .insert({ email, ip_address: userIp, success: false });
+      
+      throw new Error("Too many password reset attempts. Please try again later.");
+    }
+
+    console.log(`Sending password reset email to: ${email.substring(0, 3)}***`);
 
     const emailResponse = await resend.emails.send({
       from: "AdSpace CRM <noreply@resend.dev>",
