@@ -25,16 +25,24 @@ import { ChevronRight, ChevronDown } from "lucide-react";
     onSelect?: (t: TimelineItem) => void;
   };
 
-  // ---- utils
-  const DAY_MS = 86400000;
-  const toDate = (iso: string) => {
-    const [y, m, d] = iso.split("-").map(Number);
-    return new Date(y, (m || 1) - 1, d || 1);
-  };
-  const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
-  const fmtMonth = new Intl.DateTimeFormat(undefined, { month: "short" });
-  const fmtWeek = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
-  const fmtDay = new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric" });
+// ---- utils
+const DAY_MS = 86400000;
+const toDate = (iso: string) => {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+};
+const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
+const fmtMonth = new Intl.DateTimeFormat(undefined, { month: "short" });
+const fmtWeek = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+const fmtDay = new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric" });
+
+const formatShortDate = (dateStr: string) => {
+  const date = toDate(dateStr);
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const year = date.getFullYear().toString().slice(-2);
+  return `${day}/${month}/${year}`;
+};
   
   const colors: Record<string, string> = {
     active: "bg-emerald-500",
@@ -340,11 +348,11 @@ import { ChevronRight, ChevronDown } from "lucide-react";
                   {isExpanded && group.rows.map(row => (
                     <div key={row.flight_id} className="flex hover:bg-muted/25 transition-colors">
                       <div className="w-80 p-3 border-r border-border">
-                        <div className="text-sm ml-6">
-                          <div className="truncate font-medium">{row.flight_name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {row.start_date} → {row.end_date}
-                          </div>
+                        <div className="text-sm ml-6 flex items-center gap-2">
+                          <span className="font-medium truncate">{row.flight_name}</span>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            {formatShortDate(row.start_date)} → {formatShortDate(row.end_date)}
+                          </span>
                         </div>
                         <div className="flex gap-4 text-xs text-muted-foreground mt-1 ml-6">
                           <span>{row.impressions?.toLocaleString?.() ?? "—"} imp</span>
