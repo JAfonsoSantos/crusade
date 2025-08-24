@@ -363,6 +363,7 @@ export type Database = {
       }
       campaigns: {
         Row: {
+          advertiser_id: string | null
           budget: number | null
           company_id: string
           created_at: string
@@ -377,6 +378,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          advertiser_id?: string | null
           budget?: number | null
           company_id: string
           created_at?: string
@@ -391,6 +393,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          advertiser_id?: string | null
           budget?: number | null
           company_id?: string
           created_at?: string
@@ -405,6 +408,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "campaigns_advertiser_id_fkey"
+            columns: ["advertiser_id"]
+            isOneToOne: false
+            referencedRelation: "advertisers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "campaigns_company_id_fkey"
             columns: ["company_id"]
