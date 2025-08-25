@@ -49,7 +49,6 @@ const Layout = () => {
     { name: 'Campaigns', href: '/campaigns', icon: Megaphone },
     { name: 'Forecast', href: '/forecast', icon: TrendingUp },
     { name: 'Spaces', href: '/spaces', icon: Target },
-    { name: 'Integrations', href: '/integrations', icon: Settings },
     { name: 'Demo Site', href: '/demo-site', icon: Target },
   ];
 
@@ -118,7 +117,7 @@ const Layout = () => {
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuContent align="end" className="w-56 bg-background border border-border shadow-lg">
                 <DropdownMenuItem onClick={() => navigate('/personal-settings')}>
                   <UserIcon className="mr-2 h-4 w-4" />
                   <span>Personal Settings</span>
@@ -126,6 +125,10 @@ const Layout = () => {
                 <DropdownMenuItem onClick={() => navigate('/business-settings')}>
                   <Building2 className="mr-2 h-4 w-4" />
                   <span>Business Settings</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/integrations')}>
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Integrations</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>
