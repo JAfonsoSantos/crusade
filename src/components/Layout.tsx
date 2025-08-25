@@ -50,6 +50,31 @@ const Layout = () => {
     enabled: !!user?.id,
   });
 
+  // Fetch user profile data including avatar
+  const { data: userProfile } = useQuery({
+    queryKey: ["userProfile", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      
+      const { data, error } = await supabase
+        .from("profiles")
+        .select(`
+          id,
+          user_id,
+          full_name,
+          avatar_url,
+          role,
+          company_id
+        `)
+        .eq("user_id", user.id)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
@@ -271,7 +296,8 @@ const Layout = () => {
                 <Button variant="ghost" className="flex items-center space-x-2">
                   <CompanyAvatar 
                     companyName={company?.name || "Company"}
-                    userName={user.user_metadata?.full_name || user.email || ""}
+                    userName={userProfile?.full_name || user.user_metadata?.full_name || user.email || ""}
+                    logoUrl={userProfile?.avatar_url}
                     size="sm"
                   />
                   <span className="text-sm">
@@ -283,7 +309,7 @@ const Layout = () => {
               <DropdownMenuContent align="end" className="w-80 bg-background border border-border shadow-lg z-50">
                 <DropdownMenuItem onClick={() => navigate('/personal-settings')}>
                   <UserIcon className="mr-2 h-4 w-4" />
-                  <span>{(user.user_metadata?.full_name || user.email?.split('@')[0] || "User")} Settings</span>
+                  <span>{(userProfile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || "User")} Settings</span>
                 </DropdownMenuItem>
                 
                 <div
