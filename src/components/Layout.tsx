@@ -242,7 +242,7 @@ const Layout = () => {
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 bg-background border border-border shadow-lg">
+              <DropdownMenuContent align="end" className="w-80 bg-background border border-border shadow-lg z-50">
                 <DropdownMenuItem onClick={() => navigate('/personal-settings')}>
                   <UserIcon className="mr-2 h-4 w-4" />
                   <span>{(user.user_metadata?.full_name || user.email?.split('@')[0] || "User")} Settings</span>
