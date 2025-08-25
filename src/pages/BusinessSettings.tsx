@@ -3,11 +3,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Building2, Globe, Mail, Save, Users, Plus } from 'lucide-react';
+import { Building2, Save, Users, Plus, Edit, Trash2, RotateCcw, ShieldCheck } from 'lucide-react';
 
 interface Company {
   id: string;
@@ -18,15 +20,37 @@ interface Company {
   status: string;
 }
 
+interface CompanyUser {
+  id: string;
+  user_id: string;
+  full_name: string;
+  role: string;
+}
+
+interface UserFormData {
+  full_name: string;
+  email: string;
+  role: string;
+}
+
 const BusinessSettings = () => {
   const [company, setCompany] = useState<Company | null>(null);
   const [hasCompany, setHasCompany] = useState<boolean | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [companyUsers, setCompanyUsers] = useState<CompanyUser[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     website: '',
     industry: '',
   });
+  const [userFormData, setUserFormData] = useState<UserFormData>({
+    full_name: '',
+    email: '',
+    role: 'user'
+  });
+  const [editingUser, setEditingUser] = useState<CompanyUser | null>(null);
+  const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
@@ -35,17 +59,25 @@ const BusinessSettings = () => {
     fetchCompany();
   }, []);
 
+  useEffect(() => {
+    if (hasCompany && isAdmin && company?.id) {
+      fetchCompanyUsers();
+    }
+  }, [hasCompany, isAdmin, company?.id]);
+
   const fetchCompany = async () => {
     const { data: user } = await supabase.auth.getUser();
     
     if (user.user) {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('company_id')
+        .select('company_id, role')
         .eq('user_id', user.user.id)
         .single();
 
       if (profile?.company_id) {
+        setIsAdmin(profile.role === 'admin');
+        
         const { data: companyData } = await supabase
           .from('companies')
           .select('*')
@@ -69,6 +101,27 @@ const BusinessSettings = () => {
       }
     }
     setLoading(false);
+  };
+
+  const fetchCompanyUsers = async () => {
+    if (!company?.id) return;
+    
+    const { data: users, error } = await supabase
+      .from('profiles')
+      .select(`
+        id,
+        user_id,
+        full_name,
+        role
+      `)
+      .eq('company_id', company.id);
+
+    if (error) {
+      console.error('Error fetching users:', error);
+      return;
+    }
+
+    setCompanyUsers(users || []);
   };
 
   const handleSave = async () => {
@@ -146,6 +199,102 @@ const BusinessSettings = () => {
     setSaving(false);
   };
 
+  const handleAddUser = () => {
+    setEditingUser(null);
+    setUserFormData({ full_name: '', email: '', role: 'user' });
+    setIsUserDialogOpen(true);
+  };
+
+  const handleEditUser = (user: CompanyUser) => {
+    setEditingUser(user);
+    setUserFormData({
+      full_name: user.full_name || '',
+      email: '', // We'll need to get this from auth.users or keep it empty for editing
+      role: user.role
+    });
+    setIsUserDialogOpen(true);
+  };
+
+  const handleUserSave = async () => {
+    if (editingUser) {
+      // Update existing user
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: userFormData.full_name,
+          role: userFormData.role
+        })
+        .eq('id', editingUser.id);
+
+      if (error) {
+        toast({
+          title: "Error",
+          description: "Could not update user.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: "User updated successfully!",
+        });
+        setIsUserDialogOpen(false);
+        fetchCompanyUsers();
+      }
+    } else {
+      // Create new user - this would require auth.admin.createUser which needs service role
+      toast({
+        title: "Info",
+        description: "Creating new users requires additional setup. Contact your administrator.",
+      });
+    }
+  };
+
+  const handleUserDelete = async (userId: string) => {
+    if (!confirm('Are you sure you want to delete this user?')) return;
+
+    const { error } = await supabase
+      .from('profiles')
+      .delete()
+      .eq('id', userId);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Could not delete user.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: "User deleted successfully!",
+      });
+      fetchCompanyUsers();
+    }
+  };
+
+  const handlePasswordReset = async (userId: string) => {
+    try {
+      const { error } = await supabase.functions.invoke('reset-user-password', {
+        body: { userId }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Success",
+        description: "Password reset email sent!",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Could not send password reset email.",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -153,6 +302,26 @@ const BusinessSettings = () => {
           <h2 className="text-3xl font-bold tracking-tight">Business Settings</h2>
           <p className="text-muted-foreground">Loading...</p>
         </div>
+      </div>
+    );
+  }
+
+  // Only show to admins
+  if (hasCompany && !isAdmin) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Business Settings</h2>
+          <p className="text-muted-foreground">Access restricted to administrators only.</p>
+        </div>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <ShieldCheck className="h-5 w-5" />
+              You need administrator privileges to access business settings.
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -248,7 +417,7 @@ const BusinessSettings = () => {
               <Plus className="mr-2 h-4 w-4" />
               {saving ? "Creating Company..." : "Create Company"}
             </Button>
-          </CardContent>
+            </CardContent>
         </Card>
       </div>
     );
@@ -260,7 +429,7 @@ const BusinessSettings = () => {
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Business Settings</h2>
         <p className="text-muted-foreground">
-          Manage your company information and business preferences
+          Manage your company information and user accounts
         </p>
       </div>
 
@@ -269,7 +438,7 @@ const BusinessSettings = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5" />
-              Edit Company Information
+              Company Information
             </CardTitle>
             <CardDescription>
               Update your company details and contact information.
@@ -342,32 +511,140 @@ const BusinessSettings = () => {
           </CardContent>
         </Card>
 
+        {/* User Management Section */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Account Status
-            </CardTitle>
-            <CardDescription>
-              View your company account status and details.
-            </CardDescription>
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Company Users
+                </CardTitle>
+                <CardDescription>
+                  Manage user accounts and permissions for your company.
+                </CardDescription>
+              </div>
+              <Button onClick={handleAddUser}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add User
+              </Button>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex justify-between items-center py-2">
-              <span className="text-sm font-medium">Status:</span>
-              <span className="text-sm text-green-600 capitalize font-medium">
-                {company?.status || 'Active'}
-              </span>
-            </div>
-            <div className="flex justify-between items-center py-2">
-              <span className="text-sm font-medium">Company ID:</span>
-              <span className="text-sm text-muted-foreground font-mono">
-                {company?.id.slice(0, 8)}...
-              </span>
-            </div>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {companyUsers.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell className="font-medium">{user.full_name || 'No name'}</TableCell>
+                    <TableCell>
+                      <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
+                        {user.role}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEditUser(user)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handlePasswordReset(user.user_id)}
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleUserDelete(user.id)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {companyUsers.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center text-muted-foreground">
+                      No users found
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       </div>
+
+      {/* User Dialog */}
+      <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {editingUser ? 'Edit User' : 'Add New User'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid w-full items-center gap-1.5">
+              <Label htmlFor="user_name">Full Name</Label>
+              <Input
+                id="user_name"
+                value={userFormData.full_name}
+                onChange={(e) => setUserFormData({ ...userFormData, full_name: e.target.value })}
+                placeholder="Enter full name"
+              />
+            </div>
+            
+            {!editingUser && (
+              <div className="grid w-full items-center gap-1.5">
+                <Label htmlFor="user_email">Email</Label>
+                <Input
+                  id="user_email"
+                  type="email"
+                  value={userFormData.email}
+                  onChange={(e) => setUserFormData({ ...userFormData, email: e.target.value })}
+                  placeholder="Enter email address"
+                />
+              </div>
+            )}
+
+            <div className="grid w-full items-center gap-1.5">
+              <Label htmlFor="user_role">Role</Label>
+              <Select 
+                value={userFormData.role} 
+                onValueChange={(value) => setUserFormData({ ...userFormData, role: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsUserDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleUserSave}>
+              {editingUser ? 'Update User' : 'Add User'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
