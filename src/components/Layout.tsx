@@ -54,12 +54,12 @@ const Layout = () => {
   const campaignItems = [
     { name: 'Campaigns', href: '/campaigns', icon: Megaphone },
     { name: 'Flights', href: '/flights', icon: Target },
+    { name: 'Spaces', href: '/spaces', icon: Target },
     { name: 'Creatives', href: '/creatives', icon: Image },
   ];
 
   const regularNavigation = [
     { name: 'Forecast', href: '/forecast', icon: TrendingUp },
-    { name: 'Spaces', href: '/spaces', icon: Target },
   ];
 
   const isPipelineActive = pipelineItems.some(item => location.pathname === item.href);
