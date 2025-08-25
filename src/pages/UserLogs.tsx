@@ -66,11 +66,21 @@ export default function UserLogs() {
 
         if (profileError) throw profileError;
 
-        // Set profile without email initially
-        setUserProfile({
-          ...profile,
-          email: 'N/A' // We'll get the email separately if needed
+        // Fetch user profile with email using edge function
+        const { data: userDetails, error: userDetailsError } = await supabase.functions.invoke('get-user-details', {
+          body: { userId }
         });
+
+        if (userDetailsError) {
+          console.error('Error fetching user details:', userDetailsError);
+          // Fallback to profile without email
+          setUserProfile({
+            ...profile,
+            email: 'N/A'
+          });
+        } else {
+          setUserProfile(userDetails);
+        }
 
         // Fetch activity logs
         const { data: logsData, error: logsError } = await supabase
