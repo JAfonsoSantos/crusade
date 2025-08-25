@@ -26,6 +26,7 @@ interface CompanyUser {
   id: string;
   user_id: string;
   full_name: string;
+  email?: string;
   role: string;
   permissions?: {
     pipeline: boolean;
@@ -140,18 +141,41 @@ export default function BusinessSettings() {
       return;
     }
 
-    // Convert users with proper permission typing
-    const typedUsers: CompanyUser[] = (users || []).map(user => ({
-      ...user,
-      permissions: user.permissions && typeof user.permissions === 'object' && !Array.isArray(user.permissions) ? 
-        {
-          pipeline: Boolean((user.permissions as any).pipeline),
-          campaigns: Boolean((user.permissions as any).campaigns),
-          insights: Boolean((user.permissions as any).insights)
-        } : undefined
-    }));
+    // Fetch emails for users
+    const usersWithEmails: CompanyUser[] = [];
+    
+    for (const user of users || []) {
+      try {
+        const { data: userData } = await supabase.functions.invoke('get-user-details', {
+          body: { userId: user.user_id }
+        });
+        
+        usersWithEmails.push({
+          ...user,
+          email: userData?.email || 'N/A',
+          permissions: user.permissions && typeof user.permissions === 'object' && !Array.isArray(user.permissions) ? 
+            {
+              pipeline: Boolean((user.permissions as any).pipeline),
+              campaigns: Boolean((user.permissions as any).campaigns),
+              insights: Boolean((user.permissions as any).insights)
+            } : undefined
+        });
+      } catch (error) {
+        console.error('Error fetching user email:', error);
+        usersWithEmails.push({
+          ...user,
+          email: 'N/A',
+          permissions: user.permissions && typeof user.permissions === 'object' && !Array.isArray(user.permissions) ? 
+            {
+              pipeline: Boolean((user.permissions as any).pipeline),
+              campaigns: Boolean((user.permissions as any).campaigns),
+              insights: Boolean((user.permissions as any).insights)
+            } : undefined
+        });
+      }
+    }
 
-    setCompanyUsers(typedUsers);
+    setCompanyUsers(usersWithEmails);
   };
 
   const handleSave = async () => {
@@ -580,6 +604,7 @@ export default function BusinessSettings() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Pipeline</TableHead>
                   <TableHead>Campaigns</TableHead>
@@ -591,6 +616,7 @@ export default function BusinessSettings() {
                 {companyUsers.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">{user.full_name || 'No name'}</TableCell>
+                    <TableCell className="text-muted-foreground">{user.email || 'N/A'}</TableCell>
                     <TableCell>
                       <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
                         {user.role}
@@ -657,7 +683,7 @@ export default function BusinessSettings() {
                 ))}
                 {companyUsers.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground">
                       No users found
                     </TableCell>
                   </TableRow>
