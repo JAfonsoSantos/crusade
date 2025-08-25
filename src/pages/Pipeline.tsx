@@ -443,13 +443,38 @@ export default function Pipeline() {
             onPipelineChange={setSelectedPipelineId}
             opportunityCount={opportunities.length}
           />
-          {currentPipeline?.description && (
-            <p className="text-muted-foreground mt-2">
-              {currentPipeline.description}
-            </p>
-          )}
         </div>
         
+        <div className="flex items-center gap-4">
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search opportunities..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Select value={stageFilter} onValueChange={setStageFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="All stages" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Stages</SelectItem>
+              {currentStages.map((stage) => (
+                <SelectItem key={stage.key} value={stage.key}>
+                  {stage.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedPipelineId && (
+            <Button className="gap-2">
+              <PlusCircle className="h-4 w-4" />
+              New Opportunity
+            </Button>
+          )}
+        </div>
       </div>
 
       {!selectedPipelineId ? (
@@ -486,38 +511,6 @@ export default function Pipeline() {
                 <div className="text-sm text-muted-foreground">Open Deals</div>
               </CardContent>
             </Card>
-          </div>
-
-          {/* Filters and Controls */}
-          <div className="flex flex-col sm:flex-row gap-4 items-center justify-end mb-6">
-            <div className="relative max-w-sm">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search opportunities..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Select value={stageFilter} onValueChange={setStageFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="All stages" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Stages</SelectItem>
-                {currentStages.map((stage) => (
-                  <SelectItem key={stage.key} value={stage.key}>
-                    {stage.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selectedPipelineId && (
-              <Button className="gap-2">
-                <PlusCircle className="h-4 w-4" />
-                New Opportunity
-              </Button>
-            )}
           </div>
 
           <Tabs value={view} onValueChange={(value) => setView(value as "kanban" | "list")} className="mb-6">
