@@ -322,10 +322,14 @@ const Integrations = () => {
       return;
     }
     
-    if (!['kevel', 'koddi', 'topsort'].includes(integration.provider)) {
+    // Check if sync is supported for this provider
+    const adServerProviders = ['kevel', 'koddi', 'topsort'];
+    const crmProviders = ['salesforce', 'hubspot', 'pipedrive', 'vtex'];
+    
+    if (!adServerProviders.includes(integration.provider) && !crmProviders.includes(integration.provider)) {
       toast({
         title: "Not Supported",
-        description: "Sync is currently only supported for Kevel, Koddi, and Topsort integrations.",
+        description: "Sync is currently only supported for Kevel, Koddi, Topsort, Salesforce, HubSpot, Pipedrive, and VTEX integrations.",
         variant: "destructive",
       });
       return;
@@ -334,9 +338,23 @@ const Integrations = () => {
     setSyncing(integration.id);
     
     try {
-      const { data, error } = await supabase.functions.invoke('sync-kevel-inventory', {
-        body: { integrationId: integration.id }
-      });
+      let data, error;
+      
+      if (integration.integration_type === 'crm') {
+        // Use CRM universal sync for CRM integrations
+        const response = await supabase.functions.invoke('crm-universal-sync', {
+          body: { integrationId: integration.id, syncType: 'full' }
+        });
+        data = response.data;
+        error = response.error;
+      } else {
+        // Use existing ad server sync for ad server integrations
+        const response = await supabase.functions.invoke('sync-kevel-inventory', {
+          body: { integrationId: integration.id }
+        });
+        data = response.data;
+        error = response.error;
+      }
 
       if (error) throw error;
 
@@ -794,16 +812,18 @@ const Integrations = () => {
                                 integration.status === 'paused' ? 'Paused' : 'Sync Now'}
                              </Button>
                            )}
-                           {integration.integration_type === 'crm' && (
-                             <Button 
-                               variant="outline" 
-                               size="sm" 
-                               disabled
-                             >
-                               <RefreshCw className="mr-2 h-4 w-4" />
-                               CRM Sync (Coming Soon)
-                             </Button>
-                           )}
+                            {integration.integration_type === 'crm' && (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => handleSync(integration)}
+                                disabled={syncing === integration.id || integration.status === 'paused'}
+                              >
+                                <RefreshCw className={`mr-2 h-4 w-4 ${syncing === integration.id ? 'animate-spin' : ''}`} />
+                                {syncing === integration.id ? 'Syncing...' : 
+                                 integration.status === 'paused' ? 'Paused' : 'CRM Sync'}
+                              </Button>
+                            )}
                            {integration.configuration?.last_sync_details && (
                              <Button 
                                variant="outline" 
