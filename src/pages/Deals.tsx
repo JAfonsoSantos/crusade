@@ -241,33 +241,31 @@ export default function Deals() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-        <div className="flex gap-2 flex-1">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search deals or advertisers..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8"
-            />
-          </div>
-          <Select value={stageFilter} onValueChange={setStageFilter}>
-            <SelectTrigger className="w-[180px]">
-              <Filter className="mr-2 h-4 w-4" />
-              <SelectValue placeholder="All stages" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Stages</SelectItem>
-              <SelectItem value="needs_analysis">Needs Analysis</SelectItem>
-              <SelectItem value="value_proposition">Value Proposition</SelectItem>
-              <SelectItem value="proposal">Proposal/Quote</SelectItem>
-              <SelectItem value="negotiation">Negotiation/Review</SelectItem>
-              <SelectItem value="closed_won">Closed Won</SelectItem>
-              <SelectItem value="closed_lost">Closed Lost</SelectItem>
-            </SelectContent>
-          </Select>
+      <div className="flex flex-col sm:flex-row gap-4 items-center justify-end">
+        <div className="relative max-w-sm">
+          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search deals or advertisers..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-8"
+          />
         </div>
+        <Select value={stageFilter} onValueChange={setStageFilter}>
+          <SelectTrigger className="w-[180px]">
+            <Filter className="mr-2 h-4 w-4" />
+            <SelectValue placeholder="All stages" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Stages</SelectItem>
+            <SelectItem value="needs_analysis">Needs Analysis</SelectItem>
+            <SelectItem value="value_proposition">Value Proposition</SelectItem>
+            <SelectItem value="proposal">Proposal/Quote</SelectItem>
+            <SelectItem value="negotiation">Negotiation/Review</SelectItem>
+            <SelectItem value="closed_won">Closed Won</SelectItem>
+            <SelectItem value="closed_lost">Closed Lost</SelectItem>
+          </SelectContent>
+        </Select>
         <Button className="gap-2">
           <PlusCircle className="h-4 w-4" />
           New Deal
