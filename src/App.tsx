@@ -23,6 +23,7 @@ import Advertisers from "./pages/Advertisers";
 import Brands from "./pages/Brands";
 import Contacts from "./pages/Contacts";
 import Flights from "./pages/Flights";
+import SalesforceOAuth from "./pages/SalesforceOAuth";
 import Layout from "./components/Layout";
 import NotFound from "./pages/NotFound";
 
@@ -56,6 +57,7 @@ const App = () => (
             <Route path="personal-settings" element={<PersonalSettings />} />
             <Route path="business-settings" element={<BusinessSettings />} />
             <Route path="user-logs/:userId" element={<UserLogs />} />
+            <Route path="salesforce-oauth" element={<SalesforceOAuth />} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
