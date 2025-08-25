@@ -184,6 +184,7 @@ export function SwitchCompanyModal({ trigger, currentCompanyId, onCompanySwitch 
             <Building2 className="h-5 w-5" />
             Switch Company
           </DialogTitle>
+          <div className="sr-only">Select a different company to switch to from the list below.</div>
         </DialogHeader>
         
         <div className="space-y-4">
