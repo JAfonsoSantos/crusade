@@ -52,46 +52,44 @@ const Layout = () => {
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
+        // Only synchronous state updates here to avoid deadlocks
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
-        
-        // Log de autenticação
+
+        // Defer side effects like logging to avoid blocking auth flow
         if (event === 'SIGNED_IN' && session?.user) {
-          try {
-            await supabase.functions.invoke('log-activity', {
+          setTimeout(() => {
+            supabase.functions.invoke('log-activity', {
               body: {
                 action: 'login',
                 details: {
                   loginMethod: 'email',
                   userAgent: navigator.userAgent,
-                  timestamp: new Date().toISOString()
+                  timestamp: new Date().toISOString(),
                 },
-                resource_type: 'auth'
-              }
-            });
-          } catch (error) {
-            console.error('Failed to log login:', error);
-          }
+                resource_type: 'auth',
+              },
+            }).catch((err) => console.error('Failed to log login:', err));
+          }, 0);
         }
-        
+
         if (event === 'SIGNED_OUT') {
-          try {
-            await supabase.functions.invoke('log-activity', {
+          setTimeout(() => {
+            supabase.functions.invoke('log-activity', {
               body: {
                 action: 'logout',
                 details: {
-                  timestamp: new Date().toISOString()
+                  timestamp: new Date().toISOString(),
                 },
-                resource_type: 'auth'
-              }
-            });
-          } catch (error) {
-            console.error('Failed to log logout:', error);
-          }
+                resource_type: 'auth',
+              },
+            }).catch((err) => console.error('Failed to log logout:', err));
+          }, 0);
         }
-        
+
+        // Redirect unauthenticated users to /auth
         if (!session?.user && location.pathname !== '/auth') {
           navigate('/auth');
         }
@@ -102,7 +100,7 @@ const Layout = () => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
-      
+
       if (!session?.user && location.pathname !== '/auth') {
         navigate('/auth');
       }
