@@ -26,7 +26,7 @@ type UserCompanyAccess = {
     website?: string;
     industry?: string;
     status: string;
-  };
+  } | null;
 };
 
 export function SwitchCompanyModal({ trigger, currentCompanyId, onCompanySwitch }: SwitchCompanyModalProps) {
@@ -64,10 +64,13 @@ export function SwitchCompanyModal({ trigger, currentCompanyId, onCompanySwitch 
   });
 
   // Filter companies based on search term
-  const filteredCompanies = userCompanies.filter((access) =>
-    access.companies.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (access.companies.industry && access.companies.industry.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredCompanies = userCompanies.filter((access) => {
+    // Skip entries where companies data is missing
+    if (!access.companies) return false;
+    
+    return access.companies.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (access.companies.industry && access.companies.industry.toLowerCase().includes(searchTerm.toLowerCase()));
+  });
 
   // Switch company mutation
   const switchCompanyMutation = useMutation({
@@ -178,15 +181,15 @@ export function SwitchCompanyModal({ trigger, currentCompanyId, onCompanySwitch 
                   onClick={() => handleCompanySelect(access.company_id)}
                 >
                   <CompanyAvatar
-                    companyName={access.companies.name}
+                    companyName={access.companies?.name || "Unknown Company"}
                     size="sm"
                   />
                   
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate">
-                      {access.companies.name}
+                      {access.companies?.name || "Unknown Company"}
                     </div>
-                    {access.companies.industry && (
+                    {access.companies?.industry && (
                       <div className="text-xs text-muted-foreground truncate">
                         {access.companies.industry}
                       </div>
