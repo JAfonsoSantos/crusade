@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { supabase } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
-import { LayoutDashboard, Target, Megaphone, Settings, ChevronDown, User as UserIcon, Building2, LogOut, Users, TrendingUp, RefreshCw, Globe, Handshake, Palette, Contact, Image } from 'lucide-react';
+import { LayoutDashboard, Target, Megaphone, Settings, ChevronDown, User as UserIcon, Building2, LogOut, Users, TrendingUp, RefreshCw, Globe, Handshake, Palette, Contact, Image, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const Layout = () => {
@@ -59,12 +59,14 @@ const Layout = () => {
     { name: 'Creatives', href: '/creatives', icon: Image },
   ];
 
-  const regularNavigation = [
+  const insightsItems = [
+    { name: 'Reports', href: '/reports', icon: BarChart3 },
     { name: 'Forecast', href: '/forecast', icon: TrendingUp },
   ];
 
   const isPipelineActive = pipelineItems.some(item => location.pathname === item.href);
   const isCampaignActive = campaignItems.some(item => location.pathname === item.href);
+  const isInsightsActive = insightsItems.some(item => location.pathname === item.href);
 
   if (loading) {
     return (
@@ -148,24 +150,32 @@ const Layout = () => {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Regular Navigation Items */}
-            {regularNavigation.map((item) => {
-              const Icon = item.icon;
-              const isActive = location.pathname === item.href;
-              return (
+            {/* Insights Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
                 <button
-                  key={item.name}
-                  onClick={() => navigate(item.href)}
                   className={cn(
                     'flex items-center space-x-2 transition-colors hover:text-foreground/80',
-                    isActive ? 'text-foreground' : 'text-foreground/60'
+                    isInsightsActive ? 'text-foreground' : 'text-foreground/60'
                   )}
                 >
-                  <Icon className="h-4 w-4" />
-                  <span>{item.name}</span>
+                  <BarChart3 className="h-4 w-4" />
+                  <span>Insights</span>
+                  <ChevronDown className="h-3 w-3" />
                 </button>
-              );
-            })}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56 bg-background border border-border shadow-lg z-50">
+                {insightsItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <DropdownMenuItem key={item.name} onClick={() => navigate(item.href)}>
+                      <Icon className="mr-2 h-4 w-4" />
+                      <span>{item.name}</span>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </nav>
           
           <div className="flex flex-1 items-center justify-end space-x-2">
