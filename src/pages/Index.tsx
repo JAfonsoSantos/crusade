@@ -16,6 +16,7 @@ const Index = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    console.log('Index component mounted, fetching stats...');
     fetchStats();
   }, []);
 
@@ -23,13 +24,27 @@ const Index = () => {
     try {
       // Get user's company
       const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile } = await supabase
+      
+      if (!user) {
+        console.log('No authenticated user found');
+        setLoading(false);
+        return;
+      }
+
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('company_id')
-        .eq('user_id', user?.id)
-        .single();
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error('Error fetching profile:', profileError);
+        setLoading(false);
+        return;
+      }
 
       if (!profile?.company_id) {
+        console.log('No company associated with user');
         setLoading(false);
         return;
       }
@@ -40,6 +55,10 @@ const Index = () => {
         supabase.from('campaigns').select('id', { count: 'exact' }).eq('company_id', profile.company_id),
         supabase.from('ad_server_integrations').select('id', { count: 'exact' }).eq('company_id', profile.company_id)
       ]);
+
+      if (spacesResult.error) console.error('Spaces error:', spacesResult.error);
+      if (campaignsResult.error) console.error('Campaigns error:', campaignsResult.error);
+      if (integrationsResult.error) console.error('Integrations error:', integrationsResult.error);
 
       setStats({
         spaces: spacesResult.count || 0,
