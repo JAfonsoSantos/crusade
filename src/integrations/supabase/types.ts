@@ -39,6 +39,7 @@ export type Database = {
           configuration: Json | null
           created_at: string
           id: string
+          integration_type: string
           last_sync: string | null
           name: string
           platform_config: Json | null
@@ -52,6 +53,7 @@ export type Database = {
           configuration?: Json | null
           created_at?: string
           id?: string
+          integration_type?: string
           last_sync?: string | null
           name: string
           platform_config?: Json | null
@@ -65,6 +67,7 @@ export type Database = {
           configuration?: Json | null
           created_at?: string
           id?: string
+          integration_type?: string
           last_sync?: string | null
           name?: string
           platform_config?: Json | null
