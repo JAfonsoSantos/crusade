@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import { CompanyAvatar } from '@/components/CompanyAvatar';
 import { SwitchCompanyModal } from '@/components/SwitchCompanyModal';
+import { usePageLogger } from '@/hooks/usePageLogger';
 
 const Layout = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -17,6 +18,11 @@ const Layout = () => {
   const [hoveredMenuItem, setHoveredMenuItem] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Ativa o logging automático de páginas para utilizadores autenticados
+  if (user) {
+    usePageLogger();
+  }
 
   // Fetch company data for the current user
   const { data: company } = useQuery({
@@ -48,10 +54,45 @@ const Layout = () => {
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+        
+        // Log de autenticação
+        if (event === 'SIGNED_IN' && session?.user) {
+          try {
+            await supabase.functions.invoke('log-activity', {
+              body: {
+                action: 'login',
+                details: {
+                  loginMethod: 'email',
+                  userAgent: navigator.userAgent,
+                  timestamp: new Date().toISOString()
+                },
+                resource_type: 'auth'
+              }
+            });
+          } catch (error) {
+            console.error('Failed to log login:', error);
+          }
+        }
+        
+        if (event === 'SIGNED_OUT') {
+          try {
+            await supabase.functions.invoke('log-activity', {
+              body: {
+                action: 'logout',
+                details: {
+                  timestamp: new Date().toISOString()
+                },
+                resource_type: 'auth'
+              }
+            });
+          } catch (error) {
+            console.error('Failed to log logout:', error);
+          }
+        }
         
         if (!session?.user && location.pathname !== '/auth') {
           navigate('/auth');
@@ -73,6 +114,7 @@ const Layout = () => {
   }, [navigate, location.pathname]);
 
   const handleSignOut = async () => {
+    // O logging do logout será feito automaticamente pelo onAuthStateChange
     await supabase.auth.signOut();
   };
 
