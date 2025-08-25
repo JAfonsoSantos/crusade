@@ -178,6 +178,37 @@ export default function Deals() {
             Manage and track all your sales opportunities
           </p>
         </div>
+        
+        <div className="flex items-center gap-4">
+          <div className="relative max-w-sm">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search deals or advertisers..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8"
+            />
+          </div>
+          <Select value={stageFilter} onValueChange={setStageFilter}>
+            <SelectTrigger className="w-[180px]">
+              <Filter className="mr-2 h-4 w-4" />
+              <SelectValue placeholder="All stages" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Stages</SelectItem>
+              <SelectItem value="needs_analysis">Needs Analysis</SelectItem>
+              <SelectItem value="value_proposition">Value Proposition</SelectItem>
+              <SelectItem value="proposal">Proposal/Quote</SelectItem>
+              <SelectItem value="negotiation">Negotiation/Review</SelectItem>
+              <SelectItem value="closed_won">Closed Won</SelectItem>
+              <SelectItem value="closed_lost">Closed Lost</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button className="gap-2">
+            <PlusCircle className="h-4 w-4" />
+            New Deal
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -238,38 +269,6 @@ export default function Deals() {
             <div className="text-sm text-muted-foreground">Closed Won</div>
           </CardContent>
         </Card>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 items-center justify-end">
-        <div className="relative max-w-sm">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search deals or advertisers..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-8"
-          />
-        </div>
-        <Select value={stageFilter} onValueChange={setStageFilter}>
-          <SelectTrigger className="w-[180px]">
-            <Filter className="mr-2 h-4 w-4" />
-            <SelectValue placeholder="All stages" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Stages</SelectItem>
-            <SelectItem value="needs_analysis">Needs Analysis</SelectItem>
-            <SelectItem value="value_proposition">Value Proposition</SelectItem>
-            <SelectItem value="proposal">Proposal/Quote</SelectItem>
-            <SelectItem value="negotiation">Negotiation/Review</SelectItem>
-            <SelectItem value="closed_won">Closed Won</SelectItem>
-            <SelectItem value="closed_lost">Closed Lost</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button className="gap-2">
-          <PlusCircle className="h-4 w-4" />
-          New Deal
-        </Button>
       </div>
 
       {/* Deals Table */}
