@@ -6,6 +6,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
 import { LayoutDashboard, Target, Megaphone, Settings, ChevronDown, User as UserIcon, Building2, LogOut, Users, TrendingUp, RefreshCw, Globe, Handshake, Palette, Contact, Image, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useQuery } from '@tanstack/react-query';
+import { CompanyAvatar } from '@/components/CompanyAvatar';
 
 const Layout = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -13,6 +15,34 @@ const Layout = () => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Fetch company data for the current user
+  const { data: company } = useQuery({
+    queryKey: ["company", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      
+      const { data, error } = await supabase
+        .from("profiles")
+        .select(`
+          company_id,
+          companies (
+            id,
+            name,
+            email,
+            website,
+            industry,
+            status
+          )
+        `)
+        .eq("user_id", user.id)
+        .single();
+
+      if (error) throw error;
+      return data?.companies;
+    },
+    enabled: !!user?.id,
+  });
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -199,8 +229,12 @@ const Layout = () => {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center space-x-2">
+                  <CompanyAvatar 
+                    name={company?.name || "Company"} 
+                    size="sm"
+                  />
                   <span className="text-sm">
-                    {user.user_metadata?.full_name || user.email}
+                    {company?.name || "Company"}
                   </span>
                   <ChevronDown className="h-4 w-4" />
                 </Button>
