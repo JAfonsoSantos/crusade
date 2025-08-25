@@ -198,8 +198,8 @@ export default function Pipeline() {
 
   const filteredOpportunities = useMemo(() => {
     return opportunities.filter((opp) => {
-      const matchesSearch = opp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        opp.advertisers?.name.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = opp.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (opp.advertisers?.name && opp.advertisers.name.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesStage = stageFilter === "all" || opp.stage === stageFilter;
       return matchesSearch && matchesStage;
     });
