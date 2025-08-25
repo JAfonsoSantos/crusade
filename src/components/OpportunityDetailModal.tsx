@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar, DollarSign, Target, User, Briefcase, Zap, Edit, Save, X } from "lucide-react";
+import { Calendar, DollarSign, Target, User, Briefcase, Zap, Edit, Save, X, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -70,6 +71,7 @@ export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate 
   }));
   
   const { toast } = useToast();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const updateOpportunityMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -146,6 +148,11 @@ export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate 
 
   const currentStage = PIPELINE_STAGES.find(s => s.key === opportunity.stage);
 
+  const handleExpandView = () => {
+    navigate(`/deals/${opportunity.id}`);
+    onClose();
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -161,6 +168,10 @@ export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate 
               opportunity.name
             )}
             <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={handleExpandView} className="gap-2">
+                <ExternalLink className="h-4 w-4" />
+                Expand View
+              </Button>
               {isEditing ? (
                 <>
                   <Button size="sm" onClick={handleSave} disabled={updateOpportunityMutation.isPending}>
