@@ -1492,6 +1492,48 @@ export type Database = {
           },
         ]
       }
+      user_activity_logs: {
+        Row: {
+          action: string
+          company_id: string
+          created_at: string
+          details: Json | null
+          id: string
+          ip_address: unknown | null
+          resource_id: string | null
+          resource_type: string | null
+          session_id: string | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          company_id: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          ip_address?: unknown | null
+          resource_id?: string | null
+          resource_type?: string | null
+          session_id?: string | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          company_id?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          ip_address?: unknown | null
+          resource_id?: string | null
+          resource_type?: string | null
+          session_id?: string | null
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_company_access: {
         Row: {
           company_id: string
@@ -2014,6 +2056,16 @@ export type Database = {
       is_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean
+      }
+      log_user_activity: {
+        Args: {
+          p_action: string
+          p_details?: Json
+          p_resource_id?: string
+          p_resource_type?: string
+          p_user_id: string
+        }
+        Returns: undefined
       }
       refresh_all_materialized: {
         Args: Record<PropertyKey, never>

@@ -17,6 +17,7 @@ import Reports from "./pages/Reports";
 import Integrations from "./pages/Integrations";
 import PersonalSettings from "./pages/PersonalSettings";
 import BusinessSettings from "./pages/BusinessSettings";
+import UserLogs from "./pages/UserLogs";
 import DemoSite from "./pages/DemoSite";
 import Layout from "./components/Layout";
 import NotFound from "./pages/NotFound";
@@ -46,6 +47,7 @@ const App = () => (
             <Route path="demo-site" element={<DemoSite />} />
             <Route path="personal-settings" element={<PersonalSettings />} />
             <Route path="business-settings" element={<BusinessSettings />} />
+            <Route path="user-logs/:userId" element={<UserLogs />} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Building2, Save, Users, Plus, Edit, Trash2, RotateCcw, ShieldCheck } from 'lucide-react';
+import { Building2, Save, Users, Plus, Edit, Trash2, RotateCcw, ShieldCheck, FileText } from 'lucide-react';
 
 interface Company {
   id: string;
@@ -44,7 +45,8 @@ interface UserFormData {
   };
 }
 
-const BusinessSettings = () => {
+export default function BusinessSettings() {
+  const navigate = useNavigate();
   const [company, setCompany] = useState<Company | null>(null);
   const [hasCompany, setHasCompany] = useState<boolean | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
@@ -627,6 +629,15 @@ const BusinessSettings = () => {
                         <Edit className="h-4 w-4" />
                       </Button>
                       <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate(`/user-logs/${user.user_id}`)}
+                        className="flex items-center gap-2"
+                      >
+                        <FileText className="h-4 w-4" />
+                        Logs
+                      </Button>
+                      <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handlePasswordReset(user.user_id)}
@@ -792,5 +803,3 @@ const BusinessSettings = () => {
     </div>
   );
 };
-
-export default BusinessSettings;
