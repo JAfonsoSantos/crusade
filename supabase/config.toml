@@ -20,3 +20,9 @@ verify_jwt = false
 
 [functions.send-password-reset]
 verify_jwt = false
+
+[functions.salesforce-oauth-start]
+verify_jwt = false
+
+[functions.salesforce-oauth-callback]
+verify_jwt = false
