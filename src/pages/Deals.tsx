@@ -174,9 +174,6 @@ export default function Deals() {
       <div className="flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Deals</h1>
-          <p className="text-muted-foreground mt-2">
-            Manage and track all your sales opportunities
-          </p>
         </div>
         
         <div className="flex items-center gap-4">
