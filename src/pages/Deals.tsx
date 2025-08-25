@@ -178,10 +178,6 @@ export default function Deals() {
             Manage and track all your sales opportunities
           </p>
         </div>
-        <Button className="gap-2">
-          <PlusCircle className="h-4 w-4" />
-          New Deal
-        </Button>
       </div>
 
       {/* Summary Cards */}
@@ -272,6 +268,10 @@ export default function Deals() {
             </SelectContent>
           </Select>
         </div>
+        <Button className="gap-2">
+          <PlusCircle className="h-4 w-4" />
+          New Deal
+        </Button>
       </div>
 
       {/* Deals Table */}

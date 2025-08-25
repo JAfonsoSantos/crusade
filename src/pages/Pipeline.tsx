@@ -450,12 +450,6 @@ export default function Pipeline() {
           )}
         </div>
         
-        {selectedPipelineId && (
-          <Button className="gap-2">
-            <PlusCircle className="h-4 w-4" />
-            New Opportunity
-          </Button>
-        )}
       </div>
 
       {!selectedPipelineId ? (
@@ -508,7 +502,7 @@ export default function Pipeline() {
               </div>
               <Select value={stageFilter} onValueChange={setStageFilter}>
                 <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Filter by stage" />
+                  <SelectValue placeholder="All stages" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Stages</SelectItem>
@@ -520,23 +514,20 @@ export default function Pipeline() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex gap-2">
-              <Button
-                variant={view === "kanban" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setView("kanban")}
-              >
-                Kanban
+            {selectedPipelineId && (
+              <Button className="gap-2">
+                <PlusCircle className="h-4 w-4" />
+                New Opportunity
               </Button>
-              <Button
-                variant={view === "list" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setView("list")}
-              >
-                List
-              </Button>
-            </div>
+            )}
           </div>
+
+          <Tabs value={view} onValueChange={(value) => setView(value as "kanban" | "list")} className="mb-6">
+            <TabsList className="grid w-full grid-cols-2 max-w-[200px]">
+              <TabsTrigger value="kanban">Kanban</TabsTrigger>
+              <TabsTrigger value="list">List</TabsTrigger>
+            </TabsList>
+          </Tabs>
 
           {/* Pipeline Content */}
           <DndContext
