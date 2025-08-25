@@ -516,24 +516,34 @@ const Integrations = () => {
                 </div>
                 
                 <div className="grid w-full items-center gap-1.5">
-                  <Label htmlFor="integration_type">Integration Type</Label>
-                  <Select value={formData.integration_type} onValueChange={(value) => setFormData({ ...formData, integration_type: value, provider: value === 'ad_server' ? 'kevel' : 'salesforce' })}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background border shadow-lg z-50">
-                      <SelectItem value="ad_server">Ad Server</SelectItem>
-                      <SelectItem value="crm">CRM</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                   <Label htmlFor="integration_type">Integration Type</Label>
+                   <Select 
+                     value={formData.integration_type} 
+                     onValueChange={(value) => {
+                       const newProvider = value === 'ad_server' ? 'kevel' : 'salesforce';
+                       setFormData({ 
+                         ...formData, 
+                         integration_type: value, 
+                         provider: newProvider 
+                       });
+                     }}
+                   >
+                     <SelectTrigger>
+                       <SelectValue placeholder="Select integration type" />
+                     </SelectTrigger>
+                     <SelectContent className="bg-background border shadow-lg z-50">
+                       <SelectItem value="ad_server">Ad Server</SelectItem>
+                       <SelectItem value="crm">CRM</SelectItem>
+                     </SelectContent>
+                   </Select>
+                 </div>
                 
-                <div className="grid w-full items-center gap-1.5">
-                  <Label htmlFor="provider">Provider</Label>
-                  <Select value={formData.provider} onValueChange={(value) => setFormData({ ...formData, provider: value })}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                 <div className="grid w-full items-center gap-1.5">
+                   <Label htmlFor="provider">Provider</Label>
+                   <Select value={formData.provider} onValueChange={(value) => setFormData({ ...formData, provider: value })}>
+                     <SelectTrigger>
+                       <SelectValue placeholder="Select a provider" />
+                     </SelectTrigger>
                     <SelectContent className="bg-background border shadow-lg z-50">
                       {formData.integration_type === 'ad_server' ? (
                         <>
