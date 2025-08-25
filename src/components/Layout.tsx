@@ -19,10 +19,8 @@ const Layout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // Ativa o logging automático de páginas para utilizadores autenticados
-  if (user) {
-    usePageLogger();
-  }
+  // Sempre chama o hook - será ativado apenas quando há utilizador autenticado
+  usePageLogger();
 
   // Fetch company data for the current user
   const { data: company } = useQuery({
