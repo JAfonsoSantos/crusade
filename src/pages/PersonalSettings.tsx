@@ -3,10 +3,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { User as UserIcon, Mail, Save, Upload, Camera } from 'lucide-react';
+import { User as UserIcon, Mail, Save, Upload, Camera, Globe } from 'lucide-react';
 import { UserAvatar } from '@/components/UserAvatar';
+import { useLanguage, Language } from '@/contexts/LanguageContext';
 
 interface UserProfile {
   id: string;
@@ -28,6 +30,7 @@ const PersonalSettings = () => {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const { language, setLanguage, t } = useLanguage();
 
   useEffect(() => {
     fetchProfile();
@@ -73,11 +76,11 @@ const PersonalSettings = () => {
       });
       
       if (emailError) {
-        toast({
-          title: "Error",
-          description: "Could not update email: " + emailError.message,
-          variant: "destructive",
-        });
+      toast({
+        title: t('common.error'),
+        description: "Could not update email: " + emailError.message,
+        variant: "destructive",
+      });
         setSaving(false);
         return;
       }
@@ -85,7 +88,7 @@ const PersonalSettings = () => {
 
     if (profileError) {
       toast({
-        title: "Error",
+        title: t('common.error'),
         description: "Could not update profile.",
         variant: "destructive",
       });
@@ -107,7 +110,7 @@ const PersonalSettings = () => {
     // Validate file type and size
     if (!file.type.startsWith('image/')) {
       toast({
-        title: "Error",
+        title: t('common.error'),
         description: "Please select an image file.",
         variant: "destructive",
       });
@@ -116,7 +119,7 @@ const PersonalSettings = () => {
 
     if (file.size > 5 * 1024 * 1024) { // 5MB limit
       toast({
-        title: "Error", 
+        title: t('common.error'), 
         description: "Image size must be less than 5MB.",
         variant: "destructive",
       });
@@ -187,13 +190,13 @@ const PersonalSettings = () => {
   };
 
   if (loading) {
-    return <div>Loading...</div>;
+    return <div>{t('common.loading')}</div>;
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Personal Settings</h2>
+        <h2 className="text-3xl font-bold tracking-tight">{t('settings.personalSettings')}</h2>
         <p className="text-muted-foreground">
           Manage your personal account settings and preferences
         </p>
@@ -280,8 +283,36 @@ const PersonalSettings = () => {
 
             <Button onClick={handleSave} disabled={saving} className="w-full">
               <Save className="mr-2 h-4 w-4" />
-              {saving ? "Saving..." : "Save Changes"}
+              {saving ? "Saving..." : t('common.save')}
             </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Globe className="h-5 w-5" />
+              {t('settings.language')}
+            </CardTitle>
+            <CardDescription>
+              Select your preferred language for the interface.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid w-full items-center gap-1.5">
+              <Label htmlFor="language">{t('settings.language')}</Label>
+              <Select value={language} onValueChange={(value: Language) => setLanguage(value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select language" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="en">{t('language.en')}</SelectItem>
+                  <SelectItem value="fr">{t('language.fr')}</SelectItem>
+                  <SelectItem value="es">{t('language.es')}</SelectItem>
+                  <SelectItem value="pt">{t('language.pt')}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </CardContent>
         </Card>
 

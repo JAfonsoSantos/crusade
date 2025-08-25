@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Search, Filter, Calendar, BarChart3, Play, Pause, Edit } from 'lucide-react';
 import { useActivityLogger } from '@/hooks/useActivityLogger';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface Flight {
   id: string;
@@ -42,6 +43,7 @@ export default function Flights() {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const { logActivity } = useActivityLogger();
+  const { t } = useLanguage();
 
   useEffect(() => {
     fetchFlights();
@@ -90,8 +92,8 @@ export default function Flights() {
     } catch (error) {
       console.error('Error fetching flights:', error);
       toast({
-        title: "Erro",
-        description: "Erro ao carregar voos.",
+        title: t('common.error'),
+        description: t('flights.error'),
         variant: "destructive",
       });
     } finally {
@@ -107,6 +109,10 @@ export default function Flights() {
       case 'completed': return 'bg-blue-500';
       default: return 'bg-gray-400';
     }
+  };
+
+  const getStatusLabel = (status: string) => {
+    return t(`status.${status}`) || status;
   };
 
   const formatCurrency = (amount: number, currency: string = 'EUR') => {
@@ -138,8 +144,8 @@ export default function Flights() {
     return (
       <div className="space-y-6">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Voos</h2>
-          <p className="text-muted-foreground">Carregando...</p>
+          <h2 className="text-3xl font-bold tracking-tight">{t('flights.title')}</h2>
+          <p className="text-muted-foreground">{t('flights.loading')}</p>
         </div>
       </div>
     );
@@ -152,9 +158,9 @@ export default function Flights() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Voos</h2>
+          <h2 className="text-3xl font-bold tracking-tight">{t('flights.title')}</h2>
           <p className="text-muted-foreground">
-            Gerencie os voos das suas campanhas publicitárias
+            {t('flights.description')}
           </p>
         </div>
       </div>
@@ -163,7 +169,7 @@ export default function Flights() {
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Voos</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('flights.total')}</CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -173,7 +179,7 @@ export default function Flights() {
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Voos Ativos</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('flights.active')}</CardTitle>
             <Play className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -185,7 +191,7 @@ export default function Flights() {
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Impressões</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('flights.totalImpressions')}</CardTitle>
             <BarChart3 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -197,7 +203,7 @@ export default function Flights() {
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Gasto</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('flights.totalSpend')}</CardTitle>
             <BarChart3 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -213,7 +219,7 @@ export default function Flights() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Filter className="h-5 w-5" />
-            Filtros
+            {t('flights.filters')}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -222,7 +228,7 @@ export default function Flights() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Pesquisar voos ou campanhas..."
+                  placeholder={t('flights.search')}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -238,8 +244,8 @@ export default function Flights() {
         <Card>
           <CardContent className="text-center py-8 text-muted-foreground">
             {flights.length === 0 
-              ? "Nenhum voo encontrado. Crie a primeira campanha com voos." 
-              : "Nenhum voo encontrado com os filtros aplicados."
+              ? t('flights.noFlights')
+              : t('flights.noFilteredFlights')
             }
           </CardContent>
         </Card>
@@ -249,11 +255,11 @@ export default function Flights() {
             <Card key={campaignId}>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
-                  <span>Campanha: {campaignName}</span>
-                  <Badge variant="outline">{flights.length} voos</Badge>
+                  <span>{t('flights.campaign')}: {campaignName}</span>
+                  <Badge variant="outline">{flights.length} {t('flights.title').toLowerCase()}</Badge>
                 </CardTitle>
                 <CardDescription>
-                  Voos da campanha {campaignName}
+                  {t('flights.campaignFlights')} {campaignName}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -264,10 +270,10 @@ export default function Flights() {
                         <div className="flex items-center gap-3">
                           <h4 className="font-semibold text-lg">{flight.name}</h4>
                           <Badge className={getStatusColor(flight.status)}>
-                            {flight.status}
+                            {getStatusLabel(flight.status)}
                           </Badge>
                           <Badge variant="outline">
-                            Prioridade {flight.priority}
+                            {t('flights.priority')} {flight.priority}
                           </Badge>
                         </div>
                         <div className="flex items-center gap-2">
@@ -279,19 +285,19 @@ export default function Flights() {
                       
                       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
                         <div>
-                          <p className="text-sm text-muted-foreground">Período</p>
+                          <p className="text-sm text-muted-foreground">{t('flights.period')}</p>
                           <p className="font-medium">
-                            {new Date(flight.start_date).toLocaleDateString('pt-PT')} - {new Date(flight.end_date).toLocaleDateString('pt-PT')}
+                            {new Date(flight.start_date).toLocaleDateString()} - {new Date(flight.end_date).toLocaleDateString()}
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm text-muted-foreground">Orçamento</p>
+                          <p className="text-sm text-muted-foreground">{t('flights.budget')}</p>
                           <p className="font-medium">
                             {flight.budget ? formatCurrency(flight.budget, flight.currency) : 'N/A'}
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm text-muted-foreground">Gasto</p>
+                          <p className="text-sm text-muted-foreground">{t('flights.spend')}</p>
                           <p className="font-medium">
                             {formatCurrency(flight.spend, flight.currency)}
                           </p>
@@ -307,15 +313,15 @@ export default function Flights() {
                       <div className="grid md:grid-cols-3 gap-4 text-sm">
                         <div className="text-center p-2 bg-blue-50 rounded">
                           <p className="text-blue-600 font-medium">{flight.impressions.toLocaleString()}</p>
-                          <p className="text-blue-500">Impressões</p>
+                          <p className="text-blue-500">{t('flights.impressions')}</p>
                         </div>
                         <div className="text-center p-2 bg-green-50 rounded">
                           <p className="text-green-600 font-medium">{flight.clicks.toLocaleString()}</p>
-                          <p className="text-green-500">Cliques</p>
+                          <p className="text-green-500">{t('flights.clicks')}</p>
                         </div>
                         <div className="text-center p-2 bg-purple-50 rounded">
                           <p className="text-purple-600 font-medium">{flight.conversions.toLocaleString()}</p>
-                          <p className="text-purple-500">Conversões</p>
+                          <p className="text-purple-500">{t('flights.conversions')}</p>
                         </div>
                       </div>
                     </div>
