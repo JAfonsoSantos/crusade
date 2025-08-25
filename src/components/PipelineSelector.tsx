@@ -1,7 +1,7 @@
 import React from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Zap, Plus, ChevronDown } from "lucide-react";
+import { Building2, Zap, Plus } from "lucide-react";
 import { CreatePipelineModal } from "./CreatePipelineModal";
 
 type Pipeline = {
@@ -36,7 +36,6 @@ export function PipelineSelector({
         </h1>
         <Select value={selectedPipelineId || ""} onValueChange={onPipelineChange}>
           <SelectTrigger className="w-auto border-none shadow-none p-1 h-auto">
-            <ChevronDown className="h-5 w-5 text-muted-foreground" />
           </SelectTrigger>
           <SelectContent align="start" className="min-w-[300px] bg-background border shadow-lg z-50">
             {pipelines.map((pipeline) => (
