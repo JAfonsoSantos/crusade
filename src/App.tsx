@@ -19,6 +19,9 @@ import PersonalSettings from "./pages/PersonalSettings";
 import BusinessSettings from "./pages/BusinessSettings";
 import UserLogs from "./pages/UserLogs";
 import DemoSite from "./pages/DemoSite";
+import Advertisers from "./pages/Advertisers";
+import Brands from "./pages/Brands";
+import Contacts from "./pages/Contacts";
 import Layout from "./components/Layout";
 import NotFound from "./pages/NotFound";
 
@@ -39,6 +42,9 @@ const App = () => (
             <Route path="pipeline" element={<Pipeline />} />
             <Route path="deals" element={<Deals />} />
             <Route path="deals/:id" element={<DealDetail />} />
+            <Route path="advertisers" element={<Advertisers />} />
+            <Route path="brands" element={<Brands />} />
+            <Route path="contacts" element={<Contacts />} />
             <Route path="spaces" element={<Spaces />} />
             <Route path="campaigns" element={<Campaigns />} />
             <Route path="forecast" element={<Forecast />} />

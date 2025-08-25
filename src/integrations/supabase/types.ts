@@ -519,6 +519,74 @@ export type Database = {
         }
         Relationships: []
       }
+      contacts: {
+        Row: {
+          advertiser_id: string | null
+          company_id: string
+          company_name: string | null
+          created_at: string
+          created_by: string | null
+          email: string | null
+          first_name: string | null
+          id: string
+          job_title: string | null
+          last_name: string | null
+          lead_source: string | null
+          linkedin_url: string | null
+          notes: string | null
+          phone: string | null
+          status: string | null
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          advertiser_id?: string | null
+          company_id: string
+          company_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          job_title?: string | null
+          last_name?: string | null
+          lead_source?: string | null
+          linkedin_url?: string | null
+          notes?: string | null
+          phone?: string | null
+          status?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          advertiser_id?: string | null
+          company_id?: string
+          company_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          job_title?: string | null
+          last_name?: string | null
+          lead_source?: string | null
+          linkedin_url?: string | null
+          notes?: string | null
+          phone?: string | null
+          status?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contacts_advertiser_id_fkey"
+            columns: ["advertiser_id"]
+            isOneToOne: false
+            referencedRelation: "advertisers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       creatives: {
         Row: {
           asset_url: string | null
