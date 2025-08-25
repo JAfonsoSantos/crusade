@@ -106,10 +106,6 @@ export default function Deals() {
           pipelines (
             name,
             stages
-          ),
-          profiles!owner_id (
-            full_name,
-            avatar_url
           )
         `)
         .order("created_at", { ascending: false });
@@ -337,11 +333,11 @@ export default function Deals() {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <UserAvatar 
-                        src={opportunity.profiles?.avatar_url}
-                        name={opportunity.profiles?.full_name || "Unknown User"}
+                        src={null}
+                        name="Unknown User"
                         size="sm"
                       />
-                      <span className="text-sm">{opportunity.profiles?.full_name || "—"}</span>
+                      <span className="text-sm">—</span>
                     </div>
                   </TableCell>
                   <TableCell>
