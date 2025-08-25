@@ -97,23 +97,8 @@ export default function Pipeline() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Check permissions
-  if (permissionsLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-lg">Loading...</div>
-      </div>
-    );
-  }
-
-  if (!hasPermission('pipeline')) {
-    return <AccessDenied 
-      module="pipeline" 
-      title="Pipeline Management"
-      description="Gerir o pipeline de vendas e oportunidades comerciais."
-    />;
-  }
-
+  // Permission gating
+  const blocked = !permissionsLoading && !hasPermission('pipeline');
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -135,6 +120,7 @@ export default function Pipeline() {
       if (error) throw error;
       return data as Pipeline[];
     },
+    enabled: !blocked,
   });
 
   // Set default pipeline when pipelines load
@@ -183,7 +169,7 @@ export default function Pipeline() {
       if (error) throw error;
       return data as Opportunity[];
     },
-    enabled: !!selectedPipelineId,
+    enabled: !!selectedPipelineId && !blocked,
   });
 
   const currentPipeline = pipelines.find(p => p.id === selectedPipelineId);
@@ -444,14 +430,29 @@ export default function Pipeline() {
     </Card>
   );
 
-  if (pipelinesLoading || isLoading) {
+  if (permissionsLoading) {
     return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-lg">Loading...</div>
+      </div>
+    );
+  }
+
+  if (blocked) {
+    return <AccessDenied 
+      module="pipeline" 
+      title="Pipeline Management"
+      description="Gerir o pipeline de vendas e oportunidades comerciais."
+    />;
+  }
+
+  if (pipelinesLoading || isLoading) {
+  return (
       <div className="flex items-center justify-center h-64">
         <div className="text-lg">Loading pipelines...</div>
       </div>
     );
   }
-
   return (
     <div className="space-y-6">
       {/* Header with Pipeline Selector */}

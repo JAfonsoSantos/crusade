@@ -15,25 +15,12 @@ const CampaignsPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedItem, setSelectedItem] = useState<TimelineItem | null>(null);
 
-  // Check permissions
-  if (permissionsLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-lg">Loading...</div>
-      </div>
-    );
-  }
-
-  if (!hasPermission('campaigns')) {
-    return <AccessDenied 
-      module="campaigns" 
-      title="Campaign Management"
-      description="Gerir campanhas publicitárias e voos de anúncios."
-    />;
-  }
+  // Permission gating
+  const blocked = !permissionsLoading && !hasPermission('campaigns');
 
   // Load campaigns and flights data for timeline
   useEffect(() => {
+    if (blocked) { setTimelineItems([]); setLoading(false); return; }
     (async () => {
       setLoading(true);
       try {
@@ -105,7 +92,7 @@ const CampaignsPage: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [blocked]);
 
   const campaigns = useMemo(() => {
     const unique = [...new Set(timelineItems.map(item => item.campaign_name))];
@@ -115,6 +102,22 @@ const CampaignsPage: React.FC = () => {
   const handleItemSelect = (item: TimelineItem) => {
     setSelectedItem(item);
   };
+
+  if (permissionsLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-lg">Loading...</div>
+      </div>
+    );
+  }
+
+  if (blocked) {
+    return <AccessDenied 
+      module="campaigns" 
+      title="Campaign Management"
+      description="Gerir campanhas publicitrias e voos de ancios."
+    />;
+  }
 
   return (
     <div className="space-y-6">
