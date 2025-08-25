@@ -45,7 +45,7 @@ const Layout = () => {
   };
 
   const pipelineItems = [
-    { name: 'Deals', href: '/pipeline', icon: Handshake },
+    { name: 'Deals', href: '/deals', icon: Handshake },
     { name: 'Advertisers', href: '/advertisers', icon: Building2 },
     { name: 'Brands', href: '/brands', icon: Palette },
     { name: 'Contacts', href: '/contacts', icon: Contact },
