@@ -22,6 +22,7 @@ import DemoSite from "./pages/DemoSite";
 import Advertisers from "./pages/Advertisers";
 import Brands from "./pages/Brands";
 import Contacts from "./pages/Contacts";
+import Flights from "./pages/Flights";
 import Layout from "./components/Layout";
 import NotFound from "./pages/NotFound";
 
@@ -47,6 +48,7 @@ const App = () => (
             <Route path="contacts" element={<Contacts />} />
             <Route path="spaces" element={<Spaces />} />
             <Route path="campaigns" element={<Campaigns />} />
+            <Route path="flights" element={<Flights />} />
             <Route path="forecast" element={<Forecast />} />
             <Route path="reports" element={<Reports />} />
             <Route path="integrations" element={<Integrations />} />

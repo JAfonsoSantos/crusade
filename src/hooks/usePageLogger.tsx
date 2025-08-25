@@ -14,6 +14,7 @@ const routeNames: Record<string, string> = {
   '/contacts': 'Contacts',
   '/spaces': 'Ad Spaces',
   '/campaigns': 'Campaigns',
+  '/flights': 'Flights',
   '/forecast': 'Forecast',
   '/reports': 'Reports',
   '/integrations': 'Integrations',
