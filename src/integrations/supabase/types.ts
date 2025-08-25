@@ -194,6 +194,50 @@ export type Database = {
           },
         ]
       }
+      brands: {
+        Row: {
+          advertiser_id: string
+          company_id: string
+          created_at: string
+          description: string | null
+          id: string
+          logo_url: string | null
+          name: string
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          advertiser_id: string
+          company_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          logo_url?: string | null
+          name: string
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          advertiser_id?: string
+          company_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          logo_url?: string | null
+          name?: string
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brands_advertiser_id_fkey"
+            columns: ["advertiser_id"]
+            isOneToOne: false
+            referencedRelation: "advertisers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaign_ad_spaces: {
         Row: {
           ad_space_id: string
@@ -315,6 +359,7 @@ export type Database = {
       campaigns: {
         Row: {
           advertiser_id: string | null
+          brand_id: string | null
           budget: number | null
           company_id: string
           created_at: string
@@ -330,6 +375,7 @@ export type Database = {
         }
         Insert: {
           advertiser_id?: string | null
+          brand_id?: string | null
           budget?: number | null
           company_id: string
           created_at?: string
@@ -345,6 +391,7 @@ export type Database = {
         }
         Update: {
           advertiser_id?: string | null
+          brand_id?: string | null
           budget?: number | null
           company_id?: string
           created_at?: string
@@ -364,6 +411,13 @@ export type Database = {
             columns: ["advertiser_id"]
             isOneToOne: false
             referencedRelation: "advertisers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaigns_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
             referencedColumns: ["id"]
           },
           {
