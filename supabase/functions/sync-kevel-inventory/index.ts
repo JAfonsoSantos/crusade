@@ -49,51 +49,32 @@ Deno.serve(async (req) => {
     )
 
     const { integrationId } = await req.json()
-    
-    // Check if integration exists and is active
+
+    // Get the integration details
     const { data: integration, error: integrationError } = await supabase
       .from('ad_server_integrations')
       .select('*')
       .eq('id', integrationId)
       .single()
-    
+
     if (integrationError || !integration) {
-      console.error('Integration not found:', integrationError)
       return new Response(
-        JSON.stringify({ error: 'Integration not found' }),
+        JSON.stringify({ 
+          error: 'Integration not found',
+          details: integrationError?.message || 'No integration found with provided ID'
+        }),
         { 
           status: 404, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       )
     }
-    
-    // Check if integration is paused
+
     if (integration.status === 'paused') {
-      console.log(`Integration ${integrationId} is paused, skipping sync`)
       return new Response(
         JSON.stringify({ 
-          message: 'Integration is paused, sync skipped',
-          synced: 0,
-          errors: 0,
-          operations: {}
-        }),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
-    }
-    
-    // Check if integration is active
-    if (integration.status !== 'active') {
-      console.log(`Integration ${integrationId} is not active (status: ${integration.status}), skipping sync`)
-      return new Response(
-        JSON.stringify({ 
-          error: `Integration is ${integration.status}, cannot sync`,
-          synced: 0,
-          errors: 1,
-          operations: {}
+          error: 'Integration is paused',
+          details: 'Integration sync is temporarily paused'
         }),
         { 
           status: 400, 
@@ -102,15 +83,28 @@ Deno.serve(async (req) => {
       )
     }
 
+    if (integration.status !== 'active') {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Integration is not active',
+          details: `Integration status is ${integration.status}`
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
 
     if (integration.provider !== 'kevel') {
+      console.error('Invalid provider:', integration.provider)
       return new Response(
-        JSON.stringify({ error: 'This function only supports Kevel integrations' }),
+        JSON.stringify({ error: 'Invalid provider', details: 'Expected Kevel provider' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    const apiKey = integration.api_key_encrypted
+    const apiKey = integration.api_key // This should be decrypted in production
     if (!apiKey) {
       console.error('No API key found for integration')
       return new Response(
@@ -119,9 +113,9 @@ Deno.serve(async (req) => {
       )
     }
 
-    console.log('Fetching sites and campaigns from Kevel API...')
+    console.log('Starting sync for integration:', integration.name)
 
-    // Fetch both sites and campaigns from Kevel Management API
+    // Fetch sites and campaigns from Kevel
     const [sitesResponse, campaignsResponse] = await Promise.all([
       fetch('https://api.kevel.co/v1/site', {
         method: 'GET',
@@ -136,12 +130,11 @@ Deno.serve(async (req) => {
           'X-Adzerk-ApiKey': apiKey,
           'Content-Type': 'application/json',
         },
-      })
+      }),
     ])
 
     if (!sitesResponse.ok) {
-      const errorText = await sitesResponse.text()
-      console.error('Kevel Sites API error:', sitesResponse.status, errorText)
+      console.error('Failed to fetch sites from Kevel:', sitesResponse.status, sitesResponse.statusText)
       
       await supabase
         .from('ad_server_integrations')
@@ -153,16 +146,15 @@ Deno.serve(async (req) => {
 
       return new Response(
         JSON.stringify({ 
-          error: 'Failed to fetch sites from Kevel API', 
-          details: `${sitesResponse.status}: ${errorText}` 
+          error: 'Failed to fetch sites from Kevel',
+          details: `HTTP ${sitesResponse.status}: ${sitesResponse.statusText}`
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
     if (!campaignsResponse.ok) {
-      const errorText = await campaignsResponse.text()
-      console.error('Kevel Campaigns API error:', campaignsResponse.status, errorText)
+      console.error('Failed to fetch campaigns from Kevel:', campaignsResponse.status, campaignsResponse.statusText)
       
       await supabase
         .from('ad_server_integrations')
@@ -174,16 +166,18 @@ Deno.serve(async (req) => {
 
       return new Response(
         JSON.stringify({ 
-          error: 'Failed to fetch campaigns from Kevel API', 
-          details: `${campaignsResponse.status}: ${errorText}` 
+          error: 'Failed to fetch campaigns from Kevel',
+          details: `HTTP ${campaignsResponse.status}: ${campaignsResponse.statusText}`
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    const sitesData: { items: KevelSite[] } = await sitesResponse.json()
-    const campaignsData: { items: KevelCampaign[] } = await campaignsResponse.json()
-    
+    const sitesData: KevelApiResponse = await sitesResponse.json()
+    const campaignsData: KevelApiResponse = await campaignsResponse.json()
+
+    console.log(`Fetched ${sitesData.items?.length || 0} sites and ${campaignsData.items?.length || 0} campaigns from Kevel`)
+
     let syncedCount = 0
     let errorCount = 0
     
@@ -199,44 +193,38 @@ Deno.serve(async (req) => {
       { Name: 'Banner', Width: 728, Height: 90 },
       { Name: 'Leaderboard', Width: 728, Height: 90 },
       { Name: 'Medium Rectangle', Width: 300, Height: 250 },
+      { Name: 'Large Rectangle', Width: 336, Height: 280 },
       { Name: 'Skyscraper', Width: 160, Height: 600 },
+      { Name: 'Wide Skyscraper', Width: 300, Height: 600 },
       { Name: 'Mobile Banner', Width: 320, Height: 50 },
-      { Name: 'Square', Width: 250, Height: 250 }
+      { Name: 'Mobile Large Banner', Width: 320, Height: 100 }
     ]
 
-    // Sync Ad Spaces and create Ad Units in Kevel
-    // Kevel Hierarchy: NETWORK (You) → ADVERTISER → CAMPAIGN → FLIGHT → AD
-    // Sites represent platforms (iOS, Android, Web) - where ads appear
-    // Ad Units are specific placements within sites
-    console.log('Syncing ad spaces and creating Ad Units in Kevel...')
+    // Process sites and create ad spaces
     for (const site of sitesData.items || []) {
-      console.log(`Processing site: ${site.Title} (ID: ${site.Id}) - Platform level in Kevel hierarchy`)
+      console.log(`Processing site: ${site.Title}`)
       
-      // Count existing ad units for this site (only once per site)
       let siteAdUnitsCountedAlready = false
-      
+
       for (const adSize of commonAdSizes) {
         try {
-          // First, check if Ad Unit already exists in Kevel with exact match
           const adUnitName = `${site.Title} - ${adSize.Name}`
-          
-          console.log(`Checking for existing Ad Unit: ${adUnitName}`)
-          
-          // Check if Ad Unit already exists in Kevel using zone/list endpoint
+          let adUnitId = null
+          let needsUpdate = false
+          let kevelAdUnitCreated = false
+
+          // Check if ad unit already exists for this site and ad size
           const adUnitsResponse = await fetch(`https://api.kevel.co/v1/zone/list`, {
-            method: 'POST',
+            method: 'GET',
             headers: {
               'X-Adzerk-ApiKey': apiKey,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              SiteId: site.Id
+              'SiteId': site.Id
             })
           })
-          
-          let adUnitId = null
-          let needsUpdate = false
-          
+
           if (adUnitsResponse.ok) {
             const adUnitsData = await adUnitsResponse.json()
             
@@ -245,34 +233,27 @@ Deno.serve(async (req) => {
               operationDetails.ad_units.existing += adUnitsData.items?.length || 0
               siteAdUnitsCountedAlready = true
             }
-            
-            const existingAdUnit = adUnitsData.items?.find((unit: any) => 
-              unit.Name === adUnitName || 
-              unit.Name.toLowerCase() === adUnitName.toLowerCase()
+
+            // Find existing ad unit with the same size
+            const existingAdUnit = adUnitsData.items?.find((adUnit: any) => 
+              adUnit.Width === adSize.Width && adUnit.Height === adSize.Height
             )
-            
+
             if (existingAdUnit) {
               adUnitId = existingAdUnit.Id
-              console.log(`Found existing Ad Unit: ${adUnitName} (ID: ${adUnitId})`)
-              
-              // Check if dimensions need updating
               if (existingAdUnit.Width !== adSize.Width || existingAdUnit.Height !== adSize.Height) {
                 needsUpdate = true
-                console.log(`Ad Unit dimensions need updating: ${existingAdUnit.Width}x${existingAdUnit.Height} -> ${adSize.Width}x${adSize.Height}`)
               }
               
               operationDetails.ad_units.updated++ // Count as processed
             }
           } else {
-            console.log(`Could not fetch existing ad units for site ${site.Id}: ${adUnitsResponse.status}`)
-            // We can't verify existing ad units, but we'll still create ad spaces in our database
-            console.log(`Could not verify existing ad units, but will still create ad space in Crusade for ${adUnitName}`)
+            console.warn(`Failed to fetch ad units for site ${site.Id}: ${adUnitsResponse.status}`)
           }
-          
-          // Try to create Ad Unit in Kevel if it doesn't exist
-          let kevelAdUnitCreated = false
+
+          // Create ad unit in Kevel if it doesn't exist
           if (!adUnitId) {
-            console.log(`Creating new Ad Unit in Kevel: ${adUnitName}`)
+            // Create the ad unit/zone in Kevel
             const createAdUnitResponse = await fetch(`https://api.kevel.co/v1/site/${site.Id}/zone`, {
               method: 'POST',
               headers: {
@@ -281,13 +262,11 @@ Deno.serve(async (req) => {
               },
               body: JSON.stringify({
                 Name: adUnitName,
-                SiteId: site.Id,
-                IsDeleted: false,
                 Width: adSize.Width,
                 Height: adSize.Height
-              }),
+              })
             })
-            
+
             if (createAdUnitResponse.ok) {
               const newAdUnit = await createAdUnitResponse.json()
               adUnitId = newAdUnit.Id
@@ -295,13 +274,11 @@ Deno.serve(async (req) => {
               kevelAdUnitCreated = true
               console.log(`Successfully created Ad Unit: ${adUnitName} (ID: ${adUnitId})`)
             } else {
-              const errorText = await createAdUnitResponse.text()
-              console.log(`Could not create Ad Unit in Kevel: ${adUnitName} - ${createAdUnitResponse.status}: ${errorText}`)
-              // Don't count as error - Kevel API issues don't affect our ad spaces
+              console.error(`Failed to create ad unit ${adUnitName}:`, createAdUnitResponse.status, createAdUnitResponse.statusText)
+              continue
             }
           } else if (needsUpdate) {
-            // Update existing Ad Unit if dimensions changed
-            console.log(`Updating Ad Unit dimensions: ${adUnitName}`)
+            // Update existing ad unit if needed
             const updateResponse = await fetch(`https://api.kevel.co/v1/zone/${adUnitId}`, {
               method: 'PUT',
               headers: {
@@ -310,51 +287,52 @@ Deno.serve(async (req) => {
               },
               body: JSON.stringify({
                 Name: adUnitName,
-                SiteId: site.Id,
-                IsDeleted: false,
                 Width: adSize.Width,
                 Height: adSize.Height
-              }),
+              })
             })
-            
+
             if (!updateResponse.ok) {
-              const errorText = await updateResponse.text()
-              console.log(`Could not update Ad Unit in Kevel: ${adUnitName} - ${updateResponse.status}: ${errorText}`)
-              // Don't count as error - Kevel API issues don't affect our ad spaces
+              console.error(`Failed to update ad unit ${adUnitName}:`, updateResponse.status)
+              continue
             } else {
               console.log(`Successfully updated Ad Unit: ${adUnitName}`)
             }
           } else {
-            console.log(`Ad Unit already exists and is up to date: ${adUnitName}`)
+            console.log(`Ad Unit already exists and is up to date: ${adUnitName} (ID: ${adUnitId})`)
           }
 
-          // Create/update ad space in our database (Crusade inventory)
-          // This maps Kevel's Ad Units to our unified ad_spaces table
-          // Format: "Platform - AdSize" (e.g., "iOS - Banner", "Web - Leaderboard")
-          console.log(`Creating/updating ad space in Crusade database: ${adUnitName}`)
+          // Create or update ad space in our database
           const adSpaceData = {
-            name: adUnitName, // Follows Kevel naming: Site.Title - AdSize.Name
+            name: adUnitName,
+            description: `Ad space for ${site.Title} - ${adSize.Name} (${adSize.Width}x${adSize.Height})`,
+            dimensions: `${adSize.Width}x${adSize.Height}`,
+            location: `${site.Url} (kevel.co)`,
             type: 'display',
-            size: `${adSize.Width}x${adSize.Height}`, // Standard IAB sizes
-            location: site.Url || site.Title, // Platform identifier (iOS, Android, Web)
-            base_price: 2.50, // Default CPM price
-            price_model: 'cpm',
-            currency: 'USD',
-            status: 'available',
+            status: 'active',
             company_id: integration.company_id,
+            external_id: adUnitId?.toString(),
+            ad_server: 'kevel',
+            targeting_criteria: {
+              site_id: site.Id,
+              site_name: site.Title,
+              ad_size: adSize.Name,
+              kevel_zone_id: adUnitId
+            },
+            pricing_model: 'cpm',
+            floor_price: 1.00
           }
 
-          console.log(`Ad space data:`, adSpaceData)
-
+          // Check if ad space already exists
           const { data: existingSpace } = await supabase
             .from('ad_spaces')
             .select('id')
-            .eq('name', adSpaceData.name)
-            .eq('company_id', integration.company_id)
+            .eq('external_id', adUnitId?.toString())
+            .eq('ad_server', 'kevel')
             .single()
 
           if (existingSpace) {
-            // Ad space already exists - check if it needs updating
+            // Update existing ad space
             const { error: updateError } = await supabase
               .from('ad_spaces')
               .update(adSpaceData)
@@ -370,6 +348,7 @@ Deno.serve(async (req) => {
               syncedCount++
             }
           } else {
+            // Insert new ad space
             const { error: insertError } = await supabase
               .from('ad_spaces')
               .insert(adSpaceData)
@@ -393,47 +372,51 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Sync Campaigns from Kevel
-    console.log('Syncing campaigns from Kevel...')
+    // Process campaigns and sync them
     for (const kevelCampaign of campaignsData.items || []) {
-      if (kevelCampaign.IsDeleted) continue
-      
-      console.log(`Processing campaign: ${kevelCampaign.Name} (ID: ${kevelCampaign.Id})`)
-      
+      if (kevelCampaign.IsDeleted) {
+        continue // Skip deleted campaigns
+      }
+
       try {
-        // Safely handle date fields that might be undefined
-        const startDate = kevelCampaign.StartDate ? kevelCampaign.StartDate.split('T')[0] : new Date().toISOString().split('T')[0]
-        const endDate = kevelCampaign.EndDate ? kevelCampaign.EndDate.split('T')[0] : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // Default to 7 days from now
-        
+        const startDate = kevelCampaign.StartDate ? new Date(kevelCampaign.StartDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+        const endDate = kevelCampaign.EndDate ? new Date(kevelCampaign.EndDate).toISOString().split('T')[0] : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
         const campaignData = {
           name: kevelCampaign.Name,
           description: `Imported from Kevel (ID: ${kevelCampaign.Id})`,
           start_date: startDate,
           end_date: endDate,
-          budget: kevelCampaign.Price || 1000, // Default budget if not provided
+          budget: kevelCampaign.Price || null,
           currency: 'USD',
           status: kevelCampaign.IsActive ? 'active' : 'paused',
           company_id: integration.company_id,
-          // Don't set created_by for synced campaigns - it requires a valid user ID
+          external_id: kevelCampaign.Id.toString(),
+          ad_server: 'kevel',
+          targeting_criteria: {
+            kevel_campaign_id: kevelCampaign.Id,
+            advertiser_id: kevelCampaign.AdvertiserId
+          }
         }
 
-        // Check if campaign already exists (by name and company)
+        // Check if campaign already exists
         const { data: existingCampaign } = await supabase
           .from('campaigns')
           .select('id')
-          .eq('name', campaignData.name)
-          .eq('company_id', integration.company_id)
+          .eq('external_id', kevelCampaign.Id.toString())
+          .eq('ad_server', 'kevel')
           .single()
 
         if (existingCampaign) {
-          // Update existing campaign with latest status from Kevel
+          // Update existing campaign
           const { error: updateError } = await supabase
             .from('campaigns')
             .update({
-              status: kevelCampaign.IsActive ? 'active' : 'paused',
-              budget: kevelCampaign.Price || 1000,
-              start_date: startDate,
-              end_date: endDate
+              name: campaignData.name,
+              status: campaignData.status,
+              budget: campaignData.budget,
+              start_date: campaignData.start_date,
+              end_date: campaignData.end_date
             })
             .eq('id', existingCampaign.id)
 
@@ -470,37 +453,31 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Sync Flights for each campaign
-    console.log('Syncing flights for each campaign...')
-    console.log(`Found ${campaignsData.items?.length || 0} campaigns to process for flights`)
-    
+    // Sync flights for each campaign
+    console.log('Starting flight sync...')
     for (const kevelCampaign of campaignsData.items || []) {
       if (kevelCampaign.IsDeleted) {
-        console.log(`Skipping deleted campaign: ${kevelCampaign.Name}`)
-        continue
+        continue // Skip deleted campaigns
       }
-      
-      console.log(`Processing flights for campaign: ${kevelCampaign.Name} (ID: ${kevelCampaign.Id})`)
-      
+
       try {
-        // Get the local campaign ID
+        // Find the local campaign
         const { data: localCampaign, error: campaignError } = await supabase
           .from('campaigns')
           .select('id')
-          .eq('name', kevelCampaign.Name)
-          .eq('company_id', integration.company_id)
+          .eq('external_id', kevelCampaign.Id.toString())
+          .eq('ad_server', 'kevel')
           .single()
 
         if (campaignError) {
-          console.error(`Error finding local campaign for ${kevelCampaign.Name}:`, campaignError)
+          console.error(`Error finding local campaign for Kevel campaign ${kevelCampaign.Id}:`, campaignError)
           continue
         }
 
         if (localCampaign) {
-          console.log(`Found local campaign ID: ${localCampaign.id} for ${kevelCampaign.Name}`)
-          
+          console.log(`Syncing flights for campaign: ${kevelCampaign.Name}`)
+
           // Fetch flights for this campaign from Kevel
-          console.log(`Fetching flights from Kevel for campaign ${kevelCampaign.Id}...`)
           const flightsResponse = await fetch(`https://api.kevel.co/v1/flight`, {
             method: 'GET',
             headers: {
@@ -509,32 +486,27 @@ Deno.serve(async (req) => {
             }
           })
 
-          console.log(`Kevel flights API response status: ${flightsResponse.status}`)
-          
           if (!flightsResponse.ok) {
-            const errorText = await flightsResponse.text()
-            console.error(`Failed to fetch flights from Kevel: ${flightsResponse.status} - ${errorText}`)
+            console.error(`Failed to fetch flights from Kevel for campaign ${kevelCampaign.Id}:`, flightsResponse.status)
             continue
           }
-          
-          const flightsData = await flightsResponse.json()
-          console.log(`Fetched ${flightsData.items?.length || 0} total flights from Kevel`)
+
+          const allFlights = await flightsResponse.json()
           
           // Filter flights for this specific campaign
-          const campaignFlights = (flightsData.items || []).filter(flight => 
+          const campaignFlights = allFlights.items?.filter((flight: any) => 
             flight.CampaignId === kevelCampaign.Id
-          )
-          console.log(`Found ${campaignFlights.length} flights for campaign ${kevelCampaign.Name} (ID: ${kevelCampaign.Id})`)
-          
+          ) || []
+
+          console.log(`Found ${campaignFlights.length} flights for campaign ${kevelCampaign.Name}`)
+
           for (const kevelFlight of campaignFlights) {
             if (kevelFlight.IsDeleted) {
-              console.log(`Skipping deleted flight: ${kevelFlight.Name || kevelFlight.Id}`)
-              continue
+              continue // Skip deleted flights
             }
-            
-            console.log(`Processing flight: ${kevelFlight.Name || kevelFlight.Id} (ID: ${kevelFlight.Id})`)
-            
-            const flightData = {
+
+            try {
+              const flightData = {
                 campaign_id: localCampaign.id,
                 name: kevelFlight.Name || `Flight ${kevelFlight.Id}`,
                 description: `Imported from Kevel (ID: ${kevelFlight.Id})`,
@@ -573,7 +545,7 @@ Deno.serve(async (req) => {
                   .eq('id', existingFlight.id)
 
                 if (updateError) {
-                  console.error('Error updating flight:', updateError)
+                  console.error(`Error updating flight ${kevelFlight.Name}:`, updateError)
                   errorCount++
                 } else {
                   syncedCount++
@@ -585,20 +557,25 @@ Deno.serve(async (req) => {
                   .insert(flightData)
 
                 if (insertError) {
-                  console.error('Error inserting flight:', insertError)
+                  console.error(`Error inserting flight ${kevelFlight.Name}:`, insertError)
                   errorCount++
                 } else {
                   syncedCount++
                 }
               }
+            } catch (error) {
+              console.error(`Error syncing flight ${kevelFlight.Id}:`, error)
+              errorCount++
             }
           }
         }
       } catch (error) {
-        console.error(`Error syncing flights for campaign ${kevelCampaign.Name}:`, error)
+        console.error(`Error processing flights for campaign ${kevelCampaign.Id}:`, error)
         errorCount++
       }
     }
+
+    // Campaign cleanup - remove campaigns that no longer exist in Kevel
     console.log('Checking for campaigns to clean up...')
     try {
       // Get all campaigns that were imported from Kevel for this company
@@ -719,6 +696,7 @@ Deno.serve(async (req) => {
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
+
   } catch (error) {
     console.error('Sync error:', error)
     return new Response(
