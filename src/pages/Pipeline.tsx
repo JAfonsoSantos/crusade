@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlusCircle, Search, Filter, BarChart3 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { usePermissions } from "@/hooks/usePermissions";
+import { AccessDenied } from "@/components/AccessDenied";
 import { OpportunityDetailModal } from "@/components/OpportunityDetailModal";
 import { PipelineSelector } from "@/components/PipelineSelector";
 import { CreatePipelineModal } from "@/components/CreatePipelineModal";
@@ -84,6 +86,7 @@ type Opportunity = {
 
 
 export default function Pipeline() {
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
   const [searchTerm, setSearchTerm] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
   const [view, setView] = useState<"kanban" | "list">("kanban");
@@ -93,6 +96,23 @@ export default function Pipeline() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Check permissions
+  if (permissionsLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-lg">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!hasPermission('pipeline')) {
+    return <AccessDenied 
+      module="pipeline" 
+      title="Pipeline Management"
+      description="Gerir o pipeline de vendas e oportunidades comerciais."
+    />;
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor),

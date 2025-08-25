@@ -4,13 +4,33 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { usePermissions } from "@/hooks/usePermissions";
+import { AccessDenied } from "@/components/AccessDenied";
 import FlightsGantt, { TimelineItem } from "@/components/FlightsGantt";
 
 const CampaignsPage: React.FC = () => {
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
   const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
   const [campaignFilter, setCampaignFilter] = useState<string>("all");
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedItem, setSelectedItem] = useState<TimelineItem | null>(null);
+
+  // Check permissions
+  if (permissionsLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-lg">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!hasPermission('campaigns')) {
+    return <AccessDenied 
+      module="campaigns" 
+      title="Campaign Management"
+      description="Gerir campanhas publicitárias e voos de anúncios."
+    />;
+  }
 
   // Load campaigns and flights data for timeline
   useEffect(() => {

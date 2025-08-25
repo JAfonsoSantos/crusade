@@ -6,10 +6,30 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from 'recharts';
 import { Filter, Calendar, ChevronDown, TrendingUp, TrendingDown } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
+import { AccessDenied } from '@/components/AccessDenied';
 
 const Reports = () => {
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
   const [selectedChannel, setSelectedChannel] = useState('all');
   const [dateRange, setDateRange] = useState('year');
+
+  // Check permissions
+  if (permissionsLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-lg">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!hasPermission('insights')) {
+    return <AccessDenied 
+      module="insights" 
+      title="Insights & Reports"
+      description="Ver relatórios e análises de performance das campanhas."
+    />;
+  }
 
   // Mock data for KPIs
   const kpiData = [

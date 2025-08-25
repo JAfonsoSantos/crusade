@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -25,12 +26,22 @@ interface CompanyUser {
   user_id: string;
   full_name: string;
   role: string;
+  permissions?: {
+    pipeline: boolean;
+    campaigns: boolean;
+    insights: boolean;
+  };
 }
 
 interface UserFormData {
   full_name: string;
   email: string;
   role: string;
+  permissions: {
+    pipeline: boolean;
+    campaigns: boolean;
+    insights: boolean;
+  };
 }
 
 const BusinessSettings = () => {
@@ -47,7 +58,12 @@ const BusinessSettings = () => {
   const [userFormData, setUserFormData] = useState<UserFormData>({
     full_name: '',
     email: '',
-    role: 'user'
+    role: 'user',
+    permissions: {
+      pipeline: false,
+      campaigns: true,
+      insights: false
+    }
   });
   const [editingUser, setEditingUser] = useState<CompanyUser | null>(null);
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
@@ -112,7 +128,8 @@ const BusinessSettings = () => {
         id,
         user_id,
         full_name,
-        role
+        role,
+        permissions
       `)
       .eq('company_id', company.id);
 
@@ -121,7 +138,18 @@ const BusinessSettings = () => {
       return;
     }
 
-    setCompanyUsers(users || []);
+    // Convert users with proper permission typing
+    const typedUsers: CompanyUser[] = (users || []).map(user => ({
+      ...user,
+      permissions: user.permissions && typeof user.permissions === 'object' && !Array.isArray(user.permissions) ? 
+        {
+          pipeline: Boolean((user.permissions as any).pipeline),
+          campaigns: Boolean((user.permissions as any).campaigns),
+          insights: Boolean((user.permissions as any).insights)
+        } : undefined
+    }));
+
+    setCompanyUsers(typedUsers);
   };
 
   const handleSave = async () => {
@@ -201,7 +229,16 @@ const BusinessSettings = () => {
 
   const handleAddUser = () => {
     setEditingUser(null);
-    setUserFormData({ full_name: '', email: '', role: 'user' });
+    setUserFormData({ 
+      full_name: '', 
+      email: '', 
+      role: 'user',
+      permissions: {
+        pipeline: false,
+        campaigns: true,
+        insights: false
+      }
+    });
     setIsUserDialogOpen(true);
   };
 
@@ -210,7 +247,12 @@ const BusinessSettings = () => {
     setUserFormData({
       full_name: user.full_name || '',
       email: '', // We'll need to get this from auth.users or keep it empty for editing
-      role: user.role
+      role: user.role,
+      permissions: user.permissions || {
+        pipeline: false,
+        campaigns: true,
+        insights: false
+      }
     });
     setIsUserDialogOpen(true);
   };
@@ -222,7 +264,8 @@ const BusinessSettings = () => {
         .from('profiles')
         .update({
           full_name: userFormData.full_name,
-          role: userFormData.role
+          role: userFormData.role,
+          permissions: userFormData.permissions
         })
         .eq('id', editingUser.id);
 
@@ -536,6 +579,9 @@ const BusinessSettings = () => {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Role</TableHead>
+                  <TableHead>Pipeline</TableHead>
+                  <TableHead>Campaigns</TableHead>
+                  <TableHead>Insights</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -547,6 +593,30 @@ const BusinessSettings = () => {
                       <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
                         {user.role}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center">
+                        <Checkbox 
+                          checked={user.role === 'admin' || user.permissions?.pipeline || false} 
+                          disabled 
+                        />
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center">
+                        <Checkbox 
+                          checked={user.role === 'admin' || user.permissions?.campaigns || false} 
+                          disabled 
+                        />
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center">
+                        <Checkbox 
+                          checked={user.role === 'admin' || user.permissions?.insights || false} 
+                          disabled 
+                        />
+                      </div>
                     </TableCell>
                     <TableCell className="text-right space-x-2">
                       <Button
@@ -576,7 +646,7 @@ const BusinessSettings = () => {
                 ))}
                 {companyUsers.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center text-muted-foreground">
                       No users found
                     </TableCell>
                   </TableRow>
@@ -623,7 +693,17 @@ const BusinessSettings = () => {
               <Label htmlFor="user_role">Role</Label>
               <Select 
                 value={userFormData.role} 
-                onValueChange={(value) => setUserFormData({ ...userFormData, role: value })}
+                onValueChange={(value) => {
+                  const newPermissions = value === 'admin' ? 
+                    { pipeline: true, campaigns: true, insights: true } :
+                    { pipeline: false, campaigns: true, insights: false };
+                  
+                  setUserFormData({ 
+                    ...userFormData, 
+                    role: value,
+                    permissions: newPermissions
+                  });
+                }}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -634,6 +714,70 @@ const BusinessSettings = () => {
                 </SelectContent>
               </Select>
             </div>
+
+            {userFormData.role !== 'admin' && (
+              <div className="space-y-3">
+                <Label>Permissions</Label>
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="pipeline-permission"
+                      checked={userFormData.permissions.pipeline}
+                      onCheckedChange={(checked) => 
+                        setUserFormData({
+                          ...userFormData,
+                          permissions: {
+                            ...userFormData.permissions,
+                            pipeline: Boolean(checked)
+                          }
+                        })
+                      }
+                    />
+                    <Label htmlFor="pipeline-permission" className="text-sm font-normal">
+                      Pipeline - Access to sales pipeline management
+                    </Label>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="campaigns-permission"
+                      checked={userFormData.permissions.campaigns}
+                      onCheckedChange={(checked) => 
+                        setUserFormData({
+                          ...userFormData,
+                          permissions: {
+                            ...userFormData.permissions,
+                            campaigns: Boolean(checked)
+                          }
+                        })
+                      }
+                    />
+                    <Label htmlFor="campaigns-permission" className="text-sm font-normal">
+                      Campaigns - Access to campaign management
+                    </Label>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="insights-permission"
+                      checked={userFormData.permissions.insights}
+                      onCheckedChange={(checked) => 
+                        setUserFormData({
+                          ...userFormData,
+                          permissions: {
+                            ...userFormData.permissions,
+                            insights: Boolean(checked)
+                          }
+                        })
+                      }
+                    />
+                    <Label htmlFor="insights-permission" className="text-sm font-normal">
+                      Insights - Access to reports and analytics
+                    </Label>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsUserDialogOpen(false)}>

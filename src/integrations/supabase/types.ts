@@ -32,6 +32,60 @@ export type Database = {
         }
         Relationships: []
       }
+      access_requests: {
+        Row: {
+          admin_id: string | null
+          company_id: string
+          created_at: string
+          id: string
+          message: string | null
+          module_name: string
+          processed_at: string | null
+          requester_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          admin_id?: string | null
+          company_id: string
+          created_at?: string
+          id?: string
+          message?: string | null
+          module_name: string
+          processed_at?: string | null
+          requester_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          admin_id?: string | null
+          company_id?: string
+          created_at?: string
+          id?: string
+          message?: string | null
+          module_name?: string
+          processed_at?: string | null
+          requester_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "access_requests_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "access_requests_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ad_server_integrations: {
         Row: {
           api_key_encrypted: string | null
@@ -1327,6 +1381,7 @@ export type Database = {
           created_at: string
           full_name: string | null
           id: string
+          permissions: Json | null
           role: string | null
           updated_at: string
           user_id: string
@@ -1337,6 +1392,7 @@ export type Database = {
           created_at?: string
           full_name?: string | null
           id?: string
+          permissions?: Json | null
           role?: string | null
           updated_at?: string
           user_id: string
@@ -1347,6 +1403,7 @@ export type Database = {
           created_at?: string
           full_name?: string | null
           id?: string
+          permissions?: Json | null
           role?: string | null
           updated_at?: string
           user_id?: string
