@@ -11,6 +11,7 @@ import { ArrowLeft, Search, Filter, Clock, User, Shield, Database, FileText, Set
 import { usePermissions } from '@/hooks/usePermissions';
 import { AccessDenied } from '@/components/AccessDenied';
 import { useToast } from '@/hooks/use-toast';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ActivityLog {
   id: string;
@@ -37,6 +38,7 @@ export default function UserLogs() {
   const navigate = useNavigate();
   const { isAdmin, loading: permissionsLoading } = usePermissions();
   const { toast } = useToast();
+  const { t } = useLanguage();
   
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -73,12 +75,14 @@ export default function UserLogs() {
 
         if (userDetailsError) {
           console.error('Error fetching user details:', userDetailsError);
+          console.error('Full error details:', userDetailsError);
           // Fallback to profile without email
           setUserProfile({
             ...profile,
             email: 'N/A'
           });
         } else {
+          console.log('User details fetched successfully:', userDetails);
           setUserProfile(userDetails);
         }
 
@@ -96,8 +100,8 @@ export default function UserLogs() {
       } catch (error) {
         console.error('Error fetching user logs:', error);
         toast({
-          title: "Erro",
-          description: "Erro ao carregar os logs do utilizador.",
+          title: t('error'),
+          description: t('userLogs.loadError'),
           variant: "destructive",
         });
       } finally {
@@ -185,7 +189,7 @@ export default function UserLogs() {
   if (permissionsLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-lg">Loading...</div>
+        <div className="text-lg">{t('loading')}</div>
       </div>
     );
   }
@@ -193,15 +197,15 @@ export default function UserLogs() {
   if (!isAdmin) {
     return <AccessDenied 
       module="insights" 
-      title="User Activity Logs"
-      description="Apenas administradores podem aceder aos logs de atividade dos utilizadores."
+      title={t('userLogs.title')}
+      description={t('userLogs.accessDenied')}
     />;
   }
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-lg">Carregando logs...</div>
+        <div className="text-lg">{t('userLogs.loadingLogs')}</div>
       </div>
     );
   }
@@ -217,12 +221,12 @@ export default function UserLogs() {
           className="flex items-center gap-2"
         >
           <ArrowLeft className="h-4 w-4" />
-          Voltar às Definições
+          {t('userLogs.backToSettings')}
         </Button>
         <div className="flex-1">
-          <h1 className="text-3xl font-bold tracking-tight">Logs de Atividade</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t('userLogs.title')}</h1>
           <p className="text-muted-foreground">
-            Histórico de atividade de {userProfile?.full_name || userProfile?.email || 'Utilizador'}
+            {t('userLogs.subtitle').replace('{name}', userProfile?.full_name || userProfile?.email || t('userLogs.defaultUser'))}
           </p>
         </div>
       </div>
@@ -233,21 +237,21 @@ export default function UserLogs() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <User className="h-5 w-5" />
-              Informações do Utilizador
+              {t('userLogs.userInfo')}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <div className="text-sm font-medium text-muted-foreground">Nome</div>
+                <div className="text-sm font-medium text-muted-foreground">{t('userLogs.name')}</div>
                 <div className="text-lg">{userProfile.full_name || 'N/A'}</div>
               </div>
               <div>
-                <div className="text-sm font-medium text-muted-foreground">Email</div>
+                <div className="text-sm font-medium text-muted-foreground">{t('userLogs.email')}</div>
                 <div className="text-lg">{userProfile.email || 'N/A'}</div>
               </div>
               <div>
-                <div className="text-sm font-medium text-muted-foreground">Role</div>
+                <div className="text-sm font-medium text-muted-foreground">{t('userLogs.role')}</div>
                 <Badge variant="outline" className="capitalize">
                   {userProfile.role}
                 </Badge>
@@ -262,7 +266,7 @@ export default function UserLogs() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Filter className="h-5 w-5" />
-            Filtros
+            {t('userLogs.filters')}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -271,7 +275,7 @@ export default function UserLogs() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Pesquisar nas ações ou detalhes..."
+                  placeholder={t('userLogs.searchPlaceholder')}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -283,7 +287,7 @@ export default function UserLogs() {
                 <SelectValue placeholder="Todas as ações" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas as ações</SelectItem>
+                <SelectItem value="all">{t('userLogs.allActions')}</SelectItem>
                 {uniqueActions.map(action => (
                   <SelectItem key={action} value={action}>
                     {action}
@@ -296,10 +300,10 @@ export default function UserLogs() {
                 <SelectValue placeholder="Todos os períodos" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos os períodos</SelectItem>
-                <SelectItem value="today">Hoje</SelectItem>
-                <SelectItem value="week">Última semana</SelectItem>
-                <SelectItem value="month">Último mês</SelectItem>
+                <SelectItem value="all">{t('userLogs.allPeriods')}</SelectItem>
+                <SelectItem value="today">{t('userLogs.today')}</SelectItem>
+                <SelectItem value="week">{t('userLogs.lastWeek')}</SelectItem>
+                <SelectItem value="month">{t('userLogs.lastMonth')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -311,15 +315,15 @@ export default function UserLogs() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5" />
-            Histórico de Atividade ({filteredLogs.length} registos)
+            {t('userLogs.activityHistory')} ({filteredLogs.length} {t('userLogs.records')})
           </CardTitle>
         </CardHeader>
         <CardContent>
           {filteredLogs.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               {logs.length === 0 
-                ? "Não existem logs de atividade para este utilizador."
-                : "Não foram encontrados logs que correspondam aos filtros aplicados."
+                ? t('userLogs.noLogs')
+                : t('userLogs.noMatchingLogs')
               }
             </div>
           ) : (
@@ -345,7 +349,7 @@ export default function UserLogs() {
                       
                       {log.details && Object.keys(log.details).length > 0 && (
                         <div className="mb-2">
-                          <div className="text-xs font-medium text-muted-foreground mb-1">Detalhes:</div>
+                          <div className="text-xs font-medium text-muted-foreground mb-1">{t('userLogs.details')}:</div>
                           <pre className="text-xs bg-muted p-2 rounded text-wrap overflow-hidden">
                             {JSON.stringify(log.details, null, 2)}
                           </pre>
@@ -355,7 +359,7 @@ export default function UserLogs() {
                       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                         {log.resource_type && (
                           <Badge variant="outline" className="text-xs">
-                            Tipo: {log.resource_type}
+                            {t('userLogs.type')}: {log.resource_type}
                           </Badge>
                         )}
                         {log.ip_address && (
