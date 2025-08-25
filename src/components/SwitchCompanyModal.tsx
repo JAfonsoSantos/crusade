@@ -39,6 +39,10 @@ export function SwitchCompanyModal({ trigger, currentCompanyId, onCompanySwitch 
   const { data: userCompanies = [], isLoading } = useQuery({
     queryKey: ["userCompanies"],
     queryFn: async () => {
+      console.log("🔍 Fetching user companies...");
+      const user = (await supabase.auth.getUser()).data.user;
+      console.log("👤 User ID for company query:", user?.id);
+      
       const { data, error } = await supabase
         .from("user_company_access")
         .select(`
@@ -55,9 +59,14 @@ export function SwitchCompanyModal({ trigger, currentCompanyId, onCompanySwitch 
             status
           )
         `)
-        .eq("user_id", (await supabase.auth.getUser()).data.user?.id);
+        .eq("user_id", user?.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error("❌ Error fetching companies:", error);
+        throw error;
+      }
+      
+      console.log("📊 Companies fetched:", data);
       return data as UserCompanyAccess[];
     },
     enabled: isOpen,
@@ -75,37 +84,57 @@ export function SwitchCompanyModal({ trigger, currentCompanyId, onCompanySwitch 
   // Switch company mutation
   const switchCompanyMutation = useMutation({
     mutationFn: async (newCompanyId: string) => {
+      console.log("🚀 Starting switch company mutation for:", newCompanyId);
+      
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) throw new Error("User not authenticated");
+      
+      console.log("👤 User authenticated:", user.id);
 
       // First, set all is_current to false for this user
+      console.log("⏰ Step 1: Setting all companies to not current");
       const { error: updateAllError } = await supabase
         .from("user_company_access")
         .update({ is_current: false })
         .eq("user_id", user.id);
 
-      if (updateAllError) throw updateAllError;
+      if (updateAllError) {
+        console.error("❌ Error in step 1:", updateAllError);
+        throw updateAllError;
+      }
+      console.log("✅ Step 1 completed");
 
       // Then set the selected company to current
+      console.log("⏰ Step 2: Setting new company as current");
       const { error: setCurrentError } = await supabase
         .from("user_company_access")
         .update({ is_current: true })
         .eq("user_id", user.id)
         .eq("company_id", newCompanyId);
 
-      if (setCurrentError) throw setCurrentError;
+      if (setCurrentError) {
+        console.error("❌ Error in step 2:", setCurrentError);
+        throw setCurrentError;
+      }
+      console.log("✅ Step 2 completed");
 
       // Update the user's profile company_id
+      console.log("⏰ Step 3: Updating profile company_id");
       const { error: profileError } = await supabase
         .from("profiles")
         .update({ company_id: newCompanyId })
         .eq("user_id", user.id);
 
-      if (profileError) throw profileError;
+      if (profileError) {
+        console.error("❌ Error in step 3:", profileError);
+        throw profileError;
+      }
+      console.log("✅ Step 3 completed - All done!");
 
       return newCompanyId;
     },
     onSuccess: (newCompanyId) => {
+      console.log("🎉 Switch company success!", newCompanyId);
       toast({
         title: "Company switched",
         description: "Successfully switched to new company",
@@ -119,21 +148,28 @@ export function SwitchCompanyModal({ trigger, currentCompanyId, onCompanySwitch 
       onCompanySwitch?.();
       
       // Refresh the page to update all data contexts
+      console.log("🔄 Reloading page...");
       window.location.reload();
     },
     onError: (error) => {
+      console.error("💥 Switch company mutation failed:", error);
       toast({
         title: "Error",
         description: "Failed to switch company",
         variant: "destructive",
       });
-      console.error("Switch company error:", error);
     },
   });
 
   const handleCompanySelect = (companyId: string) => {
+    console.log("🔄 Attempting to switch to company:", companyId);
+    console.log("🏢 Current company ID:", currentCompanyId);
+    
     if (companyId !== currentCompanyId) {
+      console.log("✅ Different company selected, proceeding with switch");
       switchCompanyMutation.mutate(companyId);
+    } else {
+      console.log("⚠️ Same company selected, ignoring");
     }
   };
 
