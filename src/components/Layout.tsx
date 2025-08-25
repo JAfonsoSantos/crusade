@@ -4,15 +4,17 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { supabase } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
-import { LayoutDashboard, Target, Megaphone, Settings, ChevronDown, User as UserIcon, Building2, LogOut, Users, TrendingUp, RefreshCw, Globe, Handshake, Palette, Contact, Image, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Target, Megaphone, Settings, ChevronDown, User as UserIcon, Building2, LogOut, Users, TrendingUp, RefreshCw, Globe, Handshake, Palette, Contact, Image, BarChart3, ArrowRightLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import { CompanyAvatar } from '@/components/CompanyAvatar';
+import { SwitchCompanyModal } from '@/components/SwitchCompanyModal';
 
 const Layout = () => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hoveredMenuItem, setHoveredMenuItem] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -245,10 +247,36 @@ const Layout = () => {
                   <UserIcon className="mr-2 h-4 w-4" />
                   <span>{(user.user_metadata?.full_name || user.email?.split('@')[0] || "User")} Settings</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/business-settings')}>
-                  <Building2 className="mr-2 h-4 w-4" />
-                  <span>{company?.name || "Company"} Settings</span>
-                </DropdownMenuItem>
+                
+                <div
+                  className="relative flex items-center justify-between px-2 py-1.5 text-sm cursor-pointer hover:bg-muted/50 rounded-sm transition-colors"
+                  onMouseEnter={() => setHoveredMenuItem('business-settings')}
+                  onMouseLeave={() => setHoveredMenuItem(null)}
+                  onClick={() => navigate('/business-settings')}
+                >
+                  <div className="flex items-center">
+                    <Building2 className="mr-2 h-4 w-4" />
+                    <span>{company?.name || "Company"} Settings</span>
+                  </div>
+                  {hoveredMenuItem === 'business-settings' && (
+                    <SwitchCompanyModal
+                      currentCompanyId={company?.id || ""}
+                      trigger={
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                          }}
+                        >
+                          <ArrowRightLeft className="h-3 w-3 mr-1" />
+                          Switch
+                        </Button>
+                      }
+                    />
+                  )}
+                </div>
                 <DropdownMenuItem onClick={() => navigate('/integrations')}>
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Integrations</span>
