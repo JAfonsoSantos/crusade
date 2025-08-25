@@ -45,23 +45,6 @@ export default function UserLogs() {
   const [actionFilter, setActionFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
 
-  // Check permissions
-  if (permissionsLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-lg">Loading...</div>
-      </div>
-    );
-  }
-
-  if (!isAdmin) {
-    return <AccessDenied 
-      module="insights" 
-      title="User Activity Logs"
-      description="Apenas administradores podem aceder aos logs de atividade dos utilizadores."
-    />;
-  }
-
   useEffect(() => {
     if (!userId) return;
 
@@ -187,6 +170,23 @@ export default function UserLogs() {
   });
 
   const uniqueActions = Array.from(new Set(logs.map(log => log.action)));
+
+  // Check permissions after hooks
+  if (permissionsLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-lg">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return <AccessDenied 
+      module="insights" 
+      title="User Activity Logs"
+      description="Apenas administradores podem aceder aos logs de atividade dos utilizadores."
+    />;
+  }
 
   if (loading) {
     return (
