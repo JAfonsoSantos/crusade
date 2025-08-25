@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { supabase } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
-import { LayoutDashboard, Target, Megaphone, Settings, ChevronDown, User as UserIcon, Building2, LogOut, Users, TrendingUp, RefreshCw, Globe } from 'lucide-react';
+import { LayoutDashboard, Target, Megaphone, Settings, ChevronDown, User as UserIcon, Building2, LogOut, Users, TrendingUp, RefreshCw, Globe, Handshake, Palette, Contact, Image } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const Layout = () => {
@@ -44,12 +44,26 @@ const Layout = () => {
     await supabase.auth.signOut();
   };
 
-  const navigation = [
-    { name: 'Pipeline', href: '/pipeline', icon: Users },
+  const pipelineItems = [
+    { name: 'Deals', href: '/pipeline', icon: Handshake },
+    { name: 'Advertisers', href: '/advertisers', icon: Building2 },
+    { name: 'Brands', href: '/brands', icon: Palette },
+    { name: 'Contacts', href: '/contacts', icon: Contact },
+  ];
+
+  const campaignItems = [
     { name: 'Campaigns', href: '/campaigns', icon: Megaphone },
+    { name: 'Flights', href: '/flights', icon: Target },
+    { name: 'Creatives', href: '/creatives', icon: Image },
+  ];
+
+  const regularNavigation = [
     { name: 'Forecast', href: '/forecast', icon: TrendingUp },
     { name: 'Spaces', href: '/spaces', icon: Target },
   ];
+
+  const isPipelineActive = pipelineItems.some(item => location.pathname === item.href);
+  const isCampaignActive = campaignItems.some(item => location.pathname === item.href);
 
   if (loading) {
     return (
@@ -79,7 +93,62 @@ const Layout = () => {
           </div>
           
           <nav className="flex items-center space-x-6 text-sm font-medium">
-            {navigation.map((item) => {
+            {/* Pipeline Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className={cn(
+                    'flex items-center space-x-2 transition-colors hover:text-foreground/80',
+                    isPipelineActive ? 'text-foreground' : 'text-foreground/60'
+                  )}
+                >
+                  <Users className="h-4 w-4" />
+                  <span>Pipeline</span>
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56 bg-background border border-border shadow-lg z-50">
+                {pipelineItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <DropdownMenuItem key={item.name} onClick={() => navigate(item.href)}>
+                      <Icon className="mr-2 h-4 w-4" />
+                      <span>{item.name}</span>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Campaigns Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className={cn(
+                    'flex items-center space-x-2 transition-colors hover:text-foreground/80',
+                    isCampaignActive ? 'text-foreground' : 'text-foreground/60'
+                  )}
+                >
+                  <Megaphone className="h-4 w-4" />
+                  <span>Campaigns</span>
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56 bg-background border border-border shadow-lg z-50">
+                {campaignItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <DropdownMenuItem key={item.name} onClick={() => navigate(item.href)}>
+                      <Icon className="mr-2 h-4 w-4" />
+                      <span>{item.name}</span>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Regular Navigation Items */}
+            {regularNavigation.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.href;
               return (
