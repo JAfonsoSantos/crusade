@@ -705,7 +705,7 @@ Deno.serve(async (req) => {
         status: errorCount > 0 ? 'error' : 'active',
         last_sync: new Date().toISOString()
       })
-      .eq('id', integrationId)
+      .eq('id', integrationId);
 
     console.log(`Sync completed: ${syncedCount} synced, ${errorCount} errors`)
 
