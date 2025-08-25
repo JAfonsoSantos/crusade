@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Palette, Plus, Edit, Trash2, Search, Filter, Globe, Building2, ExternalLink } from 'lucide-react';
 import { useActivityLogger } from '@/hooks/useActivityLogger';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface Brand {
   id: string;

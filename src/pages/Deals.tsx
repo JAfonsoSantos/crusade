@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PlusCircle, Search, Filter, Eye } from "lucide-react";
 import { UserAvatar } from "@/components/UserAvatar";
 import { OpportunityDetailModal } from "@/components/OpportunityDetailModal";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 type Opportunity = {
   id: string;
@@ -77,6 +78,7 @@ export default function Deals() {
   const [stageFilter, setStageFilter] = useState("all");
   const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const { t } = useLanguage();
 
   // Fetch all opportunities
   const { data: opportunities = [], isLoading } = useQuery({
@@ -163,7 +165,7 @@ export default function Deals() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-lg">Loading deals...</div>
+        <div className="text-lg">{t('common.loading')}</div>
       </div>
     );
   }
@@ -173,7 +175,7 @@ export default function Deals() {
       {/* Header */}
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Deals</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t('deals.title')}</h1>
         </div>
         
         <div className="flex items-center gap-4">

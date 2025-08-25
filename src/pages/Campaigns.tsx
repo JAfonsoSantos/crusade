@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePermissions } from "@/hooks/usePermissions";
 import { AccessDenied } from "@/components/AccessDenied";
 import FlightsGantt, { TimelineItem } from "@/components/FlightsGantt";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const CampaignsPage: React.FC = () => {
   const { hasPermission, loading: permissionsLoading } = usePermissions();
@@ -14,6 +15,7 @@ const CampaignsPage: React.FC = () => {
   const [campaignFilter, setCampaignFilter] = useState<string>("all");
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedItem, setSelectedItem] = useState<TimelineItem | null>(null);
+  const { t } = useLanguage();
 
   // Permission gating
   const blocked = !permissionsLoading && !hasPermission('campaigns');
@@ -106,7 +108,7 @@ const CampaignsPage: React.FC = () => {
   if (permissionsLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-lg">Loading...</div>
+        <div className="text-lg">{t('common.loading')}</div>
       </div>
     );
   }
@@ -123,17 +125,17 @@ const CampaignsPage: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Campaigns Timeline</h2>
-          <p className="text-muted-foreground">View campaign flights in timeline format</p>
+          <h2 className="text-3xl font-bold tracking-tight">{t('campaigns.title')}</h2>
+          <p className="text-muted-foreground">{t('campaigns.description')}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="outline">{timelineItems.length} flights</Badge>
+          <Badge variant="outline">{timelineItems.length} {t('flights.title').toLowerCase()}</Badge>
           <Select value={campaignFilter} onValueChange={setCampaignFilter}>
             <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="All campaigns" />
+              <SelectValue placeholder={t('campaigns.totalCampaigns')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All campaigns</SelectItem>
+              <SelectItem value="all">{t('campaigns.totalCampaigns')}</SelectItem>
               {campaigns.map(campaign => (
                 <SelectItem key={campaign} value={campaign}>{campaign}</SelectItem>
               ))}
@@ -145,7 +147,7 @@ const CampaignsPage: React.FC = () => {
       {loading ? (
         <div className="text-center py-12">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading timeline...</p>
+          <p className="text-muted-foreground">{t('flights.loading')}</p>
         </div>
       ) : (
         <Card>

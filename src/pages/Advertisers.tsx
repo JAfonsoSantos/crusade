@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Building2, Plus, Edit, Trash2, Search, Filter, Users, BarChart3 } from 'lucide-react';
 import { useActivityLogger } from '@/hooks/useActivityLogger';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface Advertiser {
   id: string;
@@ -40,6 +41,7 @@ export default function Advertisers() {
   });
   const { toast } = useToast();
   const { logActivity } = useActivityLogger();
+  const { t } = useLanguage();
 
   useEffect(() => {
     fetchAdvertisers();

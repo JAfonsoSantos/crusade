@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Contact, Plus, Edit, Trash2, Search, Filter, Phone, Mail, Building2, Users, Linkedin, UserPlus } from 'lucide-react';
 import { useActivityLogger } from '@/hooks/useActivityLogger';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ContactType {
   id: string;

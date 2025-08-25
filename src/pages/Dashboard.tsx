@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { Target, Megaphone, Euro, Settings, TrendingUp, TrendingDown, Star } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -10,6 +11,7 @@ const Dashboard = () => {
     revenue: 0,
     integrations: 0,
   });
+  const { t } = useLanguage();
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -100,9 +102,9 @@ const Dashboard = () => {
   return (
     <div className="space-y-8 p-6">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+        <h2 className="text-3xl font-bold tracking-tight">{t('dashboard.title')}</h2>
         <p className="text-muted-foreground">
-          Overview of your advertising business
+          {t('dashboard.overview')}
         </p>
       </div>
       
