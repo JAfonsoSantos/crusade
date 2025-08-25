@@ -105,10 +105,6 @@ export default function Pipeline() {
   const { data: pipelines = [], isLoading: pipelinesLoading } = useQuery({
     queryKey: ["pipelines"],
     queryFn: async () => {
-      console.log("🔄 Fetching pipelines...");
-      const user = (await supabase.auth.getUser()).data.user;
-      console.log("👤 User for pipelines query:", user?.id);
-      
       const { data, error } = await supabase
         .from("pipelines")
         .select("*")
@@ -116,22 +112,15 @@ export default function Pipeline() {
         .order("is_default", { ascending: false })
         .order("created_at", { ascending: true });
 
-      if (error) {
-        console.error("❌ Error fetching pipelines:", error);
-        throw error;
-      }
-      
-      console.log("📊 Pipelines fetched:", data);
+      if (error) throw error;
       return data as Pipeline[];
     },
   });
 
   // Set default pipeline when pipelines load
   React.useEffect(() => {
-    console.log("🎯 Pipeline effect - pipelines.length:", pipelines.length, "selectedPipelineId:", selectedPipelineId);
     if (pipelines.length > 0 && !selectedPipelineId) {
       const defaultPipeline = pipelines.find(p => p.is_default) || pipelines[0];
-      console.log("📌 Setting default pipeline:", defaultPipeline.id, defaultPipeline.name);
       setSelectedPipelineId(defaultPipeline.id);
     }
   }, [pipelines.length, selectedPipelineId]);
@@ -140,14 +129,7 @@ export default function Pipeline() {
   const { data: opportunities = [], isLoading } = useQuery({
     queryKey: ["opportunities", selectedPipelineId],
     queryFn: async () => {
-      if (!selectedPipelineId) {
-        console.log("⚠️ No pipeline selected for opportunities");
-        return [];
-      }
-      
-      console.log("🔄 Fetching opportunities for pipeline:", selectedPipelineId);
-      const user = (await supabase.auth.getUser()).data.user;
-      console.log("👤 User for opportunities query:", user?.id);
+      if (!selectedPipelineId) return [];
       
       const { data, error } = await supabase
         .from("opportunities")
@@ -178,12 +160,7 @@ export default function Pipeline() {
         .eq("pipeline_id", selectedPipelineId)
         .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("❌ Error fetching opportunities:", error);
-        throw error;
-      }
-      
-      console.log("📊 Opportunities fetched:", data);
+      if (error) throw error;
       return data as Opportunity[];
     },
     enabled: !!selectedPipelineId,
