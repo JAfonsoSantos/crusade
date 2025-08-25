@@ -230,7 +230,8 @@ const Layout = () => {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center space-x-2">
                   <CompanyAvatar 
-                    name={company?.name || "Company"} 
+                    companyName={company?.name || "Company"}
+                    userName={user.user_metadata?.full_name || user.email || ""}
                     size="sm"
                   />
                   <span className="text-sm">
@@ -242,11 +243,11 @@ const Layout = () => {
               <DropdownMenuContent align="end" className="w-56 bg-background border border-border shadow-lg">
                 <DropdownMenuItem onClick={() => navigate('/personal-settings')}>
                   <UserIcon className="mr-2 h-4 w-4" />
-                  <span>Personal Settings</span>
+                  <span>{(user.user_metadata?.full_name || user.email?.split('@')[0] || "User")} Settings</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/business-settings')}>
                   <Building2 className="mr-2 h-4 w-4" />
-                  <span>Business Settings</span>
+                  <span>{company?.name || "Company"} Settings</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/integrations')}>
                   <Settings className="mr-2 h-4 w-4" />

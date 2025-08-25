@@ -1,14 +1,16 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface CompanyAvatarProps {
-  name: string;
+  companyName: string;
+  userName?: string;
   logoUrl?: string | null;
   size?: "sm" | "md" | "lg";
   className?: string;
 }
 
 export function CompanyAvatar({ 
-  name, 
+  companyName,
+  userName = "",
   logoUrl, 
   size = "md", 
   className = "" 
@@ -19,10 +21,10 @@ export function CompanyAvatar({
     lg: "h-12 w-12 text-base"
   };
 
-  const getInitials = (companyName: string) => {
-    if (!companyName) return "C";
+  const getUserInitials = (fullName: string) => {
+    if (!fullName) return "U";
     
-    const words = companyName.trim().split(' ').filter(word => word.length > 0);
+    const words = fullName.trim().split(' ').filter(word => word.length > 0);
     
     if (words.length === 1) {
       // Single word: take first and last character
@@ -34,7 +36,7 @@ export function CompanyAvatar({
     }
   };
 
-  const getAvatarColor = (companyName: string) => {
+  const getAvatarColor = (name: string) => {
     const colors = [
       "bg-red-500",
       "bg-blue-500", 
@@ -47,8 +49,8 @@ export function CompanyAvatar({
     ];
     
     let hash = 0;
-    for (let i = 0; i < companyName.length; i++) {
-      hash = companyName.charCodeAt(i) + ((hash << 5) - hash);
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
     }
     
     return colors[Math.abs(hash) % colors.length];
@@ -56,9 +58,9 @@ export function CompanyAvatar({
 
   return (
     <Avatar className={`${sizeClasses[size]} ${className}`}>
-      {logoUrl && <AvatarImage src={logoUrl} alt={name} />}
-      <AvatarFallback className={`${getAvatarColor(name)} text-white font-medium`}>
-        {getInitials(name)}
+      {logoUrl && <AvatarImage src={logoUrl} alt={companyName} />}
+      <AvatarFallback className={`${getAvatarColor(userName || companyName)} text-white font-medium`}>
+        {getUserInitials(userName)}
       </AvatarFallback>
     </Avatar>
   );
