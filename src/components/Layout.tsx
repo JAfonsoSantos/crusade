@@ -6,7 +6,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
 import { LayoutDashboard, Target, Megaphone, Settings, ChevronDown, User as UserIcon, Building2, LogOut, Users, TrendingUp, RefreshCw, Globe, Handshake, Palette, Contact, Image, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import CrusadeLogo from '@/components/CrusadeLogo';
 
 const Layout = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -90,9 +89,9 @@ const Layout = () => {
           <div className="mr-4 flex">
             <button 
               onClick={() => navigate('/dashboard')}
-              className="hover:opacity-80 transition-opacity"
+              className="text-lg font-semibold hover:text-foreground/80 transition-colors"
             >
-              <CrusadeLogo width={160} height={40} />
+              Crusade CRM
             </button>
           </div>
           
