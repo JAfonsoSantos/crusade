@@ -23,7 +23,7 @@ export const useActivityLogger = () => {
         return;
       }
 
-      await supabase.functions.invoke('log-activity', {
+      const { data, error } = await supabase.functions.invoke('log-activity', {
         body: {
           action,
           details,
@@ -31,6 +31,13 @@ export const useActivityLogger = () => {
           resource_id
         },
       });
+
+      if (error) {
+        console.error('log-activity error:', error);
+      } else {
+        // Optional debug
+        // console.debug('Activity logged:', data);
+      }
     } catch (error) {
       console.error('Failed to log activity:', error);
     }

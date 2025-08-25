@@ -81,8 +81,7 @@ export const usePageLogger = () => {
             userAgent: navigator.userAgent,
             referrer: document.referrer || null
           },
-          resource_type: 'page',
-          resource_id: currentPath
+          resource_type: 'page'
         });
 
         // Atualiza referência para próxima navegação

@@ -67,9 +67,10 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Get IP address and User Agent
-    const ip_address = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip')
-    const user_agent = req.headers.get('user-agent')
+    // Get IP address and User Agent (ensure single IP for inet type)
+    const rawIp = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || ''
+    const ip_address = rawIp ? rawIp.split(',')[0].trim() : null
+    const user_agent = req.headers.get('user-agent') || null
 
     // Insert activity log
     const { error: insertError } = await supabase
