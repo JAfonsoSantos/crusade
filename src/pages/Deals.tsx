@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PlusCircle, Search, Filter, Eye } from "lucide-react";
+import { UserAvatar } from "@/components/UserAvatar";
 import { OpportunityDetailModal } from "@/components/OpportunityDetailModal";
 
 type Opportunity = {
@@ -49,6 +50,7 @@ type Opportunity = {
   };
   profiles?: {
     full_name: string;
+    avatar_url?: string;
   };
 };
 
@@ -104,12 +106,16 @@ export default function Deals() {
           pipelines (
             name,
             stages
+          ),
+          profiles!owner_id (
+            full_name,
+            avatar_url
           )
         `)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return data as Opportunity[];
+      return data as any[];
     },
   });
 
@@ -329,7 +335,14 @@ export default function Deals() {
                     {opportunity.advertisers?.name || "—"}
                   </TableCell>
                   <TableCell>
-                    —
+                    <div className="flex items-center gap-2">
+                      <UserAvatar 
+                        src={opportunity.profiles?.avatar_url}
+                        name={opportunity.profiles?.full_name || "Unknown User"}
+                        size="sm"
+                      />
+                      <span className="text-sm">{opportunity.profiles?.full_name || "—"}</span>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline">{opportunity.probability}%</Badge>
