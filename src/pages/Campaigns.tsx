@@ -231,14 +231,14 @@ const CampaignsPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">{t?.("campaign") || "Campaign"}</span>
                 <Select
-                  value={campaignFilter || ""}
-                  onValueChange={(v) => setCampaignFilter(v || null)}
+                  value={campaignFilter || "__all__"}
+                  onValueChange={(v) => setCampaignFilter(v === "__all__" ? null : v)}
                 >
                   <SelectTrigger className="w-[280px]">
                     <SelectValue placeholder={t?.("all_campaigns") || "All campaigns"} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">{t?.("all_campaigns") || "All campaigns"}</SelectItem>
+                    <SelectItem value="__all__">{t?.("all_campaigns") || "All campaigns"}</SelectItem>
                     {campaigns.map((c) => (
                       <SelectItem key={c} value={c}>
                         <div className="flex items-center gap-2">
