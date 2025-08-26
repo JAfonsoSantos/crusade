@@ -127,6 +127,13 @@ const CampaignsPage: React.FC = () => {
     return unique.sort();
   }, [timelineItems]);
 
+  // Reset invalid persisted campaign filter
+  useEffect(() => {
+    if (campaignFilter && !campaigns.includes(campaignFilter)) {
+      setCampaignFilter(null);
+      try { localStorage.removeItem(LS_FILTER_KEY); } catch {}
+    }
+  }, [campaigns, campaignFilter]);
   const flightsCountByCampaign = useMemo(() => {
     const m = new Map<string, number>();
     for (const it of timelineItems) {
