@@ -86,16 +86,10 @@ export function PipelineSelector({
           </SelectTrigger>
           <SelectContent align="start" className="min-w-[300px] bg-background border shadow-lg z-50">
             {pipelines.map((pipeline) => (
-              <div
-                key={pipeline.id}
-                className="relative flex items-center gap-2 w-full px-2 py-1.5 cursor-pointer hover:bg-muted/50 rounded-sm"
-                onMouseEnter={() => setHoveredPipeline(pipeline.id)}
-                onMouseLeave={() => setHoveredPipeline(null)}
-                onClick={() => onPipelineChange(pipeline.id)}
-              >
-                <div className="flex items-center gap-2 flex-1">
+              <SelectItem key={pipeline.id} value={pipeline.id} className="cursor-pointer">
+                <div className="flex items-center gap-2 w-full">
                   <Building2 className="h-4 w-4" />
-                  <div>
+                  <div className="flex-1">
                     <div className="font-medium">{pipeline.name}</div>
                     {pipeline.description && (
                       <div className="text-xs text-muted-foreground">
@@ -103,33 +97,21 @@ export function PipelineSelector({
                       </div>
                     )}
                   </div>
+                  <div className="flex items-center gap-1">
+                    {pipeline.is_default && (
+                      <Badge variant="secondary" className="text-xs">
+                        Default
+                      </Badge>
+                    )}
+                    {pipeline.source !== 'manual' && (
+                      <Badge variant="outline" className="text-xs">
+                        <Zap className="h-3 w-3 mr-1" />
+                        {pipeline.source}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  {pipeline.is_default && (
-                    <Badge variant="secondary" className="text-xs">
-                      Default
-                    </Badge>
-                  )}
-                  {pipeline.source !== 'manual' && (
-                    <Badge variant="outline" className="text-xs">
-                      <Zap className="h-3 w-3 mr-1" />
-                      {pipeline.source}
-                    </Badge>
-                  )}
-                  {!pipeline.is_default && hoveredPipeline === pipeline.id && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-6 px-2 text-xs"
-                      onClick={(e) => handleMakeDefault(e, pipeline.id)}
-                      disabled={makeDefaultMutation.isPending}
-                    >
-                      <Star className="h-3 w-3 mr-1" />
-                      Make Default
-                    </Button>
-                  )}
-                </div>
-              </div>
+              </SelectItem>
             ))}
             <div className="border-t mt-1 pt-1">
               <CreatePipelineModal 
