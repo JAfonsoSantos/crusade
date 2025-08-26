@@ -186,9 +186,11 @@ Deno.serve(async (req) => {
     
     // Track detailed operations by category
     const operationDetails = {
-      campaigns: { created: 0, updated: 0, existing: 0, errors: [] as string[] },
-      ad_units: { created: 0, updated: 0, existing: 0, errors: [] as string[] },
-      sites: { created: 0, updated: 0, existing: 0, errors: [] as string[] }
+      campaigns: { created: 0, updated: 0, existing: 0, errors: [] as string[], items: [] as string[] },
+      flights: { created: 0, updated: 0, existing: 0, errors: [] as string[], items: [] as string[] },
+      ad_spaces: { created: 0, updated: 0, existing: 0, errors: [] as string[], items: [] as string[] },
+      ad_units: { created: 0, updated: 0, existing: 0, errors: [] as string[], items: [] as string[] },
+      sites: { created: 0, updated: 0, existing: 0, errors: [] as string[], items: [] as string[] }
     }
 
     // For now, let's create ad spaces with common sizes instead of fetching from API
@@ -205,9 +207,10 @@ Deno.serve(async (req) => {
 
     // Process sites and create ad spaces
     for (const site of sitesData.items || []) {
-      console.log(`Processing site: ${site.Title}`)
-      
-      let siteAdUnitsCountedAlready = false
+          console.log(`Processing site: ${site.Title}`)
+          operationDetails.sites.items.push(site.Title)
+          
+          let siteAdUnitsCountedAlready = false
 
       for (const adSize of commonAdSizes) {
         try {
@@ -334,11 +337,12 @@ Deno.serve(async (req) => {
 
             if (updateError) {
               const errorMsg = `Error updating ad space: ${adSpaceData.name}`
-              operationDetails.sites.errors.push(errorMsg)
+              operationDetails.ad_spaces.errors.push(errorMsg)
               console.error('Error updating ad space:', updateError)
               errorCount++
             } else {
-              operationDetails.sites.existing++
+              operationDetails.ad_spaces.existing++
+              operationDetails.ad_spaces.items.push(`${adSpaceData.name} (updated)`)
               syncedCount++
             }
           } else {
@@ -349,17 +353,18 @@ Deno.serve(async (req) => {
 
             if (insertError) {
               const errorMsg = `Error inserting ad space: ${adSpaceData.name}`
-              operationDetails.sites.errors.push(errorMsg)
+              operationDetails.ad_spaces.errors.push(errorMsg)
               console.error('Error inserting ad space:', insertError)
               errorCount++
             } else {
-              operationDetails.sites.created++
+              operationDetails.ad_spaces.created++
+              operationDetails.ad_spaces.items.push(`${adSpaceData.name} (created)`)
               syncedCount++
             }
           }
         } catch (error) {
           const errorMsg = `Error processing ad space for ${site.Title} - ${adSize.Name}: ${error.message}`
-          operationDetails.sites.errors.push(errorMsg)
+          operationDetails.ad_spaces.errors.push(errorMsg)
           console.error('Error processing ad size:', error)
           errorCount++
         }
@@ -417,6 +422,7 @@ Deno.serve(async (req) => {
             errorCount++
           } else {
             operationDetails.campaigns.updated++
+            operationDetails.campaigns.items.push(`${campaignData.name} (updated)`)
             syncedCount++
           }
         } else {
@@ -432,6 +438,7 @@ Deno.serve(async (req) => {
             errorCount++
           } else {
             operationDetails.campaigns.created++
+            operationDetails.campaigns.items.push(`${campaignData.name} (created)`)
             syncedCount++
           }
         }
@@ -531,8 +538,11 @@ Deno.serve(async (req) => {
 
                 if (updateError) {
                   console.error(`Error updating flight ${kevelFlight.Name}:`, updateError)
+                  operationDetails.flights.errors.push(`Failed to update flight ${kevelFlight.Name}`)
                   errorCount++
                 } else {
+                  operationDetails.flights.updated++
+                  operationDetails.flights.items.push(`${kevelFlight.Name} (updated)`)
                   syncedCount++
                 }
               } else {
@@ -543,8 +553,11 @@ Deno.serve(async (req) => {
 
                 if (insertError) {
                   console.error(`Error inserting flight ${kevelFlight.Name}:`, insertError)
+                  operationDetails.flights.errors.push(`Failed to create flight ${kevelFlight.Name}`)
                   errorCount++
                 } else {
+                  operationDetails.flights.created++
+                  operationDetails.flights.items.push(`${kevelFlight.Name} (created)`)
                   syncedCount++
                 }
               }

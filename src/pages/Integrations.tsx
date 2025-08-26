@@ -11,6 +11,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Plus, Settings, Trash2, Wifi, WifiOff, RefreshCw, ChevronDown, ChevronRight, Eye, AlertCircle, CheckCircle, Info, Pause, Play } from 'lucide-react';
+import SyncDetailsModal from '@/components/SyncDetailsModal';
 import kevelLogo from '@/assets/kevel-logo.png';
 import koddiLogo from '@/assets/koddi-logo.png';
 import topsortLogo from '@/assets/topsort-logo.png';
@@ -39,9 +40,14 @@ interface SyncDetails {
   synced: number;
   errors: number;
   operations: {
-    campaigns?: { created: number; updated: number; existing: number; errors: string[] };
-    ad_units?: { created: number; updated: number; existing: number; errors: string[] };
-    sites?: { created: number; updated: number; existing: number; errors: string[] };
+    campaigns?: { created: number; updated: number; existing: number; errors: string[]; items?: string[] };
+    flights?: { created: number; updated: number; existing: number; errors: string[]; items?: string[] };
+    ad_spaces?: { created: number; updated: number; existing: number; errors: string[]; items?: string[] };
+    ad_units?: { created: number; updated: number; existing: number; errors: string[]; items?: string[] };
+    creatives?: { created: number; updated: number; existing: number; errors: string[]; items?: string[] };
+    brands?: { created: number; updated: number; existing: number; errors: string[]; items?: string[] };
+    advertisers?: { created: number; updated: number; existing: number; errors: string[]; items?: string[] };
+    sites?: { created: number; updated: number; existing: number; errors: string[]; items?: string[] };
   };
 }
 
@@ -58,6 +64,11 @@ const Integrations = () => {
   const [expandedSyncDetails, setExpandedSyncDetails] = useState<{[key: string]: boolean}>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [integrationToDelete, setIntegrationToDelete] = useState<Integration | null>(null);
+  const [syncDetailsModal, setSyncDetailsModal] = useState<{
+    open: boolean;
+    syncDetails: SyncDetails | null;
+    integrationName: string;
+  }>({ open: false, syncDetails: null, integrationName: '' });
   const [deleting, setDeleting] = useState(false);
   const [configFormData, setConfigFormData] = useState({
     name: '',
@@ -364,9 +375,14 @@ const Integrations = () => {
         synced: data.synced || 0,
         errors: data.errors || 0,
         operations: {
-          campaigns: data.operations?.campaigns || { created: 0, updated: 0, existing: 0, errors: [] },
-          ad_units: data.operations?.ad_units || { created: 0, updated: 0, existing: 0, errors: [] },
-          sites: data.operations?.sites || { created: 0, updated: 0, existing: 0, errors: [] }
+          campaigns: data.operations?.campaigns || { created: 0, updated: 0, existing: 0, errors: [], items: [] },
+          flights: data.operations?.flights || { created: 0, updated: 0, existing: 0, errors: [], items: [] },
+          ad_spaces: data.operations?.ad_spaces || { created: 0, updated: 0, existing: 0, errors: [], items: [] },
+          ad_units: data.operations?.ad_units || { created: 0, updated: 0, existing: 0, errors: [], items: [] },
+          creatives: data.operations?.creatives || { created: 0, updated: 0, existing: 0, errors: [], items: [] },
+          brands: data.operations?.brands || { created: 0, updated: 0, existing: 0, errors: [], items: [] },
+          advertisers: data.operations?.advertisers || { created: 0, updated: 0, existing: 0, errors: [], items: [] },
+          sites: data.operations?.sites || { created: 0, updated: 0, existing: 0, errors: [], items: [] }
         }
       };
 
@@ -824,16 +840,20 @@ const Integrations = () => {
                                  integration.status === 'paused' ? 'Paused' : 'CRM Sync'}
                               </Button>
                             )}
-                           {integration.configuration?.last_sync_details && (
-                             <Button 
-                               variant="outline" 
-                               size="sm" 
-                               onClick={() => toggleDetails(integration.id)}
-                             >
-                               <Eye className="mr-2 h-4 w-4" />
-                               See Details
-                             </Button>
-                           )}
+                            {integration.configuration?.last_sync_details && (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => setSyncDetailsModal({
+                                  open: true,
+                                  syncDetails: integration.configuration.last_sync_details,
+                                  integrationName: integration.name
+                                })}
+                              >
+                                <Eye className="mr-2 h-4 w-4" />
+                                See Details
+                              </Button>
+                            )}
                          </div>
 
                         {/* ... rest of the card content remains the same ... */}
@@ -968,9 +988,19 @@ const Integrations = () => {
             </div>
           </CardContent>
         </Card>
-      )}
-    </div>
-  );
-};
+       )}
+       
+       {/* Sync Details Modal */}
+       {syncDetailsModal.syncDetails && (
+         <SyncDetailsModal
+           open={syncDetailsModal.open}
+           onOpenChange={(open) => setSyncDetailsModal({ ...syncDetailsModal, open })}
+           syncDetails={syncDetailsModal.syncDetails}
+           integrationName={syncDetailsModal.integrationName}
+         />
+       )}
+     </div>
+   );
+ };
 
 export default Integrations;
