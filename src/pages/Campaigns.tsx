@@ -1,206 +1,164 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { usePermissions } from "@/hooks/usePermissions";
-import { AccessDenied } from "@/components/AccessDenied";
-import FlightsGantt, { TimelineItem } from "@/components/FlightsGantt";
-import { useLanguage } from "@/contexts/LanguageContext";
+  import React, { useEffect, useMemo, useState } from "react";
+  import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+  import { Badge } from "@/components/ui/badge";
+  import { Button } from "@/components/ui/button";
+  import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+  import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+  import { Loader2, RefreshCw } from "lucide-react";
+  import FlightsGantt, { TimelineItem } from "@/components/FlightsGantt";
+  import { supabase } from "@/integrations/supabase/client";
 
-const CampaignsPage: React.FC = () => {
-  const { hasPermission, loading: permissionsLoading } = usePermissions();
-  const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
-  const [campaignFilter, setCampaignFilter] = useState<string>("all");
-  const [loading, setLoading] = useState<boolean>(true);
-  const [selectedItem, setSelectedItem] = useState<TimelineItem | null>(null);
-  const { t } = useLanguage();
-
-  // Permission gating
-  const blocked = !permissionsLoading && !hasPermission('campaigns');
-
-  // Load campaigns and flights data for timeline
-  useEffect(() => {
-    if (blocked) { setTimelineItems([]); setLoading(false); return; }
-    (async () => {
-      setLoading(true);
-      try {
-        const { data: userRes } = await supabase.auth.getUser();
-        const uid = userRes.user?.id;
-        if (!uid) {
-          setTimelineItems([]);
-          setLoading(false);
-          return;
-        }
-        
-        const { data: prof } = await supabase.from("profiles").select("company_id").eq("user_id", uid).single();
-        const cId = prof?.company_id;
-        if (!cId) { 
-          setTimelineItems([]); 
-          setLoading(false); 
-          return; 
-        }
-
-        // Get flights with campaign data for timeline view
-        const { data, error } = await supabase
-          .from("flights")
-          .select(`
-            id,
-            name,
-            start_date,
-            end_date,
-            status,
-            impressions,
-            clicks,
-            conversions,
-            spend,
-            priority,
-            campaigns!inner(
-              id,
-              name,
-              company_id
-            )
-          `)
-          .eq("campaigns.company_id", cId);
-
-        if (error) {
-          console.error("Error fetching flights:", error);
-          setTimelineItems([]);
-          setLoading(false);
-          return;
-        }
-        
-        const items: TimelineItem[] = (data || []).map(flight => ({
-          id: flight.id,
-          name: flight.name,
-          flight_name: flight.name,
-          flight_id: flight.id,
-          campaign_id: flight.campaigns.id,
-          campaign_name: flight.campaigns.name,
-          start_date: flight.start_date,
-          end_date: flight.end_date,
-          status: flight.status,
-          impressions: flight.impressions || 0,
-          clicks: flight.clicks || 0,
-          conversions: flight.conversions || 0,
-          spend: flight.spend || 0,
-          priority: flight.priority || 1,
-          company_id: flight.campaigns.company_id
-        }));
-        
-        setTimelineItems(items);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [blocked]);
-
-  const campaigns = useMemo(() => {
-    const unique = [...new Set(timelineItems.map(item => item.campaign_name))];
-    return unique.sort();
-  }, [timelineItems]);
-
-  const handleItemSelect = (item: TimelineItem) => {
-    setSelectedItem(item);
+  type GanttRow = {
+    company_id: string;
+    campaign_id: string;
+    campaign_name: string;
+    flight_id: string;
+    flight_name: string;
+    start_date: string;
+    end_date: string;
+    priority: number | null;
+    status: string | null;
+    impressions: number | null;
+    clicks: number | null;
+    conversions: number | null;
+    spend: number | null;
   };
 
-  if (permissionsLoading) {
+  const CampaignsPage: React.FC = () => {
+    const [items, setItems] = useState<TimelineItem[]>([]);
+    const [campaignFilter, setCampaignFilter] = useState<string>("all");
+    const [loading, setLoading] = useState<boolean>(true);
+    const [syncing, setSyncing] = useState<boolean>(false);
+    const [selected, setSelected] = useState<TimelineItem | null>(null);
+
+    // load data
+    useEffect(() => {
+      (async () => {
+        setLoading(true);
+        try {
+          const { data: userRes } = await supabase.auth.getUser();
+          const uid = userRes.user?.id;
+          if (!uid) {
+            setItems([]);
+            setLoading(false);
+            return;
+          }
+          const { data: prof } = await supabase.from("profiles").select("company_id").eq("user_id", uid).single();
+          const cId = prof?.company_id;
+          if (!cId) { setItems([]); setLoading(false); return; }
+
+          const { data, error } = await (supabase as any)
+            .from("v_gantt_items_fast")
+            .select("company_id,campaign_id,campaign_name,flight_id,flight_name,start_date,end_date,priority,status,impressions,clicks,conversions,spend")
+            .eq("company_id", cId);
+
+          if (error) console.error(error);
+          const rows: GanttRow[] = (data as any) || [];
+          setItems(rows.map(r => ({ ...r })));
+        } finally {
+          setLoading(false);
+        }
+      })();
+    }, []);
+
+    const campaigns = useMemo(() => {
+      const m = new Map<string, string>();
+      for (const it of items) m.set(it.campaign_id, it.campaign_name);
+      return Array.from(m.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+    }, [items]);
+
+    const syncAll = async () => {
+      setSyncing(true);
+      try {
+        const { error } = await supabase.functions.invoke("auto-sync-kevel");
+        if (error) throw error;
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setSyncing(false);
+      }
+    };
+
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-lg">{t('common.loading')}</div>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">Campaigns & Flights</h2>
+            <p className="text-muted-foreground">Manage campaigns and analyze performance</p>
+          </div>
+          <Button variant="outline" onClick={syncAll} disabled={syncing}>
+            {syncing ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Syncing…</>) : (<><RefreshCw className="mr-2 h-4 w-4" /> Sync with Platforms</>)}
+          </Button>
+        </div>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Timeline</CardTitle>
+              <CardDescription>Gantt by campaign</CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline">{items.length} rows</Badge>
+              <Select value={campaignFilter} onValueChange={(v) => setCampaignFilter(v)}>
+                <SelectTrigger className="w-[220px]">
+                  <SelectValue placeholder="All campaigns" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All campaigns</SelectItem>
+                  {campaigns.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="text-sm text-muted-foreground flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading timeline…
+              </div>
+            ) : (
+              <FlightsGantt
+                items={items}
+                campaignFilter={campaignFilter}
+                onSelect={(t) => setSelected(t)}
+              />
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Flight modal */}
+        <Dialog open={!!selected} onOpenChange={(v) => !v && setSelected(null)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{selected?.flight_name}</DialogTitle>
+            </DialogHeader>
+            {selected && (
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <div className="text-sm text-muted-foreground">Campaign</div>
+                  <div className="font-medium">{selected.campaign_name}</div>
+                  <div className="text-sm text-muted-foreground mt-4">Dates</div>
+                  <div className="font-medium">{selected.start_date} → {selected.end_date}</div>
+                  <div className="flex gap-2 mt-4">
+                    {typeof selected.priority === "number" && <Badge variant="outline">prio {selected.priority}</Badge>}
+                    {selected.status && <Badge className="capitalize">{selected.status}</Badge>}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="text-muted-foreground">Impr.</div><div className="text-right tabular-nums">{selected.impressions?.toLocaleString?.() ?? "0"}</div>
+                    <div className="text-muted-foreground">Clicks</div><div className="text-right tabular-nums">{selected.clicks?.toLocaleString?.() ?? "0"}</div>
+                    <div className="text-muted-foreground">Conv.</div><div className="text-right tabular-nums">{selected.conversions?.toLocaleString?.() ?? "0"}</div>
+                    <div className="text-muted-foreground">Spend</div><div className="text-right tabular-nums">{typeof selected.spend === "number" ? selected.spend.toLocaleString(undefined,{style:"currency",currency:"EUR"}) : "€0"}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     );
-  }
+  };
 
-  if (blocked) {
-    return <AccessDenied 
-      module="campaigns" 
-      title="Campaign Management"
-      description="Gerir campanhas publicitrias e voos de ancios."
-    />;
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">{t('campaigns.title')}</h2>
-          <p className="text-muted-foreground">{t('campaigns.description')}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline">{timelineItems.length} {t('flights.title').toLowerCase()}</Badge>
-          <Select value={campaignFilter} onValueChange={setCampaignFilter}>
-            <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder={t('campaigns.totalCampaigns')} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t('campaigns.totalCampaigns')}</SelectItem>
-              {campaigns.map(campaign => (
-                <SelectItem key={campaign} value={campaign}>{campaign}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="text-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">{t('flights.loading')}</p>
-        </div>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Flight Timeline</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <FlightsGantt 
-              items={timelineItems} 
-              campaignFilter={campaignFilter === "all" ? undefined : campaignFilter}
-              onSelect={handleItemSelect}
-            />
-          </CardContent>
-        </Card>
-      )}
-
-      {selectedItem && (
-        <Card>
-          <CardHeader>
-            <CardTitle>{selectedItem.flight_name}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <div className="text-sm text-muted-foreground">Campaign</div>
-                <div className="font-medium">{selectedItem.campaign_name}</div>
-                <div className="text-sm text-muted-foreground mt-4">Dates</div>
-                <div className="font-medium">
-                  {new Date(selectedItem.start_date).toLocaleDateString()} → {new Date(selectedItem.end_date).toLocaleDateString()}
-                </div>
-                <div className="flex gap-2 mt-4">
-                  <Badge className="capitalize">{selectedItem.status}</Badge>
-                  <Badge variant="secondary">Priority {selectedItem.priority}</Badge>
-                </div>
-              </div>
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="text-muted-foreground">Impressions</div>
-                  <div className="text-right tabular-nums">{selectedItem.impressions.toLocaleString()}</div>
-                  <div className="text-muted-foreground">Clicks</div>
-                  <div className="text-right tabular-nums">{selectedItem.clicks.toLocaleString()}</div>
-                  <div className="text-muted-foreground">Conversions</div>
-                  <div className="text-right tabular-nums">{selectedItem.conversions.toLocaleString()}</div>
-                  <div className="text-muted-foreground">Spend</div>
-                  <div className="text-right tabular-nums">€{selectedItem.spend.toLocaleString()}</div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  );
-};
-
-export default CampaignsPage;
+  export default CampaignsPage;
