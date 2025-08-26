@@ -163,7 +163,7 @@ const CampaignsPage: React.FC = () => {
   }
 
   if (!hasPermission("campaigns")) {
-    return <AccessDenied moduleName="Campaigns" />;
+    return <AccessDenied module="campaigns" title="Campaigns" description="You don’t have access to this module." />;
   }
 
   return (
