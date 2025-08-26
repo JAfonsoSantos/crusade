@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
       )
     }
 
-    const apiKey = integration.api_key // This should be decrypted in production
+    const apiKey = integration.api_key_encrypted || integration.api_key // In production, decrypt if encrypted
     if (!apiKey) {
       console.error('No API key found for integration')
       return new Response(
