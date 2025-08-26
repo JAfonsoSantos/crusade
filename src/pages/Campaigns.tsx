@@ -122,8 +122,12 @@ const CampaignsPage: React.FC = () => {
   }, [permissionsLoading, hasPermission, showAllCompanies]);
 
   const campaigns = useMemo(() => {
-    const unique = [...new Set(timelineItems.map(item => item.campaign_name))];
-    return unique.sort();
+    const unique = new Set<string>();
+    for (const item of timelineItems) {
+      const name = (item.campaign_name ?? "").toString().trim();
+      if (name.length > 0) unique.add(name);
+    }
+    return Array.from(unique).sort();
   }, [timelineItems]);
 
   const flightsCountByCampaign = useMemo(() => {
