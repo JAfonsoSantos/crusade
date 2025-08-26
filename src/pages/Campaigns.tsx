@@ -11,151 +11,115 @@ import FlightsGantt, { TimelineItem } from "@/components/FlightsGantt";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 const LS_FILTER_KEY = "crusade.campaigns.filter";
-const ALL_VALUE = "__all__";
 
 const CampaignsPage: React.FC = () => {
-  const { hasPermission, loading: permissionsLoading, permissions, isAdmin } = usePermissions();
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
   const { t } = useLanguage();
   const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<TimelineItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [campaignFilter, setCampaignFilter] = useState<string | null>(() => {
-    try {
-      const v = localStorage.getItem(LS_FILTER_KEY);
-      return v && v !== ALL_VALUE ? v : null;
-    } catch { return null; }
+    try { return localStorage.getItem(LS_FILTER_KEY) || null; } catch { return null; }
   });
   const [stats, setStats] = useState({ spaces: 0, campaigns: 0, revenue: 0 });
   const [syncing, setSyncing] = useState(false);
   const [debug, setDebug] = useState<{companyId?: string; flightsFetched: number; distinctCampaigns: number}>({ flightsFetched: 0, distinctCampaigns: 0 });
   const [showAllCompanies, setShowAllCompanies] = useState(false); // debug toggle
 
-  // Check permissions directly with stable values
-  const hasCampaignAccess = isAdmin || (permissions && permissions.campaigns);
-
   // persist filter
   useEffect(() => {
     try {
       if (campaignFilter) localStorage.setItem(LS_FILTER_KEY, campaignFilter);
-      else localStorage.setItem(LS_FILTER_KEY, ALL_VALUE);
+      else localStorage.removeItem(LS_FILTER_KEY);
     } catch {}
   }, [campaignFilter]);
 
   // fetch data
   useEffect(() => {
-    let mounted = true;
-
     const fetchData = async () => {
-      if (!mounted) return;
-      
       setLoading(true);
 
-      if (!hasCampaignAccess) {
-        if (mounted) {
-          setTimelineItems([]);
-          setLoading(false);
-        }
+      if (!hasPermission("campaigns")) {
+        setTimelineItems([]);
+        setLoading(false);
         return;
       }
 
-      try {
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("company_id")
-          .eq("user_id", (await supabase.auth.getUser()).data.user?.id)
-          .maybeSingle();
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("company_id")
+        .eq("user_id", (await supabase.auth.getUser()).data.user?.id)
+        .maybeSingle();
 
-        if (!mounted) return;
+      const companyId = profile?.company_id || undefined;
 
-        const companyId = profile?.company_id || undefined;
-
-        // Base query
-        let query = supabase
-          .from("flights")
-          .select(`
+      // Base query
+      let query = supabase
+        .from("flights")
+        .select(`
+          id,
+          name,
+          start_date,
+          end_date,
+          status,
+          impressions,
+          clicks,
+          conversions,
+          spend,
+          priority,
+          campaigns!inner(
             id,
             name,
-            start_date,
-            end_date,
-            status,
-            impressions,
-            clicks,
-            conversions,
-            spend,
-            priority,
-            campaigns!inner(
-              id,
-              name,
-              company_id
-            )
-          `)
-          .order("start_date", { ascending: true });
+            company_id
+          )
+        `)
+        .order("start_date", { ascending: true });
 
-        if (!showAllCompanies && companyId) {
-          query = query.eq("campaigns.company_id", companyId);
-        }
-
-        const { data, error } = await query;
-
-        if (!mounted) return;
-
-        if (error || profileError) {
-          setTimelineItems([]);
-          setDebug({ companyId, flightsFetched: 0, distinctCampaigns: 0 });
-        } else {
-          const items: TimelineItem[] = (data || []).map((flight: any) => ({
-            company_id: flight.campaigns.company_id,
-            campaign_id: flight.campaigns.id,
-            campaign_name: flight.campaigns.name,
-            flight_id: flight.id,
-            flight_name: flight.name,
-            start_date: flight.start_date,
-            end_date: flight.end_date,
-            status: flight.status,
-            impressions: flight.impressions || 0,
-            clicks: flight.clicks || 0,
-            conversions: flight.conversions || 0,
-            spend: flight.spend || 0,
-            priority: flight.priority || 1,
-          }));
-
-          setTimelineItems(items);
-
-          const campaignsCount = new Set(items.map(i => i.campaign_id)).size;
-          const revenue = items.reduce((s, r) => s + (r.spend || 0), 0);
-          const spacesCount = 0;
-          setStats({ spaces: spacesCount, campaigns: campaignsCount, revenue });
-          setDebug({ companyId, flightsFetched: items.length, distinctCampaigns: campaignsCount });
-        }
-      } catch (error) {
-        if (mounted) {
-          console.error("Error fetching campaigns data:", error);
-          setTimelineItems([]);
-          setDebug({ flightsFetched: 0, distinctCampaigns: 0 });
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
+      if (!showAllCompanies && companyId) {
+        query = query.eq("campaigns.company_id", companyId);
       }
+
+      const { data, error } = await query;
+
+      if (error || profileError) {
+        setTimelineItems([]);
+        setDebug({ companyId, flightsFetched: 0, distinctCampaigns: 0 });
+        setLoading(false);
+        return;
+      }
+
+      const items: TimelineItem[] = (data || []).map((flight: any) => ({
+        company_id: flight.campaigns.company_id,
+        campaign_id: flight.campaigns.id,
+        campaign_name: flight.campaigns.name,
+        flight_id: flight.id,
+        flight_name: flight.name,
+        start_date: flight.start_date,
+        end_date: flight.end_date,
+        status: flight.status,
+        impressions: flight.impressions || 0,
+        clicks: flight.clicks || 0,
+        conversions: flight.conversions || 0,
+        spend: flight.spend || 0,
+        priority: flight.priority || 1,
+      }));
+
+      setTimelineItems(items);
+
+      const campaignsCount = new Set(items.map(i => i.campaign_id)).size;
+      const revenue = items.reduce((s, r) => s + (r.spend || 0), 0);
+      const spacesCount = 0;
+      setStats({ spaces: spacesCount, campaigns: campaignsCount, revenue });
+      setDebug({ companyId, flightsFetched: items.length, distinctCampaigns: campaignsCount });
+      setLoading(false);
     };
 
-    if (!permissionsLoading) {
-      fetchData();
-    }
-
-    return () => {
-      mounted = false;
-    };
-  }, [permissionsLoading, hasCampaignAccess, showAllCompanies]);
+    if (!permissionsLoading) fetchData();
+  }, [permissionsLoading, hasPermission, showAllCompanies]);
 
   const campaigns = useMemo(() => {
-    const unique = new Set<string>();
-    for (const item of timelineItems) {
-      const name = (item.campaign_name ?? "").toString().trim();
-      if (name.length > 0) unique.add(name);
-    }
-    return Array.from(unique).sort();
+    const unique = [...new Set(timelineItems.map(item => item.campaign_name))];
+    return unique.sort();
   }, [timelineItems]);
 
   const flightsCountByCampaign = useMemo(() => {
@@ -183,6 +147,7 @@ const CampaignsPage: React.FC = () => {
 
   const resetFilter = () => {
     setCampaignFilter(null);
+    try { localStorage.removeItem(LS_FILTER_KEY); } catch {}
   };
 
   if (permissionsLoading) {
@@ -194,8 +159,8 @@ const CampaignsPage: React.FC = () => {
     );
   }
 
-  if (!hasCampaignAccess) {
-    return <AccessDenied module="campaigns" title="Campaigns" description="You don’t have access to this module." />;
+  if (!hasPermission("campaigns")) {
+    return <AccessDenied moduleName="Campaigns" />;
   }
 
   return (
@@ -266,14 +231,14 @@ const CampaignsPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">{t?.("campaign") || "Campaign"}</span>
                 <Select
-                  value={campaignFilter ?? ALL_VALUE}
-                  onValueChange={(v) => setCampaignFilter(v === ALL_VALUE ? null : v)}
+                  value={campaignFilter || ""}
+                  onValueChange={(v) => setCampaignFilter(v || null)}
                 >
                   <SelectTrigger className="w-[280px]">
                     <SelectValue placeholder={t?.("all_campaigns") || "All campaigns"} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={ALL_VALUE}>{t?.("all_campaigns") || "All campaigns"}</SelectItem>
+                    <SelectItem value="">{t?.("all_campaigns") || "All campaigns"}</SelectItem>
                     {campaigns.map((c) => (
                       <SelectItem key={c} value={c}>
                         <div className="flex items-center gap-2">
