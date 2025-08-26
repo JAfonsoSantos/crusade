@@ -11,6 +11,7 @@ import FlightsGantt, { TimelineItem } from "@/components/FlightsGantt";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 const LS_FILTER_KEY = "crusade.campaigns.filter";
+const ALL_VALUE = "__all__";
 
 const CampaignsPage: React.FC = () => {
   const { hasPermission, loading: permissionsLoading } = usePermissions();
@@ -19,7 +20,10 @@ const CampaignsPage: React.FC = () => {
   const [selectedItem, setSelectedItem] = useState<TimelineItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [campaignFilter, setCampaignFilter] = useState<string | null>(() => {
-    try { return localStorage.getItem(LS_FILTER_KEY) || null; } catch { return null; }
+    try {
+      const v = localStorage.getItem(LS_FILTER_KEY);
+      return v && v !== ALL_VALUE ? v : null;
+    } catch { return null; }
   });
   const [stats, setStats] = useState({ spaces: 0, campaigns: 0, revenue: 0 });
   const [syncing, setSyncing] = useState(false);
@@ -30,7 +34,7 @@ const CampaignsPage: React.FC = () => {
   useEffect(() => {
     try {
       if (campaignFilter) localStorage.setItem(LS_FILTER_KEY, campaignFilter);
-      else localStorage.removeItem(LS_FILTER_KEY);
+      else localStorage.setItem(LS_FILTER_KEY, ALL_VALUE);
     } catch {}
   }, [campaignFilter]);
 
@@ -147,7 +151,6 @@ const CampaignsPage: React.FC = () => {
 
   const resetFilter = () => {
     setCampaignFilter(null);
-    try { localStorage.removeItem(LS_FILTER_KEY); } catch {}
   };
 
   if (permissionsLoading) {
@@ -231,14 +234,14 @@ const CampaignsPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">{t?.("campaign") || "Campaign"}</span>
                 <Select
-                  value={campaignFilter || ""}
-                  onValueChange={(v) => setCampaignFilter(v || null)}
+                  value={campaignFilter ?? ALL_VALUE}
+                  onValueChange={(v) => setCampaignFilter(v === ALL_VALUE ? null : v)}
                 >
                   <SelectTrigger className="w-[280px]">
                     <SelectValue placeholder={t?.("all_campaigns") || "All campaigns"} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">{t?.("all_campaigns") || "All campaigns"}</SelectItem>
+                    <SelectItem value={ALL_VALUE}>{t?.("all_campaigns") || "All campaigns"}</SelectItem>
                     {campaigns.map((c) => (
                       <SelectItem key={c} value={c}>
                         <div className="flex items-center gap-2">
