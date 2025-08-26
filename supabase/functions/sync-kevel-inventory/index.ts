@@ -83,11 +83,12 @@ Deno.serve(async (req) => {
       )
     }
 
-    if (integration.status !== 'active') {
+    // Allow sync when status is 'active' or recovering from 'error'
+    if (integration.status === 'paused') {
       return new Response(
         JSON.stringify({ 
-          error: 'Integration is not active',
-          details: `Integration status is ${integration.status}`
+          error: 'Integration is paused',
+          details: 'Integration sync is temporarily paused'
         }),
         { 
           status: 400, 
@@ -95,6 +96,8 @@ Deno.serve(async (req) => {
         }
       )
     }
+    // Proceed for statuses: active, error, inactive (attempt first sync)
+
 
     if (integration.provider !== 'kevel') {
       console.error('Invalid provider:', integration.provider)
