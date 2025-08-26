@@ -47,7 +47,7 @@ interface SyncDetails {
 interface SyncDetailsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  syncDetails: SyncDetails;
+  syncDetails?: SyncDetails | null;
   integrationName: string;
 }
 
@@ -171,6 +171,7 @@ const SyncDetailsModal: React.FC<SyncDetailsModalProps> = ({
   syncDetails,
   integrationName
 }) => {
+  const details: SyncDetails = syncDetails ?? { timestamp: '', synced: 0, errors: 0, operations: {} as any };
   const [itemsModal, setItemsModal] = React.useState<{
     open: boolean;
     type: string;
@@ -192,9 +193,9 @@ const SyncDetailsModal: React.FC<SyncDetailsModalProps> = ({
     });
   };
 
-  const operations = Object.entries(syncDetails.operations || {}).filter(
-    ([_, operation]) => operation && (operation.created > 0 || operation.updated > 0 || operation.existing > 0 || operation.errors?.length > 0)
-  );
+const operations = Object.entries(details.operations || {}).filter(
+  ([_, operation]) => operation && (operation.created > 0 || operation.updated > 0 || operation.existing > 0 || (operation.errors?.length ?? 0) > 0)
+);
 
   return (
     <>
@@ -218,7 +219,7 @@ const SyncDetailsModal: React.FC<SyncDetailsModalProps> = ({
                   <div className="flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-green-600" />
                     <div>
-                      <p className="text-2xl font-bold text-green-600">{syncDetails.synced}</p>
+                      <p className="text-2xl font-bold text-green-600">{details.synced}</p>
                       <p className="text-xs text-muted-foreground">Items Synced</p>
                     </div>
                   </div>
@@ -230,7 +231,7 @@ const SyncDetailsModal: React.FC<SyncDetailsModalProps> = ({
                   <div className="flex items-center gap-2">
                     <AlertCircle className="h-4 w-4 text-red-600" />
                     <div>
-                      <p className="text-2xl font-bold text-red-600">{syncDetails.errors}</p>
+                      <p className="text-2xl font-bold text-red-600">{details.errors}</p>
                       <p className="text-xs text-muted-foreground">Errors</p>
                     </div>
                   </div>
@@ -242,7 +243,7 @@ const SyncDetailsModal: React.FC<SyncDetailsModalProps> = ({
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-blue-600" />
                     <div>
-                      <p className="text-sm font-medium">{formatDate(syncDetails.timestamp)}</p>
+                      <p className="text-sm font-medium">{details.timestamp ? formatDate(details.timestamp) : '—'}</p>
                       <p className="text-xs text-muted-foreground">Sync Time</p>
                     </div>
                   </div>
