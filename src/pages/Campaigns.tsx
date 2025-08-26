@@ -40,85 +40,112 @@ const CampaignsPage: React.FC = () => {
 
   // fetch data
   useEffect(() => {
+    let mounted = true;
+
     const fetchData = async () => {
+      if (!mounted) return;
+      
       setLoading(true);
 
       if (!hasPermission("campaigns")) {
-        setTimelineItems([]);
-        setLoading(false);
+        if (mounted) {
+          setTimelineItems([]);
+          setLoading(false);
+        }
         return;
       }
 
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("company_id")
-        .eq("user_id", (await supabase.auth.getUser()).data.user?.id)
-        .maybeSingle();
+      try {
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("company_id")
+          .eq("user_id", (await supabase.auth.getUser()).data.user?.id)
+          .maybeSingle();
 
-      const companyId = profile?.company_id || undefined;
+        if (!mounted) return;
 
-      // Base query
-      let query = supabase
-        .from("flights")
-        .select(`
-          id,
-          name,
-          start_date,
-          end_date,
-          status,
-          impressions,
-          clicks,
-          conversions,
-          spend,
-          priority,
-          campaigns!inner(
+        const companyId = profile?.company_id || undefined;
+
+        // Base query
+        let query = supabase
+          .from("flights")
+          .select(`
             id,
             name,
-            company_id
-          )
-        `)
-        .order("start_date", { ascending: true });
+            start_date,
+            end_date,
+            status,
+            impressions,
+            clicks,
+            conversions,
+            spend,
+            priority,
+            campaigns!inner(
+              id,
+              name,
+              company_id
+            )
+          `)
+          .order("start_date", { ascending: true });
 
-      if (!showAllCompanies && companyId) {
-        query = query.eq("campaigns.company_id", companyId);
+        if (!showAllCompanies && companyId) {
+          query = query.eq("campaigns.company_id", companyId);
+        }
+
+        const { data, error } = await query;
+
+        if (!mounted) return;
+
+        if (error || profileError) {
+          setTimelineItems([]);
+          setDebug({ companyId, flightsFetched: 0, distinctCampaigns: 0 });
+        } else {
+          const items: TimelineItem[] = (data || []).map((flight: any) => ({
+            company_id: flight.campaigns.company_id,
+            campaign_id: flight.campaigns.id,
+            campaign_name: flight.campaigns.name,
+            flight_id: flight.id,
+            flight_name: flight.name,
+            start_date: flight.start_date,
+            end_date: flight.end_date,
+            status: flight.status,
+            impressions: flight.impressions || 0,
+            clicks: flight.clicks || 0,
+            conversions: flight.conversions || 0,
+            spend: flight.spend || 0,
+            priority: flight.priority || 1,
+          }));
+
+          setTimelineItems(items);
+
+          const campaignsCount = new Set(items.map(i => i.campaign_id)).size;
+          const revenue = items.reduce((s, r) => s + (r.spend || 0), 0);
+          const spacesCount = 0;
+          setStats({ spaces: spacesCount, campaigns: campaignsCount, revenue });
+          setDebug({ companyId, flightsFetched: items.length, distinctCampaigns: campaignsCount });
+        }
+      } catch (error) {
+        if (mounted) {
+          console.error("Error fetching campaigns data:", error);
+          setTimelineItems([]);
+          setDebug({ flightsFetched: 0, distinctCampaigns: 0 });
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
       }
-
-      const { data, error } = await query;
-
-      if (error || profileError) {
-        setTimelineItems([]);
-        setDebug({ companyId, flightsFetched: 0, distinctCampaigns: 0 });
-        setLoading(false);
-        return;
-      }
-
-      const items: TimelineItem[] = (data || []).map((flight: any) => ({
-        company_id: flight.campaigns.company_id,
-        campaign_id: flight.campaigns.id,
-        campaign_name: flight.campaigns.name,
-        flight_id: flight.id,
-        flight_name: flight.name,
-        start_date: flight.start_date,
-        end_date: flight.end_date,
-        status: flight.status,
-        impressions: flight.impressions || 0,
-        clicks: flight.clicks || 0,
-        conversions: flight.conversions || 0,
-        spend: flight.spend || 0,
-        priority: flight.priority || 1,
-      }));
-
-      setTimelineItems(items);
-
-      const campaignsCount = new Set(items.map(i => i.campaign_id)).size;
-      const revenue = items.reduce((s, r) => s + (r.spend || 0), 0);
-      const spacesCount = 0;
-      setStats({ spaces: spacesCount, campaigns: campaignsCount, revenue });
-      setDebug({ companyId, flightsFetched: items.length, distinctCampaigns: campaignsCount });
-      setLoading(false);
     };
 
-    if (!permissionsLoading) fetchData();
+    if (!permissionsLoading && hasPermission("campaigns")) {
+      fetchData();
+    } else if (!permissionsLoading && !hasPermission("campaigns")) {
+      setLoading(false);
+    }
+
+    return () => {
+      mounted = false;
+    };
   }, [permissionsLoading, hasPermission, showAllCompanies]);
 
   const campaigns = useMemo(() => {
