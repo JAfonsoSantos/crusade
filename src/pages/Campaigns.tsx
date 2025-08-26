@@ -115,7 +115,7 @@ const CampaignsPage: React.FC = () => {
     };
 
     if (!permissionsLoading) fetchData();
-  }, [permissionsLoading, hasPermission, showAllCompanies]);
+  }, [permissionsLoading, showAllCompanies]);
 
   const campaigns = useMemo(() => {
     const unique = [...new Set(timelineItems.map(item => item.campaign_name))];
