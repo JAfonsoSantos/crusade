@@ -14,7 +14,7 @@ const LS_FILTER_KEY = "crusade.campaigns.filter";
 const ALL_VALUE = "__all__";
 
 const CampaignsPage: React.FC = () => {
-  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  const { hasPermission, loading: permissionsLoading, permissions, isAdmin } = usePermissions();
   const { t } = useLanguage();
   const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<TimelineItem | null>(null);
@@ -29,6 +29,9 @@ const CampaignsPage: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
   const [debug, setDebug] = useState<{companyId?: string; flightsFetched: number; distinctCampaigns: number}>({ flightsFetched: 0, distinctCampaigns: 0 });
   const [showAllCompanies, setShowAllCompanies] = useState(false); // debug toggle
+
+  // Check permissions directly with stable values
+  const hasCampaignAccess = isAdmin || (permissions && permissions.campaigns);
 
   // persist filter
   useEffect(() => {
@@ -47,7 +50,7 @@ const CampaignsPage: React.FC = () => {
       
       setLoading(true);
 
-      if (!hasPermission("campaigns")) {
+      if (!hasCampaignAccess) {
         if (mounted) {
           setTimelineItems([]);
           setLoading(false);
@@ -137,16 +140,14 @@ const CampaignsPage: React.FC = () => {
       }
     };
 
-    if (!permissionsLoading && hasPermission("campaigns")) {
+    if (!permissionsLoading) {
       fetchData();
-    } else if (!permissionsLoading && !hasPermission("campaigns")) {
-      setLoading(false);
     }
 
     return () => {
       mounted = false;
     };
-  }, [permissionsLoading, hasPermission, showAllCompanies]);
+  }, [permissionsLoading, hasCampaignAccess, showAllCompanies]);
 
   const campaigns = useMemo(() => {
     const unique = new Set<string>();
@@ -193,7 +194,7 @@ const CampaignsPage: React.FC = () => {
     );
   }
 
-  if (!hasPermission("campaigns")) {
+  if (!hasCampaignAccess) {
     return <AccessDenied module="campaigns" title="Campaigns" description="You don’t have access to this module." />;
   }
 
