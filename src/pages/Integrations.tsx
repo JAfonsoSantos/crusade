@@ -405,17 +405,530 @@ const Integrations = () => {
     }
   };
 
-  // ... (rest of the component unchanged, UI rendering code)
-  // The bottom rendering remains same as in original file
-  
+  const handleCreateIntegration = async () => {
+    // Get current user's profile to get company_id
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("company_id")
+      .eq("user_id", (await supabase.auth.getUser()).data.user?.id)
+      .single();
+
+    if (profileError || !profile?.company_id) {
+      toast({
+        title: "Error",
+        description: "Could not find company for user.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const { error } = await supabase
+      .from('ad_server_integrations')
+      .insert([{
+        name: formData.name,
+        provider: formData.provider,
+        integration_type: formData.integration_type,
+        api_key_encrypted: formData.api_key,
+        status: 'inactive',
+        company_id: profile.company_id
+      }]);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Could not create integration.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: "Integration created successfully!",
+      });
+      setShowCreateDialog(false);
+      setFormData({ name: '', integration_type: 'ad_server', provider: 'kevel', api_key: '' });
+      fetchIntegrations();
+    }
+  };
+
+  const handleDeleteIntegration = async () => {
+    if (!integrationToDelete) return;
+    
+    setDeleting(true);
+    
+    try {
+      const { error } = await supabase.functions.invoke('delete-integration', {
+        body: { integrationId: integrationToDelete.id }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Integration deleted successfully!",
+      });
+      
+      setDeleteDialogOpen(false);
+      setIntegrationToDelete(null);
+      fetchIntegrations();
+      
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Could not delete integration.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const openSyncDetails = (integration: Integration) => {
+    const syncDetails = integration.configuration?.last_sync_details;
+    if (syncDetails) {
+      setSyncDetailsModal({
+        open: true,
+        syncDetails,
+        integrationName: integration.name
+      });
+    }
+  };
+
   if (loading) {
     return <div>Loading...</div>;
   }
 
+  const adServerIntegrations = integrations.filter(i => derivedType(i) === 'ad_server');
+  const crmIntegrations = integrations.filter(i => derivedType(i) === 'crm');
+
   return (
     <div className="space-y-6">
-      {/* Render UI sections for ad_server and crm integrations */}
-      {/* ... full UI code remains same as original, with CRM Sync button etc. */}
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold">Integrations</h1>
+        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Integration
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create New Integration</DialogTitle>
+              <DialogDescription>
+                Connect your ad server or CRM to sync data automatically.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="My Integration"
+                />
+              </div>
+              <div>
+                <Label htmlFor="type">Type</Label>
+                <Select value={formData.integration_type} onValueChange={(value) => setFormData({ ...formData, integration_type: value })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ad_server">Ad Server</SelectItem>
+                    <SelectItem value="crm">CRM</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="provider">Provider</Label>
+                <Select value={formData.provider} onValueChange={(value) => setFormData({ ...formData, provider: value })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {formData.integration_type === 'ad_server' ? (
+                      <>
+                        <SelectItem value="kevel">Kevel</SelectItem>
+                        <SelectItem value="koddi">Koddi</SelectItem>
+                        <SelectItem value="topsort">Topsort</SelectItem>
+                        <SelectItem value="google_ad_manager">Google Ad Manager</SelectItem>
+                        <SelectItem value="criteo">Criteo</SelectItem>
+                        <SelectItem value="citrusad">CitrusAd</SelectItem>
+                        <SelectItem value="moloko">Moloko</SelectItem>
+                      </>
+                    ) : (
+                      <>
+                        <SelectItem value="salesforce">Salesforce</SelectItem>
+                        <SelectItem value="hubspot">HubSpot</SelectItem>
+                        <SelectItem value="pipedrive">Pipedrive</SelectItem>
+                        <SelectItem value="vtex">VTEX</SelectItem>
+                      </>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="api_key">API Key</Label>
+                <Input
+                  id="api_key"
+                  type="password"
+                  value={formData.api_key}
+                  onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
+                  placeholder="Enter API key"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleCreateIntegration} className="flex-1">
+                  Create Integration
+                </Button>
+                <Button variant="outline" onClick={() => setShowCreateDialog(false)} className="flex-1">
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Ad Server Integrations */}
+      <div>
+        <h2 className="text-xl font-semibold mb-4">Ad Server Integrations</h2>
+        {adServerIntegrations.length === 0 ? (
+          <Card>
+            <CardContent className="p-6 text-center text-muted-foreground">
+              No ad server integrations configured yet.
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4">
+            {adServerIntegrations.map((integration) => (
+              <Card key={integration.id}>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      {getProviderLogo(integration.provider) && (
+                        <img 
+                          src={getProviderLogo(integration.provider)!} 
+                          alt={getProviderName(integration.provider)}
+                          className="w-8 h-8 object-contain"
+                        />
+                      )}
+                      <div>
+                        <CardTitle className="text-lg">{integration.name}</CardTitle>
+                        <CardDescription>{getProviderName(integration.provider)}</CardDescription>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge className={getStatusColor(integration.status)}>
+                        {integration.status === 'active' && <Wifi className="w-3 h-3 mr-1" />}
+                        {integration.status === 'inactive' && <WifiOff className="w-3 h-3 mr-1" />}
+                        {integration.status === 'paused' && <Pause className="w-3 h-3 mr-1" />}
+                        {integration.status}
+                      </Badge>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => handleConfigure(integration)}>
+                          <Settings className="w-4 h-4" />
+                        </Button>
+                        {integration.status === 'paused' ? (
+                          <Button variant="ghost" size="sm" onClick={() => handleResumeIntegration(integration)}>
+                            <Play className="w-4 h-4" />
+                          </Button>
+                        ) : (
+                          <Button variant="ghost" size="sm" onClick={() => handlePauseIntegration(integration)}>
+                            <Pause className="w-4 h-4" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => handleSync(integration)}
+                          disabled={syncing === integration.id}
+                        >
+                          <RefreshCw className={`w-4 h-4 ${syncing === integration.id ? 'animate-spin' : ''}`} />
+                        </Button>
+                        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                          <AlertDialogTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => setIntegrationToDelete(integration)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Integration</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete this integration? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={handleDeleteIntegration}
+                                disabled={deleting}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                {deleting ? 'Deleting...' : 'Delete'}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Last Sync:</span>
+                      <span>{formatDate(integration.last_sync)}</span>
+                    </div>
+                    
+                    {integration.configuration?.last_sync_details && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Sync Details:</span>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => openSyncDetails(integration)}
+                        >
+                          <Eye className="w-3 h-3 mr-1" />
+                          See Details
+                        </Button>
+                      </div>
+                    )}
+
+                    <Collapsible 
+                      open={expandedSyncHistory[integration.id]} 
+                      onOpenChange={() => toggleSyncHistory(integration.id)}
+                    >
+                      <CollapsibleTrigger asChild>
+                        <Button variant="ghost" size="sm" className="w-full justify-between">
+                          <span className="text-sm">Sync History</span>
+                          {expandedSyncHistory[integration.id] ? (
+                            <ChevronDown className="w-4 h-4" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-2 mt-2">
+                        {syncHistory[integration.id]?.length > 0 ? (
+                          syncHistory[integration.id].map((sync: any, index: number) => (
+                            <div key={index} className="text-xs p-2 bg-muted rounded flex justify-between">
+                              <span>{formatDate(sync.sync_timestamp)}</span>
+                              <span>{sync.synced_count} synced, {sync.errors_count} errors</span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-xs text-muted-foreground p-2">No sync history available</div>
+                        )}
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* CRM Integrations */}
+      <div>
+        <h2 className="text-xl font-semibold mb-4">CRM Integrations</h2>
+        {crmIntegrations.length === 0 ? (
+          <Card>
+            <CardContent className="p-6 text-center text-muted-foreground">
+              No CRM integrations configured yet.
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4">
+            {crmIntegrations.map((integration) => (
+              <Card key={integration.id}>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      {getProviderLogo(integration.provider) && (
+                        <img 
+                          src={getProviderLogo(integration.provider)!} 
+                          alt={getProviderName(integration.provider)}
+                          className="w-8 h-8 object-contain"
+                        />
+                      )}
+                      <div>
+                        <CardTitle className="text-lg">{integration.name}</CardTitle>
+                        <CardDescription>{getProviderName(integration.provider)}</CardDescription>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge className={getStatusColor(integration.status)}>
+                        {integration.status === 'active' && <Wifi className="w-3 h-3 mr-1" />}
+                        {integration.status === 'inactive' && <WifiOff className="w-3 h-3 mr-1" />}
+                        {integration.status === 'paused' && <Pause className="w-3 h-3 mr-1" />}
+                        {integration.status}
+                      </Badge>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => handleConfigure(integration)}>
+                          <Settings className="w-4 h-4" />
+                        </Button>
+                        {integration.status === 'paused' ? (
+                          <Button variant="ghost" size="sm" onClick={() => handleResumeIntegration(integration)}>
+                            <Play className="w-4 h-4" />
+                          </Button>
+                        ) : (
+                          <Button variant="ghost" size="sm" onClick={() => handlePauseIntegration(integration)}>
+                            <Pause className="w-4 h-4" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => handleSync(integration)}
+                          disabled={syncing === integration.id}
+                        >
+                          <RefreshCw className={`w-4 h-4 ${syncing === integration.id ? 'animate-spin' : ''}`} />
+                        </Button>
+                        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                          <AlertDialogTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => setIntegrationToDelete(integration)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Integration</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete this integration? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={handleDeleteIntegration}
+                                disabled={deleting}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                {deleting ? 'Deleting...' : 'Delete'}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Last Sync:</span>
+                      <span>{formatDate(integration.last_sync)}</span>
+                    </div>
+                    
+                    {integration.configuration?.last_sync_details && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Sync Details:</span>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => openSyncDetails(integration)}
+                        >
+                          <Eye className="w-3 h-3 mr-1" />
+                          See Details
+                        </Button>
+                      </div>
+                    )}
+
+                    <Collapsible 
+                      open={expandedSyncHistory[integration.id]} 
+                      onOpenChange={() => toggleSyncHistory(integration.id)}
+                    >
+                      <CollapsibleTrigger asChild>
+                        <Button variant="ghost" size="sm" className="w-full justify-between">
+                          <span className="text-sm">Sync History</span>
+                          {expandedSyncHistory[integration.id] ? (
+                            <ChevronDown className="w-4 h-4" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-2 mt-2">
+                        {syncHistory[integration.id]?.length > 0 ? (
+                          syncHistory[integration.id].map((sync: any, index: number) => (
+                            <div key={index} className="text-xs p-2 bg-muted rounded flex justify-between">
+                              <span>{formatDate(sync.sync_timestamp)}</span>
+                              <span>{sync.synced_count} synced, {sync.errors_count} errors</span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-xs text-muted-foreground p-2">No sync history available</div>
+                        )}
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Configuration Dialog */}
+      <Dialog open={configDialogOpen} onOpenChange={setConfigDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Configure Integration</DialogTitle>
+            <DialogDescription>
+              Update the settings for this integration.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="config_name">Name</Label>
+              <Input
+                id="config_name"
+                value={configFormData.name}
+                onChange={(e) => setConfigFormData({ ...configFormData, name: e.target.value })}
+                placeholder="Integration name"
+              />
+            </div>
+            <div>
+              <Label htmlFor="config_api_key">API Key (leave empty to keep current)</Label>
+              <Input
+                id="config_api_key"
+                type="password"
+                value={configFormData.api_key}
+                onChange={(e) => setConfigFormData({ ...configFormData, api_key: e.target.value })}
+                placeholder="Enter new API key"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleUpdateIntegration} className="flex-1">
+                Update Integration
+              </Button>
+              <Button variant="outline" onClick={() => setConfigDialogOpen(false)} className="flex-1">
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sync Details Modal */}
+      <SyncDetailsModal
+        open={syncDetailsModal.open}
+        onOpenChange={(open) => setSyncDetailsModal(prev => ({ ...prev, open }))}
+        syncDetails={syncDetailsModal.syncDetails}
+        integrationName={syncDetailsModal.integrationName}
+      />
     </div>
   );
 };
