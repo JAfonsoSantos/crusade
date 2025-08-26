@@ -415,6 +415,7 @@ export type Database = {
       }
       campaigns: {
         Row: {
+          ad_server: string | null
           advertiser_id: string | null
           brand_id: string | null
           budget: number | null
@@ -424,6 +425,7 @@ export type Database = {
           currency: string | null
           description: string | null
           end_date: string
+          external_id: string | null
           id: string
           name: string
           start_date: string
@@ -431,6 +433,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          ad_server?: string | null
           advertiser_id?: string | null
           brand_id?: string | null
           budget?: number | null
@@ -440,6 +443,7 @@ export type Database = {
           currency?: string | null
           description?: string | null
           end_date: string
+          external_id?: string | null
           id?: string
           name: string
           start_date: string
@@ -447,6 +451,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          ad_server?: string | null
           advertiser_id?: string | null
           brand_id?: string | null
           budget?: number | null
@@ -456,6 +461,7 @@ export type Database = {
           currency?: string | null
           description?: string | null
           end_date?: string
+          external_id?: string | null
           id?: string
           name?: string
           start_date?: string

@@ -217,15 +217,12 @@ Deno.serve(async (req) => {
           let kevelAdUnitCreated = false
 
           // Check if ad unit already exists for this site and ad size
-          const adUnitsResponse = await fetch(`https://api.kevel.co/v1/zone/list`, {
+          const adUnitsResponse = await fetch(`https://api.kevel.co/v1/zone/list?SiteId=${site.Id}`, {
             method: 'GET',
             headers: {
               'X-Adzerk-ApiKey': apiKey,
               'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              'SiteId': site.Id
-            })
+            }
           })
 
           if (adUnitsResponse.ok) {
