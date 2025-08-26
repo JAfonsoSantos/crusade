@@ -51,6 +51,8 @@ const CampaignsPage: React.FC = () => {
         .eq("user_id", (await supabase.auth.getUser()).data.user?.id)
         .maybeSingle();
 
+      console.log("User profile:", profile, "Error:", profileError);
+
       const companyId = profile?.company_id || undefined;
 
       // Base query
@@ -81,7 +83,10 @@ const CampaignsPage: React.FC = () => {
 
       const { data, error } = await query;
 
+      console.log("Flights query result:", { data, error, companyId, showAllCompanies });
+
       if (error || profileError) {
+        console.error("Query errors:", { error, profileError });
         setTimelineItems([]);
         setDebug({ companyId, flightsFetched: 0, distinctCampaigns: 0 });
         setLoading(false);
