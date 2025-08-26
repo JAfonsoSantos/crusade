@@ -305,22 +305,16 @@ Deno.serve(async (req) => {
           // Create or update ad space in our database
           const adSpaceData = {
             name: adUnitName,
-            description: `Ad space for ${site.Title} - ${adSize.Name} (${adSize.Width}x${adSize.Height})`,
-            dimensions: `${adSize.Width}x${adSize.Height}`,
-            location: `${site.Url} (kevel.co)`,
+            size: `${adSize.Width}x${adSize.Height}`,
+            location: `${site.Title} (${site.Url})`,
             type: 'display',
-            status: 'active',
+            status: 'available',
             company_id: integration.company_id,
             external_id: adUnitId?.toString(),
             ad_server: 'kevel',
-            targeting_criteria: {
-              site_id: site.Id,
-              site_name: site.Title,
-              ad_size: adSize.Name,
-              kevel_zone_id: adUnitId
-            },
-            pricing_model: 'cpm',
-            floor_price: 1.00
+            price_model: 'cpm',
+            base_price: 1.00,
+            currency: 'USD'
           }
 
           // Check if ad space already exists
@@ -392,11 +386,7 @@ Deno.serve(async (req) => {
           status: kevelCampaign.IsActive ? 'active' : 'paused',
           company_id: integration.company_id,
           external_id: kevelCampaign.Id.toString(),
-          ad_server: 'kevel',
-          targeting_criteria: {
-            kevel_campaign_id: kevelCampaign.Id,
-            advertiser_id: kevelCampaign.AdvertiserId
-          }
+          ad_server: 'kevel'
         }
 
         // Check if campaign already exists
@@ -517,12 +507,7 @@ Deno.serve(async (req) => {
                 status: kevelFlight.IsActive ? 'active' : 'paused',
                 priority: kevelFlight.Priority || 1,
                 external_id: kevelFlight.Id.toString(),
-                ad_server: 'kevel',
-                targeting_criteria: {
-                  kevel_flight_id: kevelFlight.Id,
-                  impression_cap: kevelFlight.CapType || null,
-                  daily_cap: kevelFlight.DailyCap || null
-                }
+                ad_server: 'kevel'
               }
 
               // Check if flight already exists
