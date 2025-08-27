@@ -24,7 +24,7 @@ import hubspotLogo from '@/assets/hubspot-logo.png';
 import pipedriveLogo from '@/assets/pipedrive-logo.png';
 import vtexLogo from '@/assets/vtex-logo.png';
 
-/** Integrations page with fallback for Edge Functions network issues. */
+/** FIX version: ensures handleCreateIntegration is a hoisted function declaration. */
 interface Integration {
   id: string;
   name: string;
@@ -42,8 +42,6 @@ interface SyncDetails {
   errors: number;
   operations: Record<string, any>;
 }
-
-const CRM_PROVIDERS = ['salesforce', 'hubspot', 'pipedrive', 'vtex'] as const;
 
 async function callEdgeFunction(fn: string, body: any) {
   try {
@@ -71,7 +69,9 @@ async function callEdgeFunction(fn: string, body: any) {
   }
 }
 
-const Integrations = () => {
+const CRM_SET = new Set(['salesforce', 'hubspot', 'pipedrive', 'vtex']);
+
+function Integrations() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -90,32 +90,32 @@ const Integrations = () => {
 
   useEffect(() => { fetchIntegrations(); }, []);
 
-  const fetchIntegrations = async () => {
+  async function fetchIntegrations() {
     const { data, error } = await supabase.from('ad_server_integrations').select('*').order('created_at', { ascending: false });
     if (error) toast({ title: 'Error', description: 'Could not load integrations.', variant: 'destructive' });
     else setIntegrations((data || []) as Integration[]);
     setLoading(false);
-  };
+  }
 
-  const fetchSyncHistory = async (integrationId: string) => {
+  async function fetchSyncHistory(integrationId: string) {
     if (syncHistory[integrationId]) return;
     const { data } = await supabase.from('integration_sync_history').select('*').eq('integration_id', integrationId).order('sync_timestamp', { ascending: false }).limit(10);
     if (data) setSyncHistory(prev => ({ ...prev, [integrationId]: data }));
-  };
+  }
 
-  const toggleSyncHistory = (integrationId: string) => {
+  function toggleSyncHistory(integrationId: string) {
     setExpandedSyncHistory(prev => ({ ...prev, [integrationId]: !prev[integrationId] }));
     if (!expandedSyncHistory[integrationId]) fetchSyncHistory(integrationId);
-  };
+  }
 
-  const formatDate = (dateString?: string | null) => {
+  function formatDate(dateString?: string | null) {
     if (!dateString) return 'Never';
     const dt = new Date(dateString);
     if (isNaN(dt.getTime())) return 'Never';
     return dt.toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  };
+  }
 
-  const getStatusColor = (status: string) => {
+  function getStatusColor(status: string) {
     switch (status) {
       case 'active': return 'bg-green-100 text-green-800';
       case 'paused': return 'bg-yellow-100 text-yellow-800';
@@ -123,9 +123,9 @@ const Integrations = () => {
       case 'error': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
-  };
+  }
 
-  const getProviderName = (provider: string) => {
+  function getProviderName(provider: string) {
     switch (provider) {
       case 'kevel': return 'Kevel';
       case 'koddi': return 'Koddi';
@@ -140,9 +140,9 @@ const Integrations = () => {
       case 'vtex': return 'VTEX';
       default: return provider;
     }
-  };
+  }
 
-  const getProviderLogo = (provider: string) => {
+  function getProviderLogo(provider: string) {
     switch (provider) {
       case 'kevel': return kevelLogo;
       case 'koddi': return koddiLogo;
@@ -157,11 +157,11 @@ const Integrations = () => {
       case 'vtex': return vtexLogo;
       default: return null;
     }
-  };
+  }
 
-  const derivedType = (i: Integration) => (['salesforce', 'hubspot', 'pipedrive', 'vtex'] as string[]).includes(i.provider) ? 'crm' : (i.integration_type || 'ad_server');
+  const derivedType = (i: Integration) => (CRM_SET.has(i.provider) ? 'crm' : (i.integration_type || 'ad_server'));
 
-  const handleSync = async (integration: Integration) => {
+  async function handleSync(integration: Integration) {
     if (integration.status === 'paused') {
       toast({ title: 'Cannot Sync', description: 'This integration is paused. Resume it first to sync.', variant: 'destructive' });
       return;
@@ -190,15 +190,15 @@ const Integrations = () => {
     } catch (err: any) {
       toast({ title: 'Sync Failed', description: err?.message || 'Could not sync.', variant: 'destructive' });
     } finally { setSyncing(null); }
-  };
+  }
 
-  const handleConfigure = (integration: Integration) => {
+  function handleConfigure(integration: Integration) {
     setSelectedIntegration(integration);
     setConfigFormData({ name: integration.name, api_key: '' });
     setConfigDialogOpen(true);
-  };
+  }
 
-  const handleUpdateIntegration = async () => {
+  async function handleUpdateIntegration() {
     if (!selectedIntegration) return;
     const updateData: any = {};
     if (configFormData.name && configFormData.name !== selectedIntegration.name) updateData.name = configFormData.name;
@@ -207,10 +207,10 @@ const Integrations = () => {
     const { error } = await supabase.from('ad_server_integrations').update(updateData).eq('id', selectedIntegration.id);
     if (error) toast({ title: 'Error', description: 'Could not update integration.', variant: 'destructive' });
     else { setConfigDialogOpen(false); setSelectedIntegration(null); setConfigFormData({ name: '', api_key: '' }); fetchIntegrations(); }
-  };
+  }
 
-  /** CREATE INTEGRATION (missing in previous build) */
-  const handleCreateIntegration = async () => {
+  /** HOISTED declaration — fixes "not defined" */
+  async function handleCreateIntegration() {
     const { data: profile, error: pErr } = await supabase.from('profiles').select('company_id').eq('user_id', (await supabase.auth.getUser()).data.user?.id).single();
     if (pErr || !profile?.company_id) { toast({ title: 'Error', description: 'Could not find company for user.', variant: 'destructive' }); return; }
     const { error } = await supabase.from('ad_server_integrations').insert([{
@@ -223,18 +223,18 @@ const Integrations = () => {
     }]);
     if (error) { toast({ title: 'Error', description: 'Could not create integration.', variant: 'destructive' }); }
     else { setShowCreateDialog(false); setFormData({ name: '', integration_type: 'ad_server', provider: 'kevel', api_key: '' }); fetchIntegrations(); }
-  };
+  }
 
-  const handlePauseIntegration = async (integration: Integration) => {
+  async function handlePauseIntegration(integration: Integration) {
     const { error } = await supabase.from('ad_server_integrations').update({ status: 'paused' }).eq('id', integration.id);
     if (!error) fetchIntegrations();
-  };
-  const handleResumeIntegration = async (integration: Integration) => {
+  }
+  async function handleResumeIntegration(integration: Integration) {
     const { error } = await supabase.from('ad_server_integrations').update({ status: 'active' }).eq('id', integration.id);
     if (!error) fetchIntegrations();
-  };
+  }
 
-  const handleDeleteIntegration = async () => {
+  async function handleDeleteIntegration() {
     if (!integrationToDelete) return;
     setDeleting(true);
     try {
@@ -246,12 +246,12 @@ const Integrations = () => {
     } catch (err: any) {
       toast({ title: 'Error', description: err?.message || 'Could not delete integration.', variant: 'destructive' });
     } finally { setDeleting(false); }
-  };
+  }
 
-  const openSyncDetails = (integration: Integration) => {
+  function openSyncDetails(integration: Integration) {
     const syncDetails = integration.configuration?.last_sync_details;
     if (syncDetails) setSyncDetailsModal({ open: true, syncDetails, integrationName: integration.name });
-  };
+  }
 
   if (loading) return <div>Loading...</div>;
 
@@ -425,7 +425,7 @@ const Integrations = () => {
       <Dialog open={configDialogOpen} onOpenChange={setConfigDialogOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Configure Integration</DialogTitle><DialogDescription>Update the settings for this integration.</DialogDescription></DialogHeader>
-        <div className="space-y-4">
+          <div className="space-y-4">
             <div><Label htmlFor="config_name">Name</Label><Input id="config_name" value={configFormData.name} onChange={(e) => setConfigFormData({ ...configFormData, name: e.target.value })} placeholder="Integration name" /></div>
             <div><Label htmlFor="config_api_key">API Key (leave empty to keep current)</Label><Input id="config_api_key" type="password" value={configFormData.api_key} onChange={(e) => setConfigFormData({ ...configFormData, api_key: e.target.value })} placeholder="Enter new API key" /></div>
             <div className="flex gap-2"><Button onClick={handleUpdateIntegration} className="flex-1">Update Integration</Button><Button variant="outline" onClick={() => setConfigDialogOpen(false)} className="flex-1">Cancel</Button></div>
@@ -437,6 +437,6 @@ const Integrations = () => {
       <SyncDetailsModal open={syncDetailsModal.open} onOpenChange={(open) => setSyncDetailsModal(prev => ({ ...prev, open }))} syncDetails={syncDetailsModal.syncDetails} integrationName={syncDetailsModal.integrationName} />
     </div>
   );
-};
+}
 
 export default Integrations;
