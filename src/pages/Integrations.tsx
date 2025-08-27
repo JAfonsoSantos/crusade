@@ -409,9 +409,9 @@ function Integrations() {
                                     {summarizeOps(sync.operations).slice(0,2).map((s: string, i: number) => <span key={i} className="ml-2">• {s}</span>)}
                                   </div>
                                 )}
-                                <Button
-                                  variant="outline"
-                                  size="xs"
+                        <Button
+                          variant="outline"
+                          size="sm"
                                   onClick={() => setSyncDetailsModal({
                                     open: true,
                                     integrationName: integration.name,
@@ -509,9 +509,9 @@ function Integrations() {
                                     {summarizeOps(sync.operations).slice(0,2).map((s: string, i: number) => <span key={i} className="ml-2">• {s}</span>)}
                                   </div>
                                 )}
-                                <Button
-                                  variant="outline"
-                                  size="xs"
+                        <Button
+                          variant="outline"
+                          size="sm"
                                   onClick={() => setSyncDetailsModal({
                                     open: true,
                                     integrationName: integration.name,
