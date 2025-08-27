@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Settings, Trash2, Wifi, WifiOff, RefreshCw, ChevronDown, ChevronRight, Eye, Pause, Play, Bug } from 'lucide-react';
+import { Plus, Settings, Trash2, Wifi, WifiOff, RefreshCw, ChevronDown, ChevronRight, Eye, Pause, Play } from 'lucide-react';
 import SyncDetailsModal from '@/components/SyncDetailsModal';
 import kevelLogo from '@/assets/kevel-logo.png';
 import koddiLogo from '@/assets/koddi-logo.png';
@@ -24,7 +24,7 @@ import hubspotLogo from '@/assets/hubspot-logo.png';
 import pipedriveLogo from '@/assets/pipedrive-logo.png';
 import vtexLogo from '@/assets/vtex-logo.png';
 
-/** Version with enhanced error visibility, structured logs and safer function invoke fallback. */
+/** FIX version + enhancements: summaries per entity and history drill-down */
 interface Integration {
   id: string;
   name: string;
@@ -36,59 +36,56 @@ interface Integration {
   configuration?: any;
 }
 
-interface SyncDetails {
+interface SyncDetailsShape {
   timestamp: string;
   synced: number;
   errors: number;
   operations: Record<string, any>;
-  meta?: Record<string, any>;
 }
 
-type InvokeResult = {
-  data: any;
-  error: any;
-  status?: number;
-  raw?: string;
-};
-
-/** Centralized invoke that tries supabase.functions first and falls back to direct fetch with correct headers. */
-async function callEdgeFunction(fn: string, body: any): Promise<InvokeResult> {
+async function callEdgeFunction(fn: string, body: any) {
   try {
     const resp = await supabase.functions.invoke(fn, { body });
-    // supabase-js v2 returns { data, error }
-    const anyResp: any = resp as any;
-    if (anyResp?.error?.name === 'FunctionsFetchError') throw anyResp.error;
-    return { data: anyResp.data, error: anyResp.error };
-  } catch (primaryErr: any) {
-    // Fallback to direct fetch (helps when Functions proxy throws)
-    try {
-      const url = (import.meta as any).env?.VITE_SUPABASE_URL || (window as any).__SUPABASE_URL__;
-      const anon = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || (window as any).__SUPABASE_ANON_KEY__;
-      const session = await supabase.auth.getSession();
-      const access = session.data.session?.access_token;
-      const r = await fetch(`${url}/functions/v1/${fn}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(anon ? { apikey: anon } : {}),
-          ...(access ? { Authorization: `Bearer ${access}` } : {}),
-        },
-        body: JSON.stringify(body ?? {}),
-      });
-      const text = await r.text();
-      let json: any;
-      try { json = JSON.parse(text); } catch { json = null; }
-      if (!r.ok) {
-        return { data: null, error: new Error(json?.error || text || 'Function error'), status: r.status, raw: text };
-      }
-      return { data: json, error: null, status: r.status, raw: text };
-    } catch (fallbackErr: any) {
-      return { data: null, error: fallbackErr, status: undefined, raw: String(primaryErr) };
-    }
+    if ((resp as any)?.error?.name === 'FunctionsFetchError') throw (resp as any).error;
+    return resp as any;
+  } catch {
+    const url = (import.meta as any).env?.VITE_SUPABASE_URL || (window as any).__SUPABASE_URL__;
+    const anon = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || (window as any).__SUPABASE_ANON_KEY__;
+    const session = await supabase.auth.getSession();
+    const access = session.data.session?.access_token;
+    const r = await fetch(`${url}/functions/v1/${fn}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(anon ? { apikey: anon } : {}),
+        ...(access ? { Authorization: `Bearer ${access}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+    const text = await r.text();
+    let json: any; try { json = JSON.parse(text); } catch { json = { raw: text }; }
+    if (!r.ok) return { data: null, error: new Error(json?.error || JSON.stringify(json)) };
+    return { data: json, error: null };
   }
 }
 
 const CRM_SET = new Set(['salesforce', 'hubspot', 'pipedrive', 'vtex']);
+
+/** Compact summary for last_sync_details.operations */
+function summarizeOps(ops?: any): string[] {
+  if (!ops || typeof ops !== "object") return [];
+  return Object.entries(ops).map(([entity, bucket]: any) => {
+    const parts: string[] = [];
+    if (bucket.created) parts.push(`${bucket.created} created`);
+    if (bucket.updated) parts.push(`${bucket.updated} updated`);
+    if (bucket.deleted) parts.push(`${bucket.deleted} deleted`);
+    if (bucket.upserted) parts.push(`${bucket.upserted} upserted`);
+    if (bucket.fetched || bucket.existing) parts.push(`${bucket.fetched||bucket.existing} fetched`);
+    if (bucket.errors && (Array.isArray(bucket.errors) ? bucket.errors.length : bucket.errors > 0))
+      parts.push(`${Array.isArray(bucket.errors)?bucket.errors.length:bucket.errors} errors`);
+    return `${entity}: ${parts.join(", ")}`;
+  });
+}
 
 function Integrations() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
@@ -99,10 +96,9 @@ function Integrations() {
   const [syncing, setSyncing] = useState<string | null>(null);
   const [syncHistory, setSyncHistory] = useState<{[key: string]: any[]}>({});
   const [expandedSyncHistory, setExpandedSyncHistory] = useState<{[key: string]: boolean}>({});
-  const [expandedDebug, setExpandedDebug] = useState<{[key: string]: boolean}>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [integrationToDelete, setIntegrationToDelete] = useState<Integration | null>(null);
-  const [syncDetailsModal, setSyncDetailsModal] = useState<{ open: boolean; syncDetails: SyncDetails | null; integrationName: string; }>({ open: false, syncDetails: null, integrationName: '' });
+  const [syncDetailsModal, setSyncDetailsModal] = useState<{ open: boolean; syncDetails: SyncDetailsShape | null; integrationName: string; }>({ open: false, syncDetails: null, integrationName: '' });
   const [deleting, setDeleting] = useState(false);
   const [configFormData, setConfigFormData] = useState({ name: '', api_key: '' });
   const [formData, setFormData] = useState({ name: '', integration_type: 'ad_server' as 'ad_server' | 'crm', provider: 'kevel', api_key: '' });
@@ -140,8 +136,7 @@ function Integrations() {
     return dt.toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   }
 
-  function getStatusColor(status: string, hasErrors?: boolean) {
-    if (hasErrors) return 'bg-red-100 text-red-800';
+  function getStatusColor(status: string) {
     switch (status) {
       case 'active': return 'bg-green-100 text-green-800';
       case 'paused': return 'bg-yellow-100 text-yellow-800';
@@ -187,90 +182,43 @@ function Integrations() {
 
   const derivedType = (i: Integration) => (CRM_SET.has(i.provider) ? 'crm' : (i.integration_type || 'ad_server'));
 
-  /** Adds robust logging + stores last_sync_details also on error. */
   async function handleSync(integration: Integration) {
     if (integration.status === 'paused') {
       toast({ title: 'Cannot Sync', description: 'This integration is paused. Resume it first to sync.', variant: 'destructive' });
       return;
     }
     setSyncing(integration.id);
-    const startedAt = Date.now();
     try {
-      let resp: InvokeResult = { data: null, error: null };
+      let data: any, error: any;
       if (derivedType(integration) === 'crm') {
         if (integration.provider === 'salesforce') {
-          resp = await callEdgeFunction('sync-salesforce', { integrationId: integration.id });
+          const resp = await callEdgeFunction('sync-salesforce', { integrationId: integration.id });
+          data = resp.data; error = resp.error;
         } else {
-          resp = await callEdgeFunction('crm-universal-sync', { integrationId: integration.id, provider: integration.provider });
+          const resp = await callEdgeFunction('crm-universal-sync', { integrationId: integration.id, provider: integration.provider });
+          data = resp.data; error = resp.error;
         }
       } else {
-        // Kevel/GAM/etc.
-        resp = await callEdgeFunction('sync-kevel-inventory', { integrationId: integration.id });
+        const resp = await callEdgeFunction('sync-kevel-inventory', { integrationId: integration.id });
+        data = resp.data; error = resp.error;
       }
+      if (error) throw error;
 
-      if (resp.error) throw resp.error;
-
-      const syncDetails: SyncDetails = {
+      const syncDetails: SyncDetailsShape = {
         timestamp: new Date().toISOString(),
-        synced: resp?.data?.synced ?? 0,
-        errors: resp?.data?.errors ?? 0,
-        operations: resp?.data?.operations ?? {},
-        meta: {
-          duration_ms: Date.now() - startedAt,
-          status: 'success',
-          http_status: resp?.status ?? 200,
-        }
+        synced: data?.synced || 0,
+        errors: data?.errors || 0,
+        operations: data?.operations || {}
       };
-
-      await supabase
-        .from('ad_server_integrations')
-        .update({
-          last_sync: new Date().toISOString(),
-          configuration: {
-            ...(integration.configuration || {}),
-            last_sync_details: syncDetails
-          } as any
-        })
-        .eq('id', integration.id);
-
-      toast({
-        title: 'Sync Completed',
-        description: `Synced ${syncDetails.synced} items${syncDetails.errors ? `, ${syncDetails.errors} errors` : ''}.`,
-        variant: syncDetails.errors ? 'destructive' : 'default'
-      });
-
+      await supabase.from('ad_server_integrations').update({
+        last_sync: new Date().toISOString(),
+        configuration: { ...(integration.configuration || {}), last_sync_details: syncDetails } as any
+      }).eq('id', integration.id);
+      toast({ title: 'Sync Completed', description: `Synced ${syncDetails.synced} items${syncDetails.errors ? `, ${syncDetails.errors} errors` : ''}.`, variant: syncDetails.errors ? 'destructive' : 'default' });
       fetchIntegrations();
     } catch (err: any) {
-      console.error('Sync error:', err);
-      const fallbackMsg = err?.message || 'Could not sync.';
-
-      // Persist an error-shaped last_sync_details for visibility in UI
-      try {
-        const errorDetails: SyncDetails = {
-          timestamp: new Date().toISOString(),
-          synced: 0,
-          errors: 1,
-          operations: { error: String(fallbackMsg) },
-          meta: { duration_ms: Date.now() - startedAt, status: 'error' }
-        };
-        await supabase
-          .from('ad_server_integrations')
-          .update({
-            last_sync: new Date().toISOString(),
-            configuration: {
-              ...(integration.configuration || {}),
-              last_sync_details: errorDetails
-            } as any
-          })
-          .eq('id', integration.id);
-      } catch (persistErr) {
-        console.error('Failed to persist error details:', persistErr);
-      }
-
-      toast({ title: 'Sync Failed', description: fallbackMsg, variant: 'destructive' });
-    } finally {
-      setSyncing(null);
-    }
+      toast({ title: 'Sync Failed', description: err?.message || 'Could not sync.', variant: 'destructive' });
+    } finally { setSyncing(null); }
   }
 
   function handleConfigure(integration: Integration) {
@@ -290,7 +238,7 @@ function Integrations() {
     else { setConfigDialogOpen(false); setSelectedIntegration(null); setConfigFormData({ name: '', api_key: '' }); fetchIntegrations(); }
   }
 
-  /** HOISTED declaration */
+  /** HOISTED declaration — fixes "not defined" */
   async function handleCreateIntegration() {
     const { data: profile, error: pErr } = await supabase.from('profiles').select('company_id').eq('user_id', (await supabase.auth.getUser()).data.user?.id).single();
     if (pErr || !profile?.company_id) { toast({ title: 'Error', description: 'Could not find company for user.', variant: 'destructive' }); return; }
@@ -338,31 +286,6 @@ function Integrations() {
 
   const adServerIntegrations = integrations.filter(i => derivedType(i) === 'ad_server');
   const crmIntegrations = integrations.filter(i => derivedType(i) === 'crm');
-
-  /** Utility to show a red badge when last sync had errors */
-  const hadErrors = (i: Integration) => {
-    const e = i?.configuration?.last_sync_details?.errors;
-    return typeof e === 'number' && e > 0;
-  };
-
-  /** Small debug drawer to inspect last_sync_details JSON raw */
-  function DebugDrawer({ integration }: { integration: Integration }) {
-    const open = !!expandedDebug[integration.id];
-    const toggle = () => setExpandedDebug(prev => ({ ...prev, [integration.id]: !prev[integration.id] }));
-    const details = integration.configuration?.last_sync_details;
-    return (
-      <div className="mt-2">
-        <Button size="sm" variant="ghost" onClick={toggle}>
-          <Bug className="w-4 h-4 mr-1" /> {open ? 'Hide debug' : 'Show debug'}
-        </Button>
-        {open && (
-          <pre className="mt-2 text-xs bg-muted p-3 rounded overflow-auto max-h-64">
-            {JSON.stringify(details ?? { info: 'No last_sync_details found' }, null, 2)}
-          </pre>
-        )}
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -433,18 +356,18 @@ function Integrations() {
                       <div><CardTitle className="text-lg">{integration.name}</CardTitle><CardDescription>{getProviderName(integration.provider)}</CardDescription></div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge className={getStatusColor(integration.status, hadErrors(integration))}>
+                      <Badge className={getStatusColor(integration.status)}>
                         {integration.status === 'active' && <Wifi className="w-3 h-3 mr-1" />}
                         {integration.status === 'inactive' && <WifiOff className="w-3 h-3 mr-1" />}
                         {integration.status === 'paused' && <Pause className="w-3 h-3 mr-1" />}
-                        {hadErrors(integration) ? 'error' : integration.status}
+                        {integration.status}
                       </Badge>
                       <div className="flex gap-1">
-                        <Button title="Sync now" variant="ghost" size="sm" onClick={() => handleSync(integration)} disabled={syncing === integration.id}><RefreshCw className={`w-4 h-4 ${syncing === integration.id ? 'animate-spin' : ''}`} /></Button>
-                        <Button title="Configure" variant="ghost" size="sm" onClick={() => handleConfigure(integration)}><Settings className="w-4 h-4" /></Button>
-                        {integration.status === 'paused' ? (<Button title="Resume" variant="ghost" size="sm" onClick={() => handleResumeIntegration(integration)}><Play className="w-4 h-4" /></Button>) : (<Button title="Pause" variant="ghost" size="sm" onClick={() => handlePauseIntegration(integration)}><Pause className="w-4 h-4" /></Button>)}
+                        <Button variant="ghost" size="sm" onClick={() => handleSync(integration)} disabled={syncing === integration.id}><RefreshCw className={`w-4 h-4 ${syncing === integration.id ? 'animate-spin' : ''}`} /></Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleConfigure(integration)}><Settings className="w-4 h-4" /></Button>
+                        {integration.status === 'paused' ? (<Button variant="ghost" size="sm" onClick={() => handleResumeIntegration(integration)}><Play className="w-4 h-4" /></Button>) : (<Button variant="ghost" size="sm" onClick={() => handlePauseIntegration(integration)}><Pause className="w-4 h-4" /></Button>)}
                         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-                          <AlertDialogTrigger asChild><Button title="Delete" variant="ghost" size="sm" onClick={() => setIntegrationToDelete(integration)}><Trash2 className="w-4 h-4" /></Button></AlertDialogTrigger>
+                          <AlertDialogTrigger asChild><Button variant="ghost" size="sm" onClick={() => setIntegrationToDelete(integration)}><Trash2 className="w-4 h-4" /></Button></AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader><AlertDialogTitle>Delete Integration</AlertDialogTitle><AlertDialogDescription>Are you sure you want to delete this integration? This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
                             <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteIntegration} disabled={deleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">{deleting ? 'Deleting...' : 'Delete'}</AlertDialogAction></AlertDialogFooter>
@@ -457,14 +380,59 @@ function Integrations() {
                 <CardContent>
                   <div className="space-y-3">
                     <div className="flex justify-between text-sm"><span className="text-muted-foreground">Last Sync:</span><span>{formatDate(integration.last_sync)}</span></div>
-                    {integration.configuration?.last_sync_details && (<div className="flex justify-between items-center"><span className="text-sm text-muted-foreground">Sync Details:</span><Button variant="outline" size="sm" onClick={() => openSyncDetails(integration)}><Eye className="w-3 h-3 mr-1" />See Details</Button></div>)}
+                    {integration.configuration?.last_sync_details && (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Sync Details:</span>
+                          <Button variant="outline" size="sm" onClick={() => openSyncDetails(integration)}><Eye className="w-3 h-3 mr-1" />See Details</Button>
+                        </div>
+                        {/* entity summary */}
+                        <div className="mt-2 text-xs text-muted-foreground space-y-1">
+                          {summarizeOps(integration.configuration.last_sync_details.operations).map((line, idx) => (
+                            <div key={idx}>• {line}</div>
+                          ))}
+                        </div>
+                      </>
+                    )}
                     <Collapsible open={!!expandedSyncHistory[integration.id]} onOpenChange={() => toggleSyncHistory(integration.id)}>
                       <CollapsibleTrigger asChild><Button variant="ghost" size="sm" className="w-full justify-between"><span className="text-sm">Sync History</span>{expandedSyncHistory[integration.id] ? (<ChevronDown className="w-4 h-4" />) : (<ChevronRight className="w-4 h-4" />)}</Button></CollapsibleTrigger>
                       <CollapsibleContent className="space-y-2 mt-2">
-                        {syncHistory[integration.id]?.length > 0 ? (syncHistory[integration.id].map((sync: any, index: number) => (<div key={index} className="text-xs p-2 bg-muted rounded flex justify-between"><span>{formatDate(sync.sync_timestamp)}</span><span>{sync.synced_count} synced, {sync.errors_count} errors</span></div>))) : (<div className="text-xs text-muted-foreground p-2">No sync history available</div>)}
+                        {syncHistory[integration.id]?.length > 0 ? (
+                          syncHistory[integration.id].map((sync: any, index: number) => (
+                            <div key={index} className="text-xs p-2 bg-muted rounded flex justify-between items-center gap-2">
+                              <span>{formatDate(sync.sync_timestamp)}</span>
+                              <span>{sync.synced_count} synced, {sync.errors_count} errors</span>
+                              <div className="flex items-center gap-2">
+                                {/* show ops summary inline if present */}
+                                {sync.operations && (
+                                  <div className="hidden sm:block text-muted-foreground">
+                                    {summarizeOps(sync.operations).slice(0,2).map((s: string, i: number) => <span key={i} className="ml-2">• {s}</span>)}
+                                  </div>
+                                )}
+                                <Button
+                                  variant="outline"
+                                  size="xs"
+                                  onClick={() => setSyncDetailsModal({
+                                    open: true,
+                                    integrationName: integration.name,
+                                    syncDetails: {
+                                      timestamp: sync.sync_timestamp,
+                                      synced: sync.synced_count || 0,
+                                      errors: sync.errors_count || 0,
+                                      operations: sync.operations || {}
+                                    }
+                                  })}
+                                >
+                                  See Ops
+                                </Button>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-xs text-muted-foreground p-2">No sync history available</div>
+                        )}
                       </CollapsibleContent>
                     </Collapsible>
-                    <DebugDrawer integration={integration} />
                   </div>
                 </CardContent>
               </Card>
@@ -489,18 +457,18 @@ function Integrations() {
                       <div><CardTitle className="text-lg">{integration.name}</CardTitle><CardDescription>{getProviderName(integration.provider)}</CardDescription></div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge className={getStatusColor(integration.status, hadErrors(integration))}>
+                      <Badge className={getStatusColor(integration.status)}>
                         {integration.status === 'active' && <Wifi className="w-3 h-3 mr-1" />}
                         {integration.status === 'inactive' && <WifiOff className="w-3 h-3 mr-1" />}
                         {integration.status === 'paused' && <Pause className="w-3 h-3 mr-1" />}
-                        {hadErrors(integration) ? 'error' : integration.status}
+                        {integration.status}
                       </Badge>
                       <div className="flex gap-1">
-                        <Button title="Sync now" variant="ghost" size="sm" onClick={() => handleSync(integration)} disabled={syncing === integration.id}><RefreshCw className={`w-4 h-4 ${syncing === integration.id ? 'animate-spin' : ''}`} /></Button>
-                        <Button title="Configure" variant="ghost" size="sm" onClick={() => handleConfigure(integration)}><Settings className="w-4 h-4" /></Button>
-                        {integration.status === 'paused' ? (<Button title="Resume" variant="ghost" size="sm" onClick={() => handleResumeIntegration(integration)}><Play className="w-4 h-4" /></Button>) : (<Button title="Pause" variant="ghost" size="sm" onClick={() => handlePauseIntegration(integration)}><Pause className="w-4 h-4" /></Button>)}
+                        <Button variant="ghost" size="sm" onClick={() => handleSync(integration)} disabled={syncing === integration.id}><RefreshCw className={`w-4 h-4 ${syncing === integration.id ? 'animate-spin' : ''}`} /></Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleConfigure(integration)}><Settings className="w-4 h-4" /></Button>
+                        {integration.status === 'paused' ? (<Button variant="ghost" size="sm" onClick={() => handleResumeIntegration(integration)}><Play className="w-4 h-4" /></Button>) : (<Button variant="ghost" size="sm" onClick={() => handlePauseIntegration(integration)}><Pause className="w-4 h-4" /></Button>)}
                         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-                          <AlertDialogTrigger asChild><Button title="Delete" variant="ghost" size="sm" onClick={() => setIntegrationToDelete(integration)}><Trash2 className="w-4 h-4" /></Button></AlertDialogTrigger>
+                          <AlertDialogTrigger asChild><Button variant="ghost" size="sm" onClick={() => setIntegrationToDelete(integration)}><Trash2 className="w-4 h-4" /></Button></AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader><AlertDialogTitle>Delete Integration</AlertDialogTitle><AlertDialogDescription>Are you sure you want to delete this integration? This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
                             <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteIntegration} disabled={deleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">{deleting ? 'Deleting...' : 'Delete'}</AlertDialogAction></AlertDialogFooter>
@@ -513,14 +481,58 @@ function Integrations() {
                 <CardContent>
                   <div className="space-y-3">
                     <div className="flex justify-between text-sm"><span className="text-muted-foreground">Last Sync:</span><span>{formatDate(integration.last_sync)}</span></div>
-                    {integration.configuration?.last_sync_details && (<div className="flex justify-between items-center"><span className="text-sm text-muted-foreground">Sync Details:</span><Button variant="outline" size="sm" onClick={() => openSyncDetails(integration)}><Eye className="w-3 h-3 mr-1" />See Details</Button></div>)}
+                    {integration.configuration?.last_sync_details && (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Sync Details:</span>
+                          <Button variant="outline" size="sm" onClick={() => openSyncDetails(integration)}><Eye className="w-3 h-3 mr-1" />See Details</Button>
+                        </div>
+                        {/* entity summary */}
+                        <div className="mt-2 text-xs text-muted-foreground space-y-1">
+                          {summarizeOps(integration.configuration.last_sync_details.operations).map((line, idx) => (
+                            <div key={idx}>• {line}</div>
+                          ))}
+                        </div>
+                      </>
+                    )}
                     <Collapsible open={!!expandedSyncHistory[integration.id]} onOpenChange={() => toggleSyncHistory(integration.id)}>
                       <CollapsibleTrigger asChild><Button variant="ghost" size="sm" className="w-full justify-between"><span className="text-sm">Sync History</span>{expandedSyncHistory[integration.id] ? (<ChevronDown className="w-4 h-4" />) : (<ChevronRight className="w-4 h-4" />)}</Button></CollapsibleTrigger>
                       <CollapsibleContent className="space-y-2 mt-2">
-                        {syncHistory[integration.id]?.length > 0 ? (syncHistory[integration.id].map((sync: any, index: number) => (<div key={index} className="text-xs p-2 bg-muted rounded flex justify-between"><span>{formatDate(sync.sync_timestamp)}</span><span>{sync.synced_count} synced, {sync.errors_count} errors</span></div>))) : (<div className="text-xs text-muted-foreground p-2">No sync history available</div>)}
+                        {syncHistory[integration.id]?.length > 0 ? (
+                          syncHistory[integration.id].map((sync: any, index: number) => (
+                            <div key={index} className="text-xs p-2 bg-muted rounded flex justify-between items-center gap-2">
+                              <span>{formatDate(sync.sync_timestamp)}</span>
+                              <span>{sync.synced_count} synced, {sync.errors_count} errors</span>
+                              <div className="flex items-center gap-2">
+                                {sync.operations && (
+                                  <div className="hidden sm:block text-muted-foreground">
+                                    {summarizeOps(sync.operations).slice(0,2).map((s: string, i: number) => <span key={i} className="ml-2">• {s}</span>)}
+                                  </div>
+                                )}
+                                <Button
+                                  variant="outline"
+                                  size="xs"
+                                  onClick={() => setSyncDetailsModal({
+                                    open: true,
+                                    integrationName: integration.name,
+                                    syncDetails: {
+                                      timestamp: sync.sync_timestamp,
+                                      synced: sync.synced_count || 0,
+                                      errors: sync.errors_count || 0,
+                                      operations: sync.operations || {}
+                                    }
+                                  })}
+                                >
+                                  See Ops
+                                </Button>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-xs text-muted-foreground p-2">No sync history available</div>
+                        )}
                       </CollapsibleContent>
                     </Collapsible>
-                    <DebugDrawer integration={integration} />
                   </div>
                 </CardContent>
               </Card>
@@ -542,7 +554,7 @@ function Integrations() {
       </Dialog>
 
       {/* Sync details modal */}
-      <SyncDetailsModal open={syncDetailsModal.open} onOpenChange={(open) => setSyncDetailsModal(prev => ({ ...prev, open }))} syncDetails={syncDetailsModal.syncDetails} integrationName={syncDetailsModal.integrationName} />
+      <SyncDetailsModal open={syncDetailsModal.open} onOpenChange={(open) => setSyncDetailsModal(prev => ({ ...prev, open }))} syncDetails={syncDetailsModal.syncDetails as any} integrationName={syncDetailsModal.integrationName} />
     </div>
   );
 }
