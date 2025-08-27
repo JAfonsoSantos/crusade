@@ -24,15 +24,7 @@ import hubspotLogo from '@/assets/hubspot-logo.png';
 import pipedriveLogo from '@/assets/pipedrive-logo.png';
 import vtexLogo from '@/assets/vtex-logo.png';
 
-/**
- * COMPLETE Integrations page with:
- * - New Integration button/dialog
- * - Grouping: Ad Servers vs CRM
- * - Sync Now + Pause/Resume + Configure + Delete
- * - Sync History + Sync Details Modal
- * - Salesforce CRM sync with robust fallback to /functions/v1 when invoke() fails
- */
-
+/** Integrations page with fallback for Edge Functions network issues. */
 interface Integration {
   id: string;
   name: string;
@@ -53,58 +45,29 @@ interface SyncDetails {
 
 const CRM_PROVIDERS = ['salesforce', 'hubspot', 'pipedrive', 'vtex'] as const;
 
-async function callEdgeFunction(
-  fn: string,
-  body: any
-): Promise<{ data: any; error: any }> {
-  // 1) Try the official invoke (uses *.supabase.co/functions/v1 under the hood)
+async function callEdgeFunction(fn: string, body: any) {
   try {
     const resp = await supabase.functions.invoke(fn, { body });
-    if (resp.error && (resp.error as any).name === 'FunctionsFetchError') {
-      // network-level error -> try fallback
-      throw resp.error;
-    }
+    if ((resp as any)?.error?.name === 'FunctionsFetchError') throw (resp as any).error;
     return resp as any;
-  } catch (e) {
-    // 2) Fallback to direct fetch against /functions/v1 (works in some locked networks)
-    try {
-      const url =
-        (import.meta as any).env?.VITE_SUPABASE_URL ||
-        (window as any).__SUPABASE_URL__;
-      const anon =
-        (import.meta as any).env?.VITE_SUPABASE_ANON_KEY ||
-        (window as any).__SUPABASE_ANON_KEY__;
-
-      if (!url) throw new Error('Missing SUPABASE URL for fallback');
-
-      const session = await supabase.auth.getSession();
-      const access = session.data.session?.access_token;
-
-      const r = await fetch(`${url}/functions/v1/${fn}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(anon ? { apikey: anon } : {}),
-          ...(access ? { Authorization: `Bearer ${access}` } : {}),
-        },
-        body: JSON.stringify(body),
-      });
-
-      const text = await r.text();
-      let json: any;
-      try {
-        json = JSON.parse(text);
-      } catch {
-        json = { raw: text };
-      }
-
-      if (!r.ok) {
-        return { data: null, error: new Error(json?.error || JSON.stringify(json)) };
-      }
-      return { data: json, error: null };
-    } catch (err) {
-      return { data: null, error: err };
-    }
+  } catch {
+    const url = (import.meta as any).env?.VITE_SUPABASE_URL || (window as any).__SUPABASE_URL__;
+    const anon = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || (window as any).__SUPABASE_ANON_KEY__;
+    const session = await supabase.auth.getSession();
+    const access = session.data.session?.access_token;
+    const r = await fetch(`${url}/functions/v1/${fn}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(anon ? { apikey: anon } : {}),
+        ...(access ? { Authorization: `Bearer ${access}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+    const text = await r.text();
+    let json: any; try { json = JSON.parse(text); } catch { json = { raw: text }; }
+    if (!r.ok) return { data: null, error: new Error(json?.error || JSON.stringify(json)) };
+    return { data: json, error: null };
   }
 }
 
@@ -136,8 +99,8 @@ const Integrations = () => {
 
   const fetchSyncHistory = async (integrationId: string) => {
     if (syncHistory[integrationId]) return;
-    const { data, error } = await supabase.from('integration_sync_history').select('*').eq('integration_id', integrationId).order('sync_timestamp', { ascending: false }).limit(10);
-    if (!error && data) setSyncHistory(prev => ({ ...prev, [integrationId]: data }));
+    const { data } = await supabase.from('integration_sync_history').select('*').eq('integration_id', integrationId).order('sync_timestamp', { ascending: false }).limit(10);
+    if (data) setSyncHistory(prev => ({ ...prev, [integrationId]: data }));
   };
 
   const toggleSyncHistory = (integrationId: string) => {
@@ -244,6 +207,22 @@ const Integrations = () => {
     const { error } = await supabase.from('ad_server_integrations').update(updateData).eq('id', selectedIntegration.id);
     if (error) toast({ title: 'Error', description: 'Could not update integration.', variant: 'destructive' });
     else { setConfigDialogOpen(false); setSelectedIntegration(null); setConfigFormData({ name: '', api_key: '' }); fetchIntegrations(); }
+  };
+
+  /** CREATE INTEGRATION (missing in previous build) */
+  const handleCreateIntegration = async () => {
+    const { data: profile, error: pErr } = await supabase.from('profiles').select('company_id').eq('user_id', (await supabase.auth.getUser()).data.user?.id).single();
+    if (pErr || !profile?.company_id) { toast({ title: 'Error', description: 'Could not find company for user.', variant: 'destructive' }); return; }
+    const { error } = await supabase.from('ad_server_integrations').insert([{
+      name: formData.name,
+      provider: formData.provider,
+      integration_type: formData.integration_type,
+      api_key_encrypted: formData.api_key,
+      status: 'inactive',
+      company_id: profile.company_id
+    }]);
+    if (error) { toast({ title: 'Error', description: 'Could not create integration.', variant: 'destructive' }); }
+    else { setShowCreateDialog(false); setFormData({ name: '', integration_type: 'ad_server', provider: 'kevel', api_key: '' }); fetchIntegrations(); }
   };
 
   const handlePauseIntegration = async (integration: Integration) => {
@@ -446,7 +425,7 @@ const Integrations = () => {
       <Dialog open={configDialogOpen} onOpenChange={setConfigDialogOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Configure Integration</DialogTitle><DialogDescription>Update the settings for this integration.</DialogDescription></DialogHeader>
-          <div className="space-y-4">
+        <div className="space-y-4">
             <div><Label htmlFor="config_name">Name</Label><Input id="config_name" value={configFormData.name} onChange={(e) => setConfigFormData({ ...configFormData, name: e.target.value })} placeholder="Integration name" /></div>
             <div><Label htmlFor="config_api_key">API Key (leave empty to keep current)</Label><Input id="config_api_key" type="password" value={configFormData.api_key} onChange={(e) => setConfigFormData({ ...configFormData, api_key: e.target.value })} placeholder="Enter new API key" /></div>
             <div className="flex gap-2"><Button onClick={handleUpdateIntegration} className="flex-1">Update Integration</Button><Button variant="outline" onClick={() => setConfigDialogOpen(false)} className="flex-1">Cancel</Button></div>
