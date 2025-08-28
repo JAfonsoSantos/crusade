@@ -1,423 +1,415 @@
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
-import { Building2, Plus, Edit, Trash2, Search, Filter, Users, BarChart3 } from 'lucide-react';
-import { useActivityLogger } from '@/hooks/useActivityLogger';
-import { useLanguage } from '@/contexts/LanguageContext';
+import React, { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
+import { Eye, RefreshCw, Database, Link as LinkIcon } from "lucide-react";
 
-interface Advertiser {
-  id: string;
+type UUID = string;
+
+type Advertiser = {
+  id: UUID;
   name: string;
-  external_id?: string | null;
-  source?: string | null;
-  created_at: string;
-  company_id: string;
-}
+  website?: string | null;
+  created_at?: string | null;
+};
 
-interface AdvertiserFormData {
-  name: string;
-  external_id: string;
-  source: string;
-}
+type PipelineRow = {
+  advertiser_id: UUID;
+  brands?: number | null;
+  flights_active?: number | null;
+  flights_total?: number | null;
+  spend_30d?: number | null;
+  impressions_30d?: number | null;
+  opp_open?: number | null;
+  opp_value?: number | null;
+};
 
-export default function Advertisers() {
-  const [advertisers, setAdvertisers] = useState<Advertiser[]>([]);
-  const [filteredAdvertisers, setFilteredAdvertisers] = useState<Advertiser[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingAdvertiser, setEditingAdvertiser] = useState<Advertiser | null>(null);
-  const [formData, setFormData] = useState<AdvertiserFormData>({
-    name: '',
-    external_id: '',
-    source: 'manual'
-  });
+type CountsRow = {
+  advertiser_id: UUID;
+  accounts?: number | null;
+  contacts?: number | null;
+  opportunities?: number | null;
+  leads?: number | null;
+};
+
+type CrmLink = {
+  advertiser_id: UUID;
+  crm_id?: string | null;
+  crm_external_id?: string | null;
+  crm_name?: string | null;
+  website?: string | null;
+  industry?: string | null;
+};
+
+const number = (v: any) => typeof v === "number" && isFinite(v) ? v : 0;
+const money = (v: any) =>
+  new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  }).format(number(v));
+const compact = (v: any) =>
+  new Intl.NumberFormat(undefined, { notation: "compact" }).format(number(v));
+
+export default function AdvertisersPage() {
   const { toast } = useToast();
-  const { logActivity } = useActivityLogger();
-  const { t } = useLanguage();
+  const [loading, setLoading] = useState(true);
+  const [advertisers, setAdvertisers] = useState<Advertiser[]>([]);
+  const [pipeline, setPipeline] = useState<Record<UUID, PipelineRow>>({});
+  const [crmCounts, setCrmCounts] = useState<Record<UUID, CountsRow>>({});
+  const [crmLinks, setCrmLinks] = useState<Record<UUID, CrmLink[]>>({});
+  const [filter, setFilter] = useState("");
+  const [selected, setSelected] = useState<Advertiser | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    fetchAdvertisers();
+    load();
   }, []);
 
-  useEffect(() => {
-    const filtered = advertisers.filter(advertiser =>
-      advertiser.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (advertiser.external_id && advertiser.external_id.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
-    setFilteredAdvertisers(filtered);
-  }, [searchTerm, advertisers]);
-
-  const fetchAdvertisers = async () => {
+  async function load() {
+    setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('advertisers')
-        .select('*')
-        .order('created_at', { ascending: false });
+      // Base list
+      const { data: adv, error: e1 } = await supabase
+        .from("advertisers")
+        .select("id,name,website,created_at")
+        .order("name", { ascending: true });
+      if (e1) throw e1;
+      setAdvertisers(adv || []);
 
-      if (error) throw error;
-      setAdvertisers(data || []);
-    } catch (error) {
-      console.error('Error fetching advertisers:', error);
+      const ids = (adv || []).map((a) => a.id);
+      if (ids.length === 0) return;
+
+      // Helper to build in filter safely
+      const inList = (col: string) =>
+        `${col}.in.(${ids.map((id) => `"${id}"`).join(",")})`;
+
+      const trySelect = async (from: string, columns = "*") => {
+        try {
+          const { data, error } = await supabase
+            .from(from as any)
+            .select(columns)
+            .or(inList("advertiser_id"));
+          if (error) throw error;
+          return data ?? [];
+        } catch (err) {
+          console.warn("[Advertisers] Optional view/table not found:", from, err);
+          return [];
+        }
+      };
+
+      const [pipeRows, countRows, linkRows] = await Promise.all([
+        trySelect("v_advertiser_pipeline"),
+        trySelect("v_advertiser_crm_counts"),
+        trySelect("v_crm_account_advertiser"),
+      ]);
+
+      const pipeMap: Record<UUID, PipelineRow> = {};
+      (pipeRows as any[]).forEach((r) => {
+        pipeMap[r.advertiser_id] = r as PipelineRow;
+      });
+      setPipeline(pipeMap);
+
+      const countMap: Record<UUID, CountsRow> = {};
+      (countRows as any[]).forEach((r) => {
+        countMap[r.advertiser_id] = r as CountsRow;
+      });
+      setCrmCounts(countMap);
+
+      const linkMap: Record<UUID, CrmLink[]> = {};
+      (linkRows as any[]).forEach((r) => {
+        const id = r.advertiser_id as UUID;
+        (linkMap[id] ||= []).push(r as CrmLink);
+      });
+      setCrmLinks(linkMap);
+    } catch (err: any) {
+      console.error(err);
       toast({
-        title: "Erro",
-        description: "Erro ao carregar anunciantes.",
+        title: "Failed to load advertisers",
+        description: err?.message ?? String(err),
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const rows = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    return advertisers.filter((a) => !q || a.name.toLowerCase().includes(q));
+  }, [advertisers, filter]);
+
+  async function openDetails(a: Advertiser) {
+    setSelected(a);
+    setDetailsOpen(true);
+  }
+
+  async function doRefresh() {
+    setRefreshing(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('company_id')
-        .eq('user_id', user?.id)
-        .maybeSingle();
-
-      if (!profile?.company_id) {
-        toast({
-          title: "Erro",
-          description: "Empresa não encontrada.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      if (editingAdvertiser) {
-        // Update
-        const { error } = await supabase
-          .from('advertisers')
-          .update({
-            name: formData.name,
-            external_id: formData.external_id || null,
-            source: formData.source
-          })
-          .eq('id', editingAdvertiser.id);
-
-        if (error) throw error;
-
-        logActivity({
-          action: 'update',
-          resource_type: 'advertiser',
-          details: { advertiser_name: formData.name }
-        });
-
-        toast({
-          title: "Sucesso",
-          description: "Anunciante atualizado com sucesso!",
-        });
-      } else {
-        // Create
-        const { error } = await supabase
-          .from('advertisers')
-          .insert({
-            name: formData.name,
-            external_id: formData.external_id || null,
-            source: formData.source,
-            company_id: profile.company_id
-          });
-
-        if (error) throw error;
-
-        logActivity({
-          action: 'create',
-          resource_type: 'advertiser',
-          details: { advertiser_name: formData.name }
-        });
-
-        toast({
-          title: "Sucesso",
-          description: "Anunciante criado com sucesso!",
-        });
-      }
-
-      setIsDialogOpen(false);
-      setEditingAdvertiser(null);
-      setFormData({ name: '', external_id: '', source: 'manual' });
-      fetchAdvertisers();
-    } catch (error) {
-      console.error('Error saving advertiser:', error);
-      toast({
-        title: "Erro",
-        description: "Erro ao guardar anunciante.",
-        variant: "destructive",
-      });
+      await load();
+      toast({ title: "Refreshed" });
+    } finally {
+      setRefreshing(false);
     }
-  };
-
-  const handleDelete = async (advertiser: Advertiser) => {
-    if (!confirm(`Tem a certeza que pretende eliminar o anunciante "${advertiser.name}"?`)) {
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('advertisers')
-        .delete()
-        .eq('id', advertiser.id);
-
-      if (error) throw error;
-
-      logActivity({
-        action: 'delete',
-        resource_type: 'advertiser',
-        details: { advertiser_name: advertiser.name }
-      });
-
-      toast({
-        title: "Sucesso",
-        description: "Anunciante eliminado com sucesso!",
-      });
-      
-      fetchAdvertisers();
-    } catch (error) {
-      console.error('Error deleting advertiser:', error);
-      toast({
-        title: "Erro",
-        description: "Erro ao eliminar anunciante.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleEdit = (advertiser: Advertiser) => {
-    setEditingAdvertiser(advertiser);
-    setFormData({
-      name: advertiser.name,
-      external_id: advertiser.external_id || '',
-      source: advertiser.source || 'manual'
-    });
-    setIsDialogOpen(true);
-  };
-
-  const handleAdd = () => {
-    setEditingAdvertiser(null);
-    setFormData({ name: '', external_id: '', source: 'manual' });
-    setIsDialogOpen(true);
-  };
-
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Anunciantes</h2>
-          <p className="text-muted-foreground">Carregando...</p>
-        </div>
-      </div>
-    );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Anunciantes</h2>
+          <h1 className="text-3xl font-bold">Advertisers</h1>
           <p className="text-muted-foreground">
-            Gerencie os seus anunciantes e clientes
+            Merged view of CRM + Ad Server for each advertiser.
           </p>
         </div>
-        <Button onClick={handleAdd} className="flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          Novo Anunciante
-        </Button>
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Filter by name..."
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="w-[280px]"
+          />
+          <Button variant="outline" onClick={doRefresh} disabled={refreshing}>
+            <RefreshCw
+              className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`}
+            />{" "}
+            Refresh
+          </Button>
+        </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Anunciantes</CardTitle>
-            <Building2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{advertisers.length}</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Fontes Externas</CardTitle>
-            <BarChart3 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {advertisers.filter(a => a.external_id).length}
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Criados Manualmente</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {advertisers.filter(a => a.source === 'manual').length}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search and Filters */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Filtros
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Pesquisar anunciantes..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Advertisers Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Anunciantes ({filteredAdvertisers.length})</CardTitle>
+          <CardTitle className="text-lg">Overview</CardTitle>
           <CardDescription>
-            Lista de todos os anunciantes registados no sistema
+            Basic KPIs per advertiser; counts come from optional views (if
+            present).
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {filteredAdvertisers.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              {advertisers.length === 0 
-                ? "Nenhum anunciante registado. Crie o primeiro anunciante." 
-                : "Nenhum anunciante encontrado com os filtros aplicados."
-              }
+          {loading ? (
+            <div className="text-sm text-muted-foreground">Loading…</div>
+          ) : rows.length === 0 ? (
+            <div className="text-sm text-muted-foreground">
+              No advertisers found.
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>ID Externo</TableHead>
-                  <TableHead>Fonte</TableHead>
-                  <TableHead>Data de Criação</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredAdvertisers.map((advertiser) => (
-                  <TableRow key={advertiser.id}>
-                    <TableCell className="font-medium">{advertiser.name}</TableCell>
-                    <TableCell>
-                      {advertiser.external_id ? (
-                        <Badge variant="outline">{advertiser.external_id}</Badge>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={advertiser.source === 'manual' ? 'secondary' : 'default'}>
-                        {advertiser.source || 'manual'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {new Date(advertiser.created_at).toLocaleDateString('pt-PT')}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {rows.map((a) => {
+                const p = pipeline[a.id];
+                const c = crmCounts[a.id];
+                return (
+                  <Card key={a.id} className="border">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="text-base">{a.name}</CardTitle>
+                          {a.website && (
+                            <CardDescription className="truncate">
+                              {a.website}
+                            </CardDescription>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {number(p?.flights_active) > 0 && (
+                            <Badge variant="secondary">
+                              {number(p?.flights_active)} active flights
+                            </Badge>
+                          )}
+                          <Badge>
+                            <Database className="w-3 h-3 mr-1" />
+                            {number(c?.opportunities)} opps
+                          </Badge>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Brands</span>
+                        <span>{number(p?.brands)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          Flights (active / total)
+                        </span>
+                        <span>
+                          {number(p?.flights_active)} / {number(p?.flights_total)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Spend (30d)</span>
+                        <span>{money(p?.spend_30d)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          Impressions (30d)
+                        </span>
+                        <span>{compact(p?.impressions_30d)}</span>
+                      </div>
+                      <Separator className="my-2" />
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          CRM: Accounts / Contacts
+                        </span>
+                        <span>
+                          {number(c?.accounts)} / {number(c?.contacts)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          CRM: Opps / Value
+                        </span>
+                        <span>
+                          {number(c?.opportunities)} / {money(p?.opp_value)}
+                        </span>
+                      </div>
+                      <div className="pt-2 flex justify-end">
                         <Button
-                          variant="ghost"
                           size="sm"
-                          onClick={() => handleEdit(advertiser)}
+                          variant="outline"
+                          onClick={() => openDetails(a)}
                         >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(advertiser)}
-                        >
-                          <Trash2 className="h-4 w-4" />
+                          <Eye className="w-4 h-4 mr-2" /> See Details
                         </Button>
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Create/Edit Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>
-              {editingAdvertiser ? 'Editar Anunciante' : 'Novo Anunciante'}
+              Advertiser Details{selected ? ` — ${selected.name}` : ""}
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid gap-4">
-              <div>
-                <Label htmlFor="name">Nome *</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Nome do anunciante"
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="external_id">ID Externo</Label>
-                <Input
-                  id="external_id"
-                  value={formData.external_id}
-                  onChange={(e) => setFormData({ ...formData, external_id: e.target.value })}
-                  placeholder="ID de sistema externo"
-                />
-              </div>
-              <div>
-                <Label htmlFor="source">Fonte</Label>
-                <Input
-                  id="source"
-                  value={formData.source}
-                  onChange={(e) => setFormData({ ...formData, source: e.target.value })}
-                  placeholder="manual, hubspot, salesforce..."
-                />
-              </div>
+          {!selected ? (
+            <div className="text-sm text-muted-foreground">
+              No advertiser selected.
             </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit">
-                {editingAdvertiser ? 'Atualizar' : 'Criar'}
-              </Button>
-            </DialogFooter>
-          </form>
+          ) : (
+            <Tabs defaultValue="crm">
+              <TabsList>
+                <TabsTrigger value="crm">CRM</TabsTrigger>
+                <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="crm" className="space-y-4 pt-2">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">Linked CRM Accounts</CardTitle>
+                    <CardDescription>
+                      Rows from <code>v_crm_account_advertiser</code> (if available).
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {(crmLinks[selected.id] ?? []).length === 0 ? (
+                      <div className="text-sm text-muted-foreground">
+                        No CRM links found.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {(crmLinks[selected.id] ?? []).map((l, i) => (
+                          <Card key={i} className="border">
+                            <CardContent className="p-3 text-sm">
+                              <div className="font-medium">
+                                {l.crm_name || l.crm_external_id}
+                              </div>
+                              {l.website && (
+                                <div className="truncate text-muted-foreground">
+                                  {l.website}
+                                </div>
+                              )}
+                              <div className="flex items-center gap-1 text-muted-foreground mt-1">
+                                <LinkIcon className="w-3 h-3" />
+                                <span className="truncate">
+                                  CRM ID: {l.crm_external_id || l.crm_id}
+                                </span>
+                              </div>
+                              {l.industry && (
+                                <div className="text-muted-foreground mt-1">
+                                  Industry: {l.industry}
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="pipeline" className="space-y-4 pt-2">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">
+                      Performance (last 30d)
+                    </CardTitle>
+                    <CardDescription>
+                      Data from <code>v_advertiser_pipeline</code> (if available).
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="text-sm">
+                    {(() => {
+                      const p = pipeline[selected.id];
+                      if (!p)
+                        return (
+                          <div className="text-muted-foreground">
+                            No pipeline data.
+                          </div>
+                        );
+                      return (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Brands</span>
+                            <span>{number(p.brands)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">
+                              Flights active / total
+                            </span>
+                            <span>
+                              {number(p.flights_active)} / {number(p.flights_total)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Spend (30d)</span>
+                            <span>{money(p.spend_30d)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Impr. (30d)</span>
+                            <span>{compact(p.impressions_30d)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Open Opps</span>
+                            <span>{number(p.opp_open)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Opp. Value</span>
+                            <span>{money(p.opp_value)}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          )}
         </DialogContent>
       </Dialog>
     </div>
