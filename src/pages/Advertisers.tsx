@@ -15,6 +15,7 @@ type UUID = string;
 type Advertiser = {
   id: UUID;
   name: string;
+  // Pode não existir na tabela — manter como opcional
   website?: string | null;
   created_at?: string | null;
 };
@@ -47,7 +48,7 @@ type CrmLink = {
   industry?: string | null;
 };
 
-const number = (v: any) => typeof v === "number" && isFinite(v) ? v : 0;
+const number = (v: any) => (typeof v === "number" && isFinite(v) ? v : 0);
 const money = (v: any) =>
   new Intl.NumberFormat(undefined, {
     style: "currency",
@@ -76,18 +77,18 @@ export default function AdvertisersPage() {
   async function load() {
     setLoading(true);
     try {
-      // Base list
+      // ⚠️ Selecionar apenas colunas que existem de certeza
       const { data: adv, error: e1 } = await supabase
         .from("advertisers")
-        .select("id,name,website,created_at")
+        .select("id,name,created_at")
         .order("name", { ascending: true });
       if (e1) throw e1;
-      setAdvertisers(adv || []);
+      setAdvertisers((adv || []) as Advertiser[]);
 
-      const ids = (adv || []).map((a) => a.id);
+      const ids = (adv || []).map((a: any) => a.id as UUID);
       if (ids.length === 0) return;
 
-      // Helper to build in filter safely
+      // helper para in()
       const inList = (col: string) =>
         `${col}.in.(${ids.map((id) => `"${id}"`).join(",")})`;
 
@@ -180,7 +181,7 @@ export default function AdvertisersPage() {
           <Button variant="outline" onClick={doRefresh} disabled={refreshing}>
             <RefreshCw
               className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`}
-            />{" "}
+            />
             Refresh
           </Button>
         </div>
@@ -190,8 +191,7 @@ export default function AdvertisersPage() {
         <CardHeader>
           <CardTitle className="text-lg">Overview</CardTitle>
           <CardDescription>
-            Basic KPIs per advertiser; counts come from optional views (if
-            present).
+            Basic KPIs per advertiser; counts come from optional views (if present).
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -212,6 +212,7 @@ export default function AdvertisersPage() {
                       <div className="flex items-center justify-between">
                         <div>
                           <CardTitle className="text-base">{a.name}</CardTitle>
+                          {/* website só se existir (pode vir via futuras colunas/views) */}
                           {a.website && (
                             <CardDescription className="truncate">
                               {a.website}
@@ -265,11 +266,9 @@ export default function AdvertisersPage() {
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">
-                          CRM: Opps / Value
+                          CRM: Opps
                         </span>
-                        <span>
-                          {number(c?.opportunities)} / {money(p?.opp_value)}
-                        </span>
+                        <span>{number(c?.opportunities)}</span>
                       </div>
                       <div className="pt-2 flex justify-end">
                         <Button
@@ -277,7 +276,8 @@ export default function AdvertisersPage() {
                           variant="outline"
                           onClick={() => openDetails(a)}
                         >
-                          <Eye className="w-4 h-4 mr-2" /> See Details
+                          <Eye className="w-4 h-4 mr-2" />
+                          See Details
                         </Button>
                       </div>
                     </CardContent>
@@ -297,9 +297,7 @@ export default function AdvertisersPage() {
             </DialogTitle>
           </DialogHeader>
           {!selected ? (
-            <div className="text-sm text-muted-foreground">
-              No advertiser selected.
-            </div>
+            <div className="text-sm text-muted-foreground">No advertiser selected.</div>
           ) : (
             <Tabs defaultValue="crm">
               <TabsList>
@@ -317,9 +315,7 @@ export default function AdvertisersPage() {
                   </CardHeader>
                   <CardContent>
                     {(crmLinks[selected.id] ?? []).length === 0 ? (
-                      <div className="text-sm text-muted-foreground">
-                        No CRM links found.
-                      </div>
+                      <div className="text-sm text-muted-foreground">No CRM links found.</div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {(crmLinks[selected.id] ?? []).map((l, i) => (
@@ -356,9 +352,7 @@ export default function AdvertisersPage() {
               <TabsContent value="pipeline" className="space-y-4 pt-2">
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-base">
-                      Performance (last 30d)
-                    </CardTitle>
+                    <CardTitle className="text-base">Performance (last 30d)</CardTitle>
                     <CardDescription>
                       Data from <code>v_advertiser_pipeline</code> (if available).
                     </CardDescription>
@@ -366,12 +360,11 @@ export default function AdvertisersPage() {
                   <CardContent className="text-sm">
                     {(() => {
                       const p = pipeline[selected.id];
-                      if (!p)
+                      if (!p) {
                         return (
-                          <div className="text-muted-foreground">
-                            No pipeline data.
-                          </div>
+                          <div className="text-muted-foreground">No pipeline data.</div>
                         );
+                      }
                       return (
                         <div className="grid grid-cols-2 gap-3">
                           <div className="flex justify-between">
