@@ -1,24 +1,26 @@
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { RefreshCw, Link as LinkIcon, Search, ExternalLink } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { RefreshCw, Link as LinkIcon, Search, X } from "lucide-react";
 
-/** Minimal types to align with existing schema */
-interface Advertiser {
-  id: string;
-  name: string;
-  created_at?: string | null;
-}
+type AdvertiserRow = { id: string; name: string };
 
-interface IdentityRow {
+type AdvertiserIdentity = {
   advertiser_id: string;
   website?: string | null;
   industry?: string | null;
@@ -29,364 +31,419 @@ interface IdentityRow {
   crm_opportunities_open?: number | null;
   crm_opportunities_won?: number | null;
   crm_opportunities_total?: number | null;
-}
+};
 
-/** Simple search result types */
-interface CRMAccount {
-  external_id: string;
-  name: string;
-  website?: string | null;
-  industry?: string | null;
-}
+type CRMAccount = { external_id: string; name: string };
+type AdServerAdvertiser = { external_id: string; name: string };
 
-interface AdServerAdvertiser {
-  external_id: string;
-  name: string;
-  provider?: string | null;
-}
-
-export default function Advertisers() {
+export default function AdvertisersPage() {
   const { toast } = useToast();
+  const [rows, setRows] = useState<AdvertiserRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [list, setList] = useState<Advertiser[]>([]);
-  const [identity, setIdentity] = useState<Record<string, IdentityRow>>({});
-  const [syncing, setSyncing] = useState(false);
+  const [identities, setIdentities] = useState<Record<string, AdvertiserIdentity>>(
+    {}
+  );
 
-  // Link modal state
+  // Linking modal
   const [linkOpen, setLinkOpen] = useState(false);
-  const [activeAdv, setActiveAdv] = useState<Advertiser | null>(null);
-
-  // Search states inside the modal
+  const [linkFor, setLinkFor] = useState<AdvertiserRow | null>(null);
   const [crmQuery, setCrmQuery] = useState("");
-  const [crmResults, setCrmResults] = useState<CRMAccount[]>([]);
-  const [selectedCRM, setSelectedCRM] = useState<CRMAccount | null>(null);
-
   const [adQuery, setAdQuery] = useState("");
+  const [crmResults, setCrmResults] = useState<CRMAccount[]>([]);
   const [adResults, setAdResults] = useState<AdServerAdvertiser[]>([]);
-  const [selectedAd, setSelectedAd] = useState<AdServerAdvertiser | null>(null);
+  const [saving, setSaving] = useState(false);
 
+  // Load advertisers
   useEffect(() => {
     (async () => {
       setLoading(true);
-      // 1) fetch advertisers
-      const { data: advs, error: advErr } = await supabase
+      const { data, error } = await supabase
         .from("advertisers")
         .select("id,name")
         .order("name", { ascending: true });
-      if (advErr) {
-        toast({ title: "Error", description: "Failed to load advertisers", variant: "destructive" });
-        setLoading(false);
-        return;
-      }
-      setList(advs || []);
-
-      // 2) fetch identity view rows (optional LEFT set)
-      const { data: ids, error: idErr } = await supabase
-        .from("v_advertiser_identity")
-        .select("*");
-      if (idErr) {
-        // still render advertisers; identity is optional
-        console.warn("v_advertiser_identity not available:", idErr);
+      if (error) {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
       } else {
-        const map: Record<string, IdentityRow> = {};
-        (ids as any[]).forEach((row) => {
-          if (row?.advertiser_id) map[row.advertiser_id] = row as IdentityRow;
-        });
-        setIdentity(map);
+        setRows((data || []) as AdvertiserRow[]);
       }
       setLoading(false);
     })();
-  }, []);
+  }, [toast]);
 
-  const rows = useMemo(() => {
-    return list.map((a) => ({
-      ...a,
-      _id: a.id,
-      identity: identity[a.id] || {},
-    }));
-  }, [list, identity]);
+  // Load identity view for the list
+  useEffect(() => {
+    if (rows.length === 0) return;
+    (async () => {
+      const ids = rows.map((r) => r.id);
+      const q = (supabase.from("v_advertiser_identity" as any) as any)
+        .select("*")
+        .in("advertiser_id", ids);
+      const { data, error } = await q;
+      if (error) {
+        // view não presente na tipagem -> cast
+        console.error(error);
+      } else {
+        const map: Record<string, AdvertiserIdentity> = {};
+        (data as any[]).forEach((d) => {
+          map[d.advertiser_id] = d as AdvertiserIdentity;
+        });
+        setIdentities(map);
+      }
+    })();
+  }, [rows]);
 
-  async function refreshIdentity() {
-    // No server-side job here; just re-read the view
-    setSyncing(true);
-    const { data, error } = await supabase.from("v_advertiser_identity").select("*");
-    if (!error && data) {
-      const map: Record<string, IdentityRow> = {};
-      (data as any[]).forEach((row) => {
-        if (row?.advertiser_id) map[row.advertiser_id] = row as IdentityRow;
-      });
-      setIdentity(map);
-    } else {
-      toast({ title: "Refresh failed", description: error?.message || "Could not refresh identity.", variant: "destructive" });
+  const refreshIdentities = async () => {
+    if (rows.length === 0) return;
+    const ids = rows.map((r) => r.id);
+    const { data, error } = await (supabase.from("v_advertiser_identity" as any) as any)
+      .select("*")
+      .in("advertiser_id", ids);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      return;
     }
-    setSyncing(false);
-  }
+    const map: Record<string, AdvertiserIdentity> = {};
+    (data as any[]).forEach((d) => {
+      map[d.advertiser_id] = d as AdvertiserIdentity;
+    });
+    setIdentities(map);
+    toast({ title: "Refreshed", description: "Identity refreshed." });
+  };
 
-  function openLinkModal(a: Advertiser) {
-    setActiveAdv(a);
+  const openLinkModal = (adv: AdvertiserRow) => {
+    setLinkFor(adv);
     setCrmQuery("");
-    setCrmResults([]);
-    setSelectedCRM(null);
     setAdQuery("");
+    setCrmResults([]);
     setAdResults([]);
-    setSelectedAd(null);
     setLinkOpen(true);
-  }
+  };
 
-  // --- Search helpers ---
-  async function searchCRM(q: string) {
-    setCrmQuery(q);
-    if (!q || q.length < 2) {
+  // Search CRM
+  const searchCRM = async () => {
+    const term = crmQuery.trim();
+    if (!term) {
       setCrmResults([]);
       return;
     }
-    const { data, error } = await supabase
-      .from("crm_accounts")
-      .select("external_id,name,website,industry")
-      .ilike("name", `%${q}%`)
+    const { data, error } = await (supabase.from("crm_accounts" as any) as any)
+      .select("external_id,name")
+      .ilike("name", `%${term}%`)
       .limit(20);
-    if (!error) setCrmResults((data || []) as CRMAccount[]);
-  }
+    if (error) {
+      toast({ title: "CRM search error", description: error.message, variant: "destructive" });
+    } else {
+      setCrmResults(((data || []) as any) as CRMAccount[]);
+    }
+  };
 
-  async function searchAdServer(q: string) {
-    setAdQuery(q);
-    if (!q || q.length < 2) {
+  // Search Ad Server (simple helper view)
+  const searchAdServer = async () => {
+    const term = adQuery.trim();
+    if (!term) {
       setAdResults([]);
       return;
     }
-    // derive from ad_server_adv_links + advertisers? Provide a search over link table by name if present,
-    // or fallback to advertisers names in our DB (best effort).
-    const { data, error } = await supabase
-      .from("ad_server_adv_links")
-      .select("external_id,name,provider")
-      .ilike("name", `%${q}%`)
+    // If you created a helper view ad_server_adv_links(external_id,name,advertiser_id), use it.
+    // Otherwise fall back to listing advertisers (demo).
+    let data: any = null, error: any = null;
+    const tryView = await (supabase.from("ad_server_adv_links" as any) as any)
+      .select("external_id,name")
+      .ilike("name", `%${term}%`)
       .limit(20);
-    if (!error && data?.length) {
-      setAdResults(data as AdServerAdvertiser[]);
-      return;
+    if (tryView.error) {
+      const fb = await supabase
+        .from("advertisers")
+        .select("id,name")
+        .ilike("name", `%${term}%`)
+        .limit(20);
+      if (!fb.error) {
+        data = (fb.data || []).map((r: any) => ({
+          external_id: r.id,
+          name: r.name,
+        }));
+      } else {
+        error = fb.error;
+      }
+    } else {
+      data = tryView.data;
+      error = tryView.error;
     }
-    const { data: advLike } = await supabase.from("advertisers").select("id,name").ilike("name", `%${q}%`).limit(20);
-    const conv = (advLike || []).map((x: any) => ({ external_id: x.id, name: x.name, provider: null as any }));
-    setAdResults(conv);
-  }
-
-  // --- Link calls ---
-  async function linkCRM() {
-    if (!activeAdv || !selectedCRM) return;
-    // Calls the helper function created earlier: upsert_adv_link_fn(advertiser_id, integration_id, external_id, source)
-    // We do not know the integration UUID here. Use any CRM integration present in ad_server_integrations with provider='salesforce'.
-    const { data: integ } = await supabase
-      .from("ad_server_integrations")
-      .select("id")
-      .eq("provider", "salesforce")
-      .limit(1)
-      .maybeSingle();
-
-    if (!integ?.id) {
-      toast({ title: "No CRM integration found", description: "Create a Salesforce integration first.", variant: "destructive" });
-      return;
-    }
-
-    const { error } = await supabase.rpc("upsert_adv_link_fn", {
-      p_advertiser_id: activeAdv.id,
-      p_integration_id: integ.id,
-      p_external_id: selectedCRM.external_id,
-      p_source: "crm",
-    });
-
     if (error) {
-      toast({ title: "Link failed", description: error.message, variant: "destructive" });
-      return;
+      toast({
+        title: "Ad Server search error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      setAdResults(((data || []) as any) as AdServerAdvertiser[]);
     }
-    toast({ title: "Linked", description: `Linked "${activeAdv.name}" to CRM Account ${selectedCRM.name}` });
-    setLinkOpen(false);
-    refreshIdentity();
-  }
+  };
 
-  async function linkAdServer() {
-    if (!activeAdv || !selectedAd) return;
+  const saveLink = async (source: "crm" | "ad_server", externalId: string) => {
+    if (!linkFor) return;
+    setSaving(true);
+    try {
+      const { data: integrations } = await supabase
+        .from("ad_server_integrations")
+        .select("id,provider,status")
+        .eq("status", "active");
+      let integrationId: string | null = null;
+      const providersCRM = new Set(["salesforce", "hubspot", "pipedrive", "vtex"]);
+      const providersAS = new Set([
+        "kevel",
+        "koddi",
+        "topsort",
+        "google_ad_manager",
+        "criteo",
+        "citrusad",
+        "moloko",
+      ]);
+      (integrations || []).forEach((i: any) => {
+        if (source === "crm" && providersCRM.has(i.provider)) integrationId = i.id;
+        if (source === "ad_server" && providersAS.has(i.provider)) integrationId = i.id;
+      });
+      if (!integrationId) {
+        throw new Error("No active integration found for the selected source.");
+      }
 
-    // Pick any Ad Server integration (first active) – Kevel by default
-    const { data: integ } = await supabase
-      .from("ad_server_integrations")
-      .select("id")
-      .in("provider", ["kevel", "koddi", "topsort", "google_ad_manager", "criteo", "citrusad", "moloko"])
-      .eq("status", "active")
-      .limit(1)
-      .maybeSingle();
+      const payload = {
+        p_source: source,
+        p_advertiser_id: linkFor.id,
+        p_integration_id: integrationId,
+        p_external_id: externalId,
+      };
 
-    if (!integ?.id) {
-      toast({ title: "No Ad Server integration found", description: "Create/activate at least one Ad Server integration.", variant: "destructive" });
-      return;
+      const rpcRes = await (supabase.rpc as any)("upsert_adv_link_fn", payload);
+      if (rpcRes.error) throw rpcRes.error;
+
+      toast({ title: "Linked", description: "Link saved successfully." });
+      setLinkOpen(false);
+      await refreshIdentities();
+    } catch (e: any) {
+      toast({
+        title: "Link error",
+        description: e?.message || String(e),
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
     }
+  };
 
-    const { error } = await supabase.rpc("upsert_adv_link_fn", {
-      p_advertiser_id: activeAdv.id,
-      p_integration_id: integ.id,
-      p_external_id: selectedAd.external_id,
-      p_source: "ad_server",
+  const table = useMemo(() => {
+    return rows.map((r) => {
+      const id = r.id;
+      const i = identities[id] || ({} as AdvertiserIdentity);
+      return (
+        <Card key={id} className="border">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-base">{r.name}</CardTitle>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => openLinkModal(r)}>
+                  <LinkIcon className="w-4 h-4 mr-1" /> Link
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="text-sm grid grid-cols-1 md:grid-cols-4 gap-2">
+            <div>
+              <div className="text-muted-foreground">Website</div>
+              <div className="truncate">{i.website || "—"}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Industry</div>
+              <div>{i.industry || "—"}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">CRM</div>
+              <div className="flex items-center gap-2">
+                {i.crm_account_external_id ? (
+                  <Badge variant="secondary">linked</Badge>
+                ) : (
+                  <Badge variant="outline">not linked</Badge>
+                )}
+                <span className="truncate">{i.crm_name || "—"}</span>
+              </div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Ad Server</div>
+              <div className="flex items-center gap-2">
+                {i.ad_server_advertiser_external_id ? (
+                  <Badge variant="secondary">linked</Badge>
+                ) : (
+                  <Badge variant="outline">not linked</Badge>
+                )}
+                <span className="truncate">{i.ad_server_name || "—"}</span>
+              </div>
+            </div>
+            <div className="md:col-span-4">
+              <div className="text-muted-foreground mb-1">CRM Pipeline</div>
+              <div className="text-xs">
+                open: {i.crm_opportunities_open ?? 0} • won:{" "}
+                {i.crm_opportunities_won ?? 0} • total:{" "}
+                {i.crm_opportunities_total ?? 0}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      );
     });
-
-    if (error) {
-      toast({ title: "Link failed", description: error.message, variant: "destructive" });
-      return;
-    }
-    toast({ title: "Linked", description: `Linked "${activeAdv.name}" to Ad Server advertiser ${selectedAd.name}` });
-    setLinkOpen(false);
-    refreshIdentity();
-  }
-
-  if (loading) {
-    return <div className="p-6">Loading advertisers…</div>;
-  }
+  }, [rows, identities]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Advertisers</h1>
-        <Button variant="outline" onClick={refreshIdentity} disabled={syncing} className="gap-2">
-          <RefreshCw className={syncing ? "animate-spin h-4 w-4" : "h-4 w-4"} />
+        <h1 className="text-2xl font-semibold">Advertisers</h1>
+        <Button size="sm" onClick={refreshIdentities}>
+          <RefreshCw className="w-4 h-4 mr-1" />
           Refresh
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {rows.map((row) => {
-          const id = row.identity || {};
-          return (
-            <Card key={row._id} className="flex flex-col">
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <CardTitle className="text-lg">{row.name}</CardTitle>
-                    <CardDescription>
-                      {id.industry ? <span>{id.industry} · </span> : null}
-                      {id.website ? (
-                        <a href={id.website} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 underline">
-                          {id.website}
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      ) : (
-                        <span className="text-muted-foreground">No website</span>
-                      )}
-                    </CardDescription>
-                  </div>
-                  <div className="flex gap-2">
-                    {id.crm_account_external_id ? (
-                      <Badge variant="secondary">CRM linked</Badge>
-                    ) : (
-                      <Badge variant="outline">No CRM</Badge>
-                    )}
-                    {id.ad_server_advertiser_external_id ? (
-                      <Badge variant="secondary">Ad Server linked</Badge>
-                    ) : (
-                      <Badge variant="outline">No Ad Server</Badge>
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="flex-1">
-                <div className="text-sm space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">CRM Account:</span>
-                    <span>{id.crm_name || "—"}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Ad Server:</span>
-                    <span>{id.ad_server_name || "—"}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Opportunities:</span>
-                    <span>
-                      {(id.crm_opportunities_open || 0) + (id.crm_opportunities_won || 0)} total ·{" "}
-                      <span className="text-green-700">{id.crm_opportunities_open || 0} open</span>
-                    </span>
-                  </div>
-                </div>
-                <div className="pt-4">
-                  <Dialog open={linkOpen && activeAdv?.id === row._id} onOpenChange={(o) => setLinkOpen(o)}>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" className="w-full gap-2" onClick={() => openLinkModal(row)}>
-                        <LinkIcon className="h-4 w-4" /> Link CRM / Ad Server
+      {loading ? (
+        <div>Loading…</div>
+      ) : rows.length === 0 ? (
+        <div className="text-muted-foreground">No advertisers.</div>
+      ) : (
+        <div className="grid gap-3">{table}</div>
+      )}
+
+      {/* Link modal */}
+      <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Link integrations</DialogTitle>
+            <DialogDescription>
+              Connect this advertiser with CRM or Ad Server entities.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-2">
+            <Tabs defaultValue="crm">
+              <TabsList className="grid grid-cols-2 w-full">
+                <TabsTrigger value="crm">CRM</TabsTrigger>
+                <TabsTrigger value="adserver">Ad Server</TabsTrigger>
+              </TabsList>
+              <TabsContent value="crm" className="mt-4 space-y-3">
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <Label>Search CRM Accounts</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Search by name…"
+                        value={crmQuery}
+                        onChange={(e) => setCrmQuery(e.target.value)}
+                      />
+                      <Button variant="outline" onClick={searchCRM}>
+                        <Search className="w-4 h-4 mr-1" />
+                        Search
                       </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[720px]">
-                      <DialogHeader>
-                        <DialogTitle>Link integrations</DialogTitle>
-                        <DialogDescription>Link “{activeAdv?.name}” to a CRM Account and/or an Ad Server advertiser.</DialogDescription>
-                      </DialogHeader>
-                      <Tabs defaultValue="crm">
-                        <TabsList className="mb-3">
-                          <TabsTrigger value="crm">CRM Account</TabsTrigger>
-                          <TabsTrigger value="ad">Ad Server</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="crm">
-                          <div className="space-y-3">
-                            <Label htmlFor="crm-search">Search CRM Accounts</Label>
-                            <div className="flex gap-2">
-                              <div className="relative w-full">
-                                <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
-                                <Input id="crm-search" placeholder="Type 2+ chars…" className="pl-8" value={crmQuery} onChange={(e) => searchCRM(e.target.value)} />
-                              </div>
-                              <Button variant="secondary" disabled={!selectedCRM} onClick={linkCRM}>
-                                Link CRM
-                              </Button>
-                            </div>
-                            <div className="max-h-56 overflow-auto rounded border">
-                              {(crmResults || []).map((r) => (
-                                <div
-                                  key={r.external_id}
-                                  className={`px-3 py-2 cursor-pointer hover:bg-muted ${selectedCRM?.external_id === r.external_id ? "bg-muted" : ""}`}
-                                  onClick={() => setSelectedCRM(r)}
-                                >
-                                  <div className="font-medium">{r.name}</div>
-                                  <div className="text-xs text-muted-foreground">Ext ID: {r.external_id} · {r.industry || "—"} · {r.website || "—"}</div>
-                                </div>
-                              ))}
-                              {crmQuery.length >= 2 && (crmResults || []).length === 0 && (
-                                <div className="px-3 py-2 text-sm text-muted-foreground">No results</div>
-                              )}
-                            </div>
-                          </div>
-                        </TabsContent>
-                        <TabsContent value="ad">
-                          <div className="space-y-3">
-                            <Label htmlFor="ad-search">Search Ad Server Advertisers</Label>
-                            <div className="flex gap-2">
-                              <div className="relative w-full">
-                                <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
-                                <Input id="ad-search" placeholder="Type 2+ chars…" className="pl-8" value={adQuery} onChange={(e) => searchAdServer(e.target.value)} />
-                              </div>
-                              <Button variant="secondary" disabled={!selectedAd} onClick={linkAdServer}>
-                                Link Ad Server
-                              </Button>
-                            </div>
-                            <div className="max-h-56 overflow-auto rounded border">
-                              {(adResults || []).map((r) => (
-                                <div
-                                  key={r.external_id}
-                                  className={`px-3 py-2 cursor-pointer hover:bg-muted ${selectedAd?.external_id === r.external_id ? "bg-muted" : ""}`}
-                                  onClick={() => setSelectedAd(r)}
-                                >
-                                  <div className="font-medium">{r.name}</div>
-                                  <div className="text-xs text-muted-foreground">Ext ID: {r.external_id} {r.provider ? `· ${r.provider}` : ""}</div>
-                                </div>
-                              ))}
-                              {adQuery.length >= 2 && (adResults || []).length === 0 && (
-                                <div className="px-3 py-2 text-sm text-muted-foreground">No results</div>
-                              )}
-                            </div>
-                          </div>
-                        </TabsContent>
-                      </Tabs>
-                    </DialogContent>
-                  </Dialog>
+                    </div>
+                  </div>
+                  {crmQuery && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setCrmQuery("");
+                        setCrmResults([]);
+                      }}
+                      title="Clear"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+                <div className="max-h-64 overflow-auto border rounded">
+                  {(crmResults || []).length === 0 ? (
+                    <div className="p-3 text-sm text-muted-foreground">No results</div>
+                  ) : (
+                    (crmResults || []).map((r) => (
+                      <div
+                        key={r.external_id}
+                        className="flex items-center justify-between p-3 border-b last:border-0"
+                      >
+                        <div>
+                          <div className="font-medium">{r.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {r.external_id}
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => saveLink("crm", r.external_id)}
+                          disabled={saving}
+                        >
+                          Link
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="adserver" className="mt-4 space-y-3">
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <Label>Search Ad Server Advertisers</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Search by name…"
+                        value={adQuery}
+                        onChange={(e) => setAdQuery(e.target.value)}
+                      />
+                      <Button variant="outline" onClick={searchAdServer}>
+                        <Search className="w-4 h-4 mr-1" />
+                        Search
+                      </Button>
+                    </div>
+                  </div>
+                  {adQuery && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setAdQuery("");
+                        setAdResults([]);
+                      }}
+                      title="Clear"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+                <div className="max-h-64 overflow-auto border rounded">
+                  {(adResults || []).length === 0 ? (
+                    <div className="p-3 text-sm text-muted-foreground">No results</div>
+                  ) : (
+                    (adResults || []).map((r) => (
+                      <div
+                        key={r.external_id}
+                        className="flex items-center justify-between p-3 border-b last:border-0"
+                      >
+                        <div>
+                          <div className="font-medium">{r.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {r.external_id}
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => saveLink("ad_server", r.external_id)}
+                          disabled={saving}
+                        >
+                          Link
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
