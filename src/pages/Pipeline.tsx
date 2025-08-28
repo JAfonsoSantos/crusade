@@ -7,18 +7,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, Search, Filter, BarChart3 } from "lucide-react";
+import { PlusCircle, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import { AccessDenied } from "@/components/AccessDenied";
 import { OpportunityDetailModal } from "@/components/OpportunityDetailModal";
 import { PipelineSelector } from "@/components/PipelineSelector";
-import { CreatePipelineModal } from "@/components/CreatePipelineModal";
 import { 
   DndContext, 
   DragOverlay,
   pointerWithin,
-  closestCorners,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -27,7 +25,6 @@ import {
   useDroppable,
 } from "@dnd-kit/core";
 import {
-  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
@@ -35,6 +32,9 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+/* =========================
+   Tipos existentes
+========================= */
 type Pipeline = {
   id: string;
   name: string;
@@ -84,6 +84,23 @@ type Opportunity = {
   };
 };
 
+/* =========================
+   Tipos novos (CRM snapshot)
+   Assumem colunas típicas da view v_advertiser_pipeline
+   — se a view tiver nomes ligeiramente diferentes, não quebra o ecrã
+========================= */
+type AdvertiserCRMSnapshot = {
+  advertiser_id: string;
+  advertiser_name?: string | null;
+  // contagens
+  crm_opportunities_open?: number | null;
+  crm_opportunities_won?: number | null;
+  crm_opportunities_lost?: number | null;
+  // valores
+  crm_open_value?: number | null;
+  crm_won_value?: number | null;
+  crm_lost_value?: number | null;
+};
 
 export default function Pipeline() {
   const { hasPermission, loading: permissionsLoading } = usePermissions();
@@ -94,6 +111,7 @@ export default function Pipeline() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [showCRMSnapshot, setShowCRMSnapshot] = useState(false); // <- toggle CRM snapshot
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -101,9 +119,7 @@ export default function Pipeline() {
   const blocked = !permissionsLoading && !hasPermission('pipeline');
   const sensors = useSensors(
     useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   // Fetch pipelines
@@ -141,27 +157,10 @@ export default function Pipeline() {
         .from("opportunities")
         .select(`
           *,
-          advertisers (
-            name
-          ),
-          campaigns (
-            id,
-            name,
-            status,
-            start_date,
-            end_date
-          ),
-          flights (
-            id,
-            name,
-            status,
-            start_date,
-            end_date
-          ),
-          pipelines (
-            name,
-            stages
-          )
+          advertisers ( name ),
+          campaigns ( id, name, status, start_date, end_date ),
+          flights   ( id, name, status, start_date, end_date ),
+          pipelines ( name, stages )
         `)
         .eq("pipeline_id", selectedPipelineId)
         .order("created_at", { ascending: false });
@@ -172,24 +171,56 @@ export default function Pipeline() {
     enabled: !!selectedPipelineId && !blocked,
   });
 
+  /* =========================
+     CRM Snapshot (view v_advertiser_pipeline)
+     – resiliente: se a view não existir, devolve []
+  ========================= */
+  const { data: crmSnapshot = [], isLoading: crmLoading } = useQuery({
+    queryKey: ["crm-snapshot", selectedPipelineId, showCRMSnapshot],
+    enabled: !!selectedPipelineId && showCRMSnapshot && !blocked,
+    queryFn: async () => {
+      try {
+        // se a view existir, ótimo; se não, isto vai lançar erro
+        const { data, error } = await supabase
+          .from("v_advertiser_pipeline")
+          .select("*")
+          // se a view tiver company filter ou similar, aqui é onde ajustar
+          .limit(1000);
+
+        if (error) throw error;
+        return (data || []) as AdvertiserCRMSnapshot[];
+      } catch (err: any) {
+        // não bloquear a página — apenas avisar para debug
+        console.warn("CRM snapshot not available:", err?.message || err);
+        toast({
+          title: "CRM snapshot",
+          description: "Sem dados de CRM (view v_advertiser_pipeline ausente).",
+        });
+        return [] as AdvertiserCRMSnapshot[];
+      }
+    },
+  });
+
   const currentPipeline = pipelines.find(p => p.id === selectedPipelineId);
   const currentStages = currentPipeline?.stages || [
-    { key: "needs_analysis", label: "Needs Analysis", color: "bg-blue-500" },
-    { key: "value_proposition", label: "Value Proposition", color: "bg-purple-500" },
-    { key: "proposal", label: "Proposal/Quote", color: "bg-orange-500" },
-    { key: "negotiation", label: "Negotiation/Review", color: "bg-yellow-500" },
-    { key: "closed_won", label: "Closed Won", color: "bg-green-500" },
-    { key: "closed_lost", label: "Closed Lost", color: "bg-red-500" },
+    { key: "needs_analysis",     label: "Needs Analysis",     color: "bg-blue-500" },
+    { key: "value_proposition",  label: "Value Proposition",  color: "bg-purple-500" },
+    { key: "proposal",           label: "Proposal/Quote",     color: "bg-orange-500" },
+    { key: "negotiation",        label: "Negotiation/Review", color: "bg-yellow-500" },
+    { key: "closed_won",         label: "Closed Won",         color: "bg-green-500" },
+    { key: "closed_lost",        label: "Closed Lost",        color: "bg-red-500" },
   ];
 
   const filteredOpportunities = useMemo(() => {
     return opportunities.filter((opp) => {
-      const matchesSearch = opp.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      const matchesSearch =
+        opp.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (opp.advertisers?.name && opp.advertisers.name.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesStage = stageFilter === "all" || opp.stage === stageFilter;
       return matchesSearch && matchesStage;
     });
   }, [opportunities, searchTerm, stageFilter]);
+
   // Mutation to update opportunity stage
   const updateOpportunityMutation = useMutation({
     mutationFn: async ({ opportunityId, newStage }: { opportunityId: string, newStage: string }) => {
@@ -201,18 +232,11 @@ export default function Pipeline() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Opportunity moved successfully",
-      });
+      toast({ title: "Success", description: "Opportunity moved successfully" });
       queryClient.invalidateQueries({ queryKey: ["opportunities", selectedPipelineId] });
     },
-    onError: (error) => {
-      toast({
-        title: "Error", 
-        description: "Failed to move opportunity",
-        variant: "destructive",
-      });
+    onError: () => {
+      toast({ title: "Error", description: "Failed to move opportunity", variant: "destructive" });
     },
   });
 
@@ -238,10 +262,7 @@ export default function Pipeline() {
     }
 
     if (targetStageKey && activeOpportunity.stage !== targetStageKey) {
-      updateOpportunityMutation.mutate({
-        opportunityId: activeOpportunity.id,
-        newStage: targetStageKey,
-      });
+      updateOpportunityMutation.mutate({ opportunityId: activeOpportunity.id, newStage: targetStageKey });
     }
   };
 
@@ -269,10 +290,7 @@ export default function Pipeline() {
   }, [filteredOpportunities]);
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("pt-PT", {
-      style: "currency",
-      currency: "EUR",
-    }).format(amount);
+    return new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(amount);
   };
 
   const handleOpportunityClick = (opportunity: Opportunity) => {
@@ -282,9 +300,7 @@ export default function Pipeline() {
 
   // Droppable Stage Column
   const DroppableStageColumn = ({ stage, opportunities }: { stage: any, opportunities: Opportunity[] }) => {
-    const { setNodeRef, isOver } = useDroppable({
-      id: stage.key,
-    });
+    const { setNodeRef, isOver } = useDroppable({ id: stage.key });
 
     return (
       <div 
@@ -331,19 +347,11 @@ export default function Pipeline() {
     };
 
     return (
-      <div
-        ref={setNodeRef}
-        style={style}
-        {...attributes}
-        className="mb-3"
-      >
+      <div ref={setNodeRef} style={style} {...attributes} className="mb-3">
         <Card 
           className="hover:shadow-md transition-shadow cursor-pointer"
           onClick={(e) => {
-            // Prevent click when dragging
-            if (!isDragging) {
-              handleOpportunityClick(opportunity);
-            }
+            if (!isDragging) handleOpportunityClick(opportunity);
           }}
         >
           <CardContent className="p-4">
@@ -352,9 +360,9 @@ export default function Pipeline() {
               className="absolute top-2 right-2 cursor-grab active:cursor-grabbing p-1 rounded hover:bg-muted"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="w-2 h-2 bg-muted-foreground rounded-full mb-1"></div>
-              <div className="w-2 h-2 bg-muted-foreground rounded-full mb-1"></div>
-              <div className="w-2 h-2 bg-muted-foreground rounded-full"></div>
+              <div className="w-2 h-2 bg-muted-foreground rounded-full mb-1" />
+              <div className="w-2 h-2 bg-muted-foreground rounded-full mb-1" />
+              <div className="w-2 h-2 bg-muted-foreground rounded-full" />
             </div>
             <div className="space-y-2 pr-6">
               <h4 className="font-medium text-sm truncate">{opportunity.name}</h4>
@@ -375,9 +383,7 @@ export default function Pipeline() {
                 <span className="font-semibold text-sm">
                   {opportunity.amount ? formatCurrency(opportunity.amount) : "—"}
                 </span>
-                <Badge variant="outline" className="text-xs">
-                  {opportunity.probability}%
-                </Badge>
+                <Badge variant="outline" className="text-xs">{opportunity.probability}%</Badge>
               </div>
               {opportunity.close_date && (
                 <div className="text-xs text-muted-foreground">
@@ -392,10 +398,7 @@ export default function Pipeline() {
   };
 
   const OpportunityCard = ({ opportunity }: { opportunity: Opportunity }) => (
-    <Card 
-      className="mb-3 hover:shadow-md transition-shadow cursor-pointer" 
-      onClick={() => handleOpportunityClick(opportunity)}
-    >
+    <Card className="mb-3 hover:shadow-md transition-shadow cursor-pointer" onClick={() => handleOpportunityClick(opportunity)}>
       <CardContent className="p-4">
         <div className="space-y-2">
           <h4 className="font-medium text-sm truncate">{opportunity.name}</h4>
@@ -416,9 +419,7 @@ export default function Pipeline() {
             <span className="font-semibold text-sm">
               {opportunity.amount ? formatCurrency(opportunity.amount) : "—"}
             </span>
-            <Badge variant="outline" className="text-xs">
-              {opportunity.probability}%
-            </Badge>
+            <Badge variant="outline" className="text-xs">{opportunity.probability}%</Badge>
           </div>
           {opportunity.close_date && (
             <div className="text-xs text-muted-foreground">
@@ -439,20 +440,23 @@ export default function Pipeline() {
   }
 
   if (blocked) {
-    return <AccessDenied 
-      module="pipeline" 
-      title="Pipeline Management"
-      description="Gerir o pipeline de vendas e oportunidades comerciais."
-    />;
+    return (
+      <AccessDenied 
+        module="pipeline" 
+        title="Pipeline Management"
+        description="Gerir o pipeline de vendas e oportunidades comerciais."
+      />
+    );
   }
 
   if (pipelinesLoading || isLoading) {
-  return (
+    return (
       <div className="flex items-center justify-center h-64">
         <div className="text-lg">Loading pipelines...</div>
       </div>
     );
   }
+
   return (
     <div className="space-y-6">
       {/* Header with Pipeline Selector */}
@@ -534,7 +538,45 @@ export default function Pipeline() {
             </Card>
           </div>
 
-          <Tabs value={view} onValueChange={(value) => setView(value as "kanban" | "list")} className="mb-6">
+          {/* CRM Snapshot toggle */}
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              {showCRMSnapshot ? "A mostrar snapshot do CRM (v_advertiser_pipeline)" : "Ocultar snapshot do CRM"}
+            </div>
+            <Button variant="outline" onClick={() => setShowCRMSnapshot(v => !v)}>
+              {showCRMSnapshot ? "Hide CRM Snapshot" : "Show CRM Snapshot"}
+            </Button>
+          </div>
+
+          {showCRMSnapshot && (
+            <Card className="mt-3">
+              <CardHeader>
+                <CardTitle>CRM Snapshot (por Advertiser)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {crmLoading ? (
+                  <div className="text-sm text-muted-foreground">Loading CRM data…</div>
+                ) : crmSnapshot.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">Sem dados de CRM para mostrar.</div>
+                ) : (
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {crmSnapshot.map((row) => (
+                      <Card key={row.advertiser_id}>
+                        <CardContent className="p-4 space-y-2">
+                          <div className="font-medium">{row.advertiser_name || "Advertiser"}</div>
+                          <div className="text-xs text-muted-foreground">Open: {row.crm_opportunities_open ?? 0} • {formatCurrency(row.crm_open_value ?? 0)}</div>
+                          <div className="text-xs text-muted-foreground">Won: {row.crm_opportunities_won ?? 0} • {formatCurrency(row.crm_won_value ?? 0)}</div>
+                          <div className="text-xs text-muted-foreground">Lost: {row.crm_opportunities_lost ?? 0} • {formatCurrency(row.crm_lost_value ?? 0)}</div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          <Tabs value={view} onValueChange={(value) => setView(value as "kanban" | "list")} className="mb-6 mt-6">
             <TabsList className="grid w-full grid-cols-2 max-w-[200px]">
               <TabsTrigger value="kanban">Kanban</TabsTrigger>
               <TabsTrigger value="list">List</TabsTrigger>
@@ -567,58 +609,56 @@ export default function Pipeline() {
                 </DragOverlay>
               </div>
             ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle>All Opportunities</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {filteredOpportunities.map((opp) => (
-                    <div
-                      key={opp.id}
-                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/25 transition-colors cursor-pointer"
-                      onClick={() => handleOpportunityClick(opp)}
-                    >
-                      <div className="space-y-1">
-                        <h4 className="font-medium">{opp.name}</h4>
-                        <div className="text-sm text-muted-foreground">
-                          {opp.advertisers?.name || "No Advertiser"}
-                        </div>
-                        <div className="flex gap-2 mt-1">
-                          {opp.campaigns && (
-                            <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                              {opp.campaigns.name}
-                            </span>
-                          )}
-                          {opp.flights && (
-                            <span className="text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded">
-                              {opp.flights.name}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <div className="font-medium">
-                            {opp.amount ? formatCurrency(opp.amount) : "—"}
-                          </div>
+              <Card>
+                <CardHeader>
+                  <CardTitle>All Opportunities</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {filteredOpportunities.map((opp) => (
+                      <div
+                        key={opp.id}
+                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/25 transition-colors cursor-pointer"
+                        onClick={() => handleOpportunityClick(opp)}
+                      >
+                        <div className="space-y-1">
+                          <h4 className="font-medium">{opp.name}</h4>
                           <div className="text-sm text-muted-foreground">
-                            {opp.close_date ? new Date(opp.close_date).toLocaleDateString("pt-PT") : "No date"}
+                            {opp.advertisers?.name || "No Advertiser"}
+                          </div>
+                          <div className="flex gap-2 mt-1">
+                            {opp.campaigns && (
+                              <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                                {opp.campaigns.name}
+                              </span>
+                            )}
+                            {opp.flights && (
+                              <span className="text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded">
+                                {opp.flights.name}
+                              </span>
+                            )}
                           </div>
                         </div>
-                        <Badge
-                          className={`${
-                            currentStages.find((s) => s.key === opp.stage)?.color || "bg-gray-500"
-                          } text-white`}
-                        >
-                          {currentStages.find((s) => s.key === opp.stage)?.label || opp.stage}
-                        </Badge>
-                        <Badge variant="outline">{opp.probability}%</Badge>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <div className="font-medium">
+                              {opp.amount ? formatCurrency(opp.amount) : "—"}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {opp.close_date ? new Date(opp.close_date).toLocaleDateString("pt-PT") : "No date"}
+                            </div>
+                          </div>
+                          <Badge
+                            className={`${currentStages.find((s) => s.key === opp.stage)?.color || "bg-gray-500"} text-white`}
+                          >
+                            {currentStages.find((s) => s.key === opp.stage)?.label || opp.stage}
+                          </Badge>
+                          <Badge variant="outline">{opp.probability}%</Badge>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
+                    ))}
+                  </div>
+                </CardContent>
               </Card>
             )}
           </DndContext>
