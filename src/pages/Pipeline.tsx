@@ -11,7 +11,7 @@ import { PlusCircle, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import { AccessDenied } from "@/components/AccessDenied";
-import { OpportunityDetailModal } from "@/components/OpportunityDetailModal";
+import OpportunityDetailModal from "@/components/OpportunityDetailModal";
 import { PipelineSelector } from "@/components/PipelineSelector";
 import {
   DndContext,

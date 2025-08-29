@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PlusCircle, Search, Filter, Eye } from "lucide-react";
 import { UserAvatar } from "@/components/UserAvatar";
-import { OpportunityDetailModal } from "@/components/OpportunityDetailModal";
+import OpportunityDetailModal from "@/components/OpportunityDetailModal";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 type Opportunity = {
