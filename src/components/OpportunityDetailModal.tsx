@@ -1,403 +1,451 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import * as React from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Calendar, DollarSign, Target, User, Briefcase, Zap, Edit, Save, X, ExternalLink } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-type OpportunityDetail = {
+type Opportunity = {
   id: string;
   name: string;
   amount: number | null;
-  currency: string;
+  currency: string | null;
   stage: string;
   probability: number;
   close_date: string | null;
-  description: string | null;
-  created_at: string;
-  advertisers?: {
-    name: string;
-  };
-  campaigns?: {
-    id: string;
-    name: string;
-    status: string;
-    start_date: string;
-    end_date: string;
-  };
-  flights?: {
-    id: string;
-    name: string;
-    status: string;
-    start_date: string;
-    end_date: string;
-  };
+  advertiser_id: string | null;
+  campaign_id: string | null;
+  flight_id: string | null;
+  pipeline_id: string | null;
+  crm_external_id?: string | null;
+  crm_integration_id?: string | null;
+  advertisers?: { id: string; name: string } | null;
+  campaigns?: { id: string; name: string } | null;
+  flights?: { id: string; name: string } | null;
+  pipelines?: { id: string; name: string; stages: any[] } | null;
 };
 
-interface OpportunityDetailModalProps {
-  opportunity: OpportunityDetail | null;
+type Props = {
+  opportunity: Opportunity | null;
   isOpen: boolean;
   onClose: () => void;
   onUpdate?: () => void;
-}
+};
 
-const PIPELINE_STAGES = [
-  { key: "needs_analysis", label: "Needs Analysis", color: "bg-blue-500" },
-  { key: "value_proposition", label: "Value Proposition", color: "bg-purple-500" },
-  { key: "proposal", label: "Proposal/Quote", color: "bg-orange-500" },
-  { key: "negotiation", label: "Negotiation/Review", color: "bg-yellow-500" },
-  { key: "closed_won", label: "Closed Won", color: "bg-green-500" },
-  { key: "closed_lost", label: "Closed Lost", color: "bg-red-500" },
-];
-
-export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate }: OpportunityDetailModalProps) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editData, setEditData] = useState(() => ({
-    name: opportunity?.name || "",
-    amount: opportunity?.amount?.toString() || "",
-    stage: opportunity?.stage || "",
-    probability: opportunity?.probability?.toString() || "",
-    close_date: opportunity?.close_date || "",
-    description: opportunity?.description || "",
-  }));
-  
+export function OpportunityDetailModal({
+  opportunity,
+  isOpen,
+  onClose,
+  onUpdate,
+}: Props) {
   const { toast } = useToast();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const updateOpportunityMutation = useMutation({
-    mutationFn: async (data: any) => {
+
+  const oppId = opportunity?.id;
+
+  // -------- Queries de apoio (listas) --------
+  const { data: advertisers = [] } = useQuery({
+    queryKey: ["modal-advertisers"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("advertisers")
+        .select("id, name")
+        .order("name");
+      if (error) throw error;
+      return data as { id: string; name: string }[];
+    },
+    enabled: isOpen,
+  });
+
+  const advertiserId = React.useMemo(
+    () => opportunity?.advertiser_id ?? null,
+    [opportunity?.advertiser_id]
+  );
+
+  const [advId, setAdvId] = React.useState<string | null>(advertiserId);
+  const [brandId, setBrandId] = React.useState<string | null>(null);
+  const [campaignId, setCampaignId] = React.useState<string | null>(
+    opportunity?.campaign_id ?? null
+  );
+  const [flightId, setFlightId] = React.useState<string | null>(
+    opportunity?.flight_id ?? null
+  );
+  const [stage, setStage] = React.useState<string>(opportunity?.stage ?? "");
+
+  // Sempre que a opportunity muda (abriste outra), repõe os valores
+  React.useEffect(() => {
+    setAdvId(opportunity?.advertiser_id ?? null);
+    setCampaignId(opportunity?.campaign_id ?? null);
+    setFlightId(opportunity?.flight_id ?? null);
+    setStage(opportunity?.stage ?? "");
+    setBrandId(null);
+  }, [opportunity?.id]);
+
+  const { data: pipeline } = useQuery({
+    queryKey: ["modal-pipeline", opportunity?.pipeline_id],
+    queryFn: async () => {
+      if (!opportunity?.pipeline_id) return null;
+      const { data, error } = await supabase
+        .from("pipelines")
+        .select("id, name, stages")
+        .eq("id", opportunity.pipeline_id)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { id: string; name: string; stages: any[] } | null;
+    },
+    enabled: isOpen && !!opportunity?.pipeline_id,
+  });
+
+  const { data: brands = [] } = useQuery({
+    queryKey: ["modal-brands", advId],
+    queryFn: async () => {
+      if (!advId) return [];
+      const { data, error } = await supabase
+        .from("brands")
+        .select("id, name, advertiser_id")
+        .eq("advertiser_id", advId)
+        .order("name");
+      if (error) throw error;
+      return data as { id: string; name: string; advertiser_id: string }[];
+    },
+    enabled: isOpen && !!advId,
+  });
+
+  const { data: campaigns = [] } = useQuery({
+    queryKey: ["modal-campaigns", advId, brandId],
+    queryFn: async () => {
+      if (!advId) return [];
+      // Preferir filtrar por brand se disponível; caso contrário por advertiser
+      const query = supabase.from("campaigns").select("id, name, advertiser_id, brand_id").order("name");
+      if (brandId) query.eq("brand_id", brandId);
+      else query.eq("advertiser_id", advId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as { id: string; name: string }[];
+    },
+    enabled: isOpen && !!advId,
+  });
+
+  const { data: flights = [] } = useQuery({
+    queryKey: ["modal-flights", campaignId],
+    queryFn: async () => {
+      if (!campaignId) return [];
+      const { data, error } = await supabase
+        .from("flights")
+        .select("id, name, campaign_id")
+        .eq("campaign_id", campaignId)
+        .order("start_date", { ascending: false });
+      if (error) throw error;
+      return data as { id: string; name: string }[];
+    },
+    enabled: isOpen && !!campaignId,
+  });
+
+  // Limpar dependentes quando se muda acima na hierarquia
+  React.useEffect(() => {
+    // mudou advertiser → limpar brand/campaign/flight
+    setBrandId(null);
+    setCampaignId(null);
+    setFlightId(null);
+  }, [advId]);
+
+  React.useEffect(() => {
+    // mudou brand → limpar campaign/flight
+    setCampaignId(null);
+    setFlightId(null);
+  }, [brandId]);
+
+  React.useEffect(() => {
+    // mudou campaign → limpar flight
+    setFlightId(null);
+  }, [campaignId]);
+
+  // --------- Guardar ---------
+  const updateMutation = useMutation({
+    mutationFn: async () => {
+      if (!oppId) return;
+      const payload: Record<string, any> = {
+        advertiser_id: advId,
+        campaign_id: campaignId,
+        flight_id: flightId,
+      };
+      // Se tiveres brand_id na tabela opportunities, comenta/descomenta:
+      if (brandId) payload["brand_id"] = brandId;
+
+      if (stage && stage !== opportunity?.stage) {
+        payload.stage = stage;
+      }
+
       const { error } = await supabase
         .from("opportunities")
-        .update({
-          name: data.name,
-          amount: data.amount ? parseFloat(data.amount) : null,
-          stage: data.stage,
-          probability: parseInt(data.probability),
-          close_date: data.close_date || null,
-          description: data.description || null,
-        })
-        .eq("id", data.id);
+        .update(payload)
+        .eq("id", oppId);
 
       if (error) throw error;
     },
     onSuccess: () => {
       toast({
-        title: "Success",
-        description: "Opportunity updated successfully",
+        title: "Saved",
+        description: "Opportunity updated successfully.",
       });
-      queryClient.invalidateQueries({ queryKey: ["opportunities"] });
-      setIsEditing(false);
       onUpdate?.();
+      onClose();
     },
-    onError: (error) => {
+    onError: (err: any) => {
       toast({
         title: "Error",
-        description: "Failed to update opportunity",
+        description: err?.message ?? "Failed to update opportunity.",
         variant: "destructive",
       });
     },
   });
 
-  const handleSave = () => {
-    updateOpportunityMutation.mutate({ ...editData, id: opportunity?.id });
-  };
-
-  // Ensure hooks run before any conditional return
-  if (!opportunity) return null;
-
-  // Compute view model after ensuring opportunity exists
-  const currentEditData = isEditing ? editData : {
-    name: opportunity.name || "",
-    amount: opportunity.amount?.toString() || "",
-    stage: opportunity.stage || "",
-    probability: opportunity.probability?.toString() || "",
-    close_date: opportunity.close_date || "",
-    description: opportunity.description || "",
-  };
-  const handleEdit = () => {
-    setEditData({
-      name: opportunity.name || "",
-      amount: opportunity.amount?.toString() || "",
-      stage: opportunity.stage || "",
-      probability: opportunity.probability?.toString() || "",
-      close_date: opportunity.close_date || "",
-      description: opportunity.description || "",
-    });
-    setIsEditing(true);
-  };
-
-  const handleCancel = () => {
-    setIsEditing(false);
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("pt-PT", {
-      style: "currency",
-      currency: "EUR",
-    }).format(amount);
-  };
-
-  const currentStage = PIPELINE_STAGES.find(s => s.key === opportunity.stage);
-
-  const handleExpandView = () => {
-    navigate(`/deals/${opportunity.id}`);
-    onClose();
-  };
-
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+    <Dialog open={isOpen} onOpenChange={(open) => (!open ? onClose() : null)}>
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold flex items-center justify-between">
-            {isEditing ? (
-              <Input
-                value={currentEditData.name}
-                onChange={(e) => setEditData(prev => ({ ...prev, name: e.target.value }))}
-                className="text-2xl font-bold border-none p-0 h-auto"
-              />
-            ) : (
-              opportunity.name
-            )}
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={handleExpandView} className="gap-2">
-                <ExternalLink className="h-4 w-4" />
-                Expand View
-              </Button>
-              {isEditing ? (
-                <>
-                  <Button size="sm" onClick={handleSave} disabled={updateOpportunityMutation.isPending}>
-                    <Save className="h-4 w-4" />
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={handleCancel}>
-                    <X className="h-4 w-4" />
-                  </Button>
-                </>
-              ) : (
-                <Button size="sm" variant="outline" onClick={handleEdit}>
-                  <Edit className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
+          <DialogTitle>
+            {opportunity?.name ?? "Opportunity"}
+            {opportunity?.pipelines?.name ? (
+              <span className="ml-2 text-sm text-muted-foreground">
+                • {opportunity.pipelines.name}
+              </span>
+            ) : null}
           </DialogTitle>
-          <DialogDescription>
-            {isEditing ? "Edit opportunity details" : "View and manage opportunity information"}
-          </DialogDescription>
         </DialogHeader>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Opportunity Details */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Briefcase className="h-5 w-5" />
-                Opportunity Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Value:</span>
-                {isEditing ? (
-                  <Input
-                    type="number"
-                    value={currentEditData.amount}
-                    onChange={(e) => setEditData(prev => ({ ...prev, amount: e.target.value }))}
-                    placeholder="0.00"
-                    className="w-32 text-right"
-                  />
-                ) : (
-                  <span className="font-semibold text-lg">
-                    {opportunity.amount ? formatCurrency(opportunity.amount) : "—"}
-                  </span>
-                )}
+
+        {!opportunity ? (
+          <div className="py-10 text-center text-muted-foreground">
+            No opportunity selected
+          </div>
+        ) : (
+          <Tabs defaultValue="overview" className="mt-2">
+            <TabsList>
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="edit">Edit / Link</TabsTrigger>
+            </TabsList>
+
+            {/* OVERVIEW */}
+            <TabsContent value="overview" className="space-y-4 pt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Amount</Label>
+                  <div className="text-lg font-medium">
+                    {opportunity.amount != null
+                      ? new Intl.NumberFormat("pt-PT", {
+                          style: "currency",
+                          currency: opportunity.currency || "EUR",
+                        }).format(opportunity.amount)
+                      : "—"}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <Label className="text-xs text-muted-foreground">
+                    Probability
+                  </Label>
+                  <div>
+                    <Badge variant="outline">{opportunity.probability}%</Badge>
+                  </div>
+                </div>
               </div>
-              
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Stage:</span>
-                {isEditing ? (
-                  <Select 
-                    value={currentEditData.stage} 
-                    onValueChange={(value) => setEditData(prev => ({ ...prev, stage: value }))}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Stage</Label>
+                  <div className="font-medium">{opportunity.stage}</div>
+                </div>
+                <div className="text-right">
+                  <Label className="text-xs text-muted-foreground">
+                    Close Date
+                  </Label>
+                  <div>
+                    {opportunity.close_date
+                      ? new Date(opportunity.close_date).toLocaleDateString("pt-PT")
+                      : "—"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-muted-foreground">
+                    Advertiser
+                  </Label>
+                  <div className="font-medium">
+                    {opportunity.advertisers?.name ?? "—"}
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">
+                    Campaign / Flight
+                  </Label>
+                  <div className="font-medium">
+                    {opportunity.campaigns?.name ?? "—"}
+                    {opportunity.flights?.name
+                      ? ` • ${opportunity.flights.name}`
+                      : ""}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-muted-foreground">CRM ID</Label>
+                  <Input
+                    value={opportunity.crm_external_id ?? ""}
+                    readOnly
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">
+                    Integration
+                  </Label>
+                  <Input
+                    value={opportunity.crm_integration_id ?? ""}
+                    readOnly
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* EDIT / LINK */}
+            <TabsContent value="edit" className="pt-4 space-y-4">
+              {/* Stage (opcional) */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="mb-1 block">Stage</Label>
+                  <Select
+                    value={stage}
+                    onValueChange={(v) => setStage(v)}
                   >
-                    <SelectTrigger className="w-48">
-                      <SelectValue />
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select stage" />
                     </SelectTrigger>
                     <SelectContent>
-                      {PIPELINE_STAGES.map((stage) => (
-                        <SelectItem key={stage.key} value={stage.key}>
-                          {stage.label}
+                      {(pipeline?.stages ?? []).map((s: any) => (
+                        <SelectItem key={s.key} value={s.key}>
+                          {s.label ?? s.key}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                ) : (
-                  <Badge className={`${currentStage?.color || "bg-gray-500"} text-white`}>
-                    {currentStage?.label || opportunity.stage}
-                  </Badge>
-                )}
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Probability:</span>
-                {isEditing ? (
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={currentEditData.probability}
-                    onChange={(e) => setEditData(prev => ({ ...prev, probability: e.target.value }))}
-                    placeholder="50"
-                    className="w-20 text-right"
-                  />
-                ) : (
-                  <Badge variant="outline" className="font-semibold">
-                    {opportunity.probability}%
-                  </Badge>
-                )}
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Close Date:</span>
-                {isEditing ? (
-                  <Input
-                    type="date"
-                    value={currentEditData.close_date}
-                    onChange={(e) => setEditData(prev => ({ ...prev, close_date: e.target.value }))}
-                    className="w-40"
-                  />
-                ) : (
-                  <span className="flex items-center gap-1">
-                    <Calendar className="h-4 w-4" />
-                    {opportunity.close_date 
-                      ? new Date(opportunity.close_date).toLocaleDateString("pt-PT")
-                      : "Not set"
-                    }
-                  </span>
-                )}
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Created:</span>
-                <span>{new Date(opportunity.created_at).toLocaleDateString("pt-PT")}</span>
-              </div>
-              
-              {(opportunity.description || isEditing) && (
-                <>
-                  <Separator />
-                  <div>
-                    <span className="text-sm text-muted-foreground">Description:</span>
-                    {isEditing ? (
-                      <Textarea
-                        value={currentEditData.description}
-                        onChange={(e) => setEditData(prev => ({ ...prev, description: e.target.value }))}
-                        placeholder="Enter description..."
-                        className="mt-1"
-                        rows={3}
-                      />
-                    ) : (
-                      <p className="mt-1 text-sm">{opportunity.description}</p>
-                    )}
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Advertiser Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" />
-                Advertiser
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-4">
-                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <User className="h-8 w-8 text-primary" />
                 </div>
-                <h3 className="font-semibold text-lg">
-                  {opportunity.advertisers?.name || "No Advertiser"}
-                </h3>
-                <p className="text-sm text-muted-foreground">Retail Media Partner</p>
               </div>
-            </CardContent>
-          </Card>
 
-          {/* Campaign Information */}
-          {opportunity.campaigns && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Target className="h-5 w-5" />
-                  Associated Campaign
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <span className="text-sm text-muted-foreground">Campaign Name:</span>
-                  <p className="font-medium">{opportunity.campaigns.name}</p>
+                  <Label className="mb-1 block">Advertiser</Label>
+                  <Select
+                    value={advId ?? undefined}
+                    onValueChange={(v) => setAdvId(v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose advertiser" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {advertisers.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Status:</span>
-                  <Badge variant={opportunity.campaigns.status === 'active' ? 'default' : 'secondary'}>
-                    {opportunity.campaigns.status}
-                  </Badge>
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Period:</span>
-                  <span className="text-sm">
-                    {new Date(opportunity.campaigns.start_date).toLocaleDateString("pt-PT")} - {" "}
-                    {new Date(opportunity.campaigns.end_date).toLocaleDateString("pt-PT")}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          )}
 
-          {/* Flight Information */}
-          {opportunity.flights && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Zap className="h-5 w-5" />
-                  Associated Flight
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
                 <div>
-                  <span className="text-sm text-muted-foreground">Flight Name:</span>
-                  <p className="font-medium">{opportunity.flights.name}</p>
+                  <Label className="mb-1 block">Brand (optional)</Label>
+                  <Select
+                    value={brandId ?? undefined}
+                    onValueChange={(v) => setBrandId(v)}
+                    disabled={!advId || brands.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={brands.length ? "Choose brand" : "—"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {brands.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Status:</span>
-                  <Badge variant={opportunity.flights.status === 'active' ? 'default' : 'secondary'}>
-                    {opportunity.flights.status}
-                  </Badge>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="mb-1 block">Campaign</Label>
+                  <Select
+                    value={campaignId ?? undefined}
+                    onValueChange={(v) => setCampaignId(v)}
+                    disabled={!advId || campaigns.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={campaigns.length ? "Choose campaign" : "—"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {campaigns.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Period:</span>
-                  <span className="text-sm">
-                    {new Date(opportunity.flights.start_date).toLocaleDateString("pt-PT")} - {" "}
-                    {new Date(opportunity.flights.end_date).toLocaleDateString("pt-PT")}
-                  </span>
+
+                <div>
+                  <Label className="mb-1 block">Flight</Label>
+                  <Select
+                    value={flightId ?? undefined}
+                    onValueChange={(v) => setFlightId(v)}
+                    disabled={!campaignId || flights.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={flights.length ? "Choose flight" : "—"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {flights.map((f) => (
+                        <SelectItem key={f.id} value={f.id}>
+                          {f.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="ghost" onClick={onClose}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => updateMutation.mutate()}
+                  disabled={!oppId}
+                >
+                  Save
+                </Button>
+              </div>
+            </TabsContent>
+          </Tabs>
+        )}
       </DialogContent>
     </Dialog>
   );
