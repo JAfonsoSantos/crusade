@@ -1,63 +1,75 @@
-
-import React, { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
-
-// shadcn/ui
+// src/components/OpportunityDetailModal.tsx
+import * as React from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Loader2, Link as LinkIcon } from "lucide-react";
+
+type FlightMini = {
+  id: string;
+  name: string;
+  start_date: string | null;
+  end_date: string | null;
+  campaign_id: string | null;
+};
+
+type SuggestionRow = {
+  opportunity_id: string;
+  flight_id: string;
+  name_score: number;
+  date_score: number;
+  advertiser_score: number;
+  total_score: number;
+  // Se tiveres estes campos na view, serão usados; se não, buscamos em flights
+  flight_name?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+};
 
 type Opportunity = {
   id: string;
   name: string;
   amount: number | null;
-  currency: string | null;
+  currency: string;
   stage: string;
   probability: number;
-  close_date: string | null; // YYYY-MM-DD
+  close_date: string | null;
   advertiser_id: string | null;
+  description: string | null;
+  next_steps: string | null;
+  created_at: string;
   campaign_id: string | null;
   flight_id: string | null;
   pipeline_id: string | null;
-  description: string | null;
 };
-
-type Option = { id: string; name: string };
 
 type Props = {
   opportunity: Opportunity | null;
   isOpen: boolean;
   onClose: () => void;
-  onUpdate: () => void;
+  onUpdate?: () => void;
 };
 
-// Stages used on the Pipeline page
-const STAGE_OPTIONS: { key: string; label: string }[] = [
-  { key: "needs_analysis", label: "Needs Analysis" },
-  { key: "value_proposition", label: "Value Proposition" },
-  { key: "proposal", label: "Proposal/Quote" },
-  { key: "negotiation", label: "Negotiation/Review" },
-  { key: "closed_won", label: "Closed Won" },
-  { key: "closed_lost", label: "Closed Lost" },
-];
+function formatDate(d?: string | null) {
+  if (!d) return "—";
+  try {
+    return new Date(d).toLocaleDateString("pt-PT");
+  } catch {
+    return d;
+  }
+}
 
 export function OpportunityDetailModal({
   opportunity,
@@ -66,268 +78,301 @@ export function OpportunityDetailModal({
   onUpdate,
 }: Props) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const [loading, setLoading] = useState(false);
+  // === Base tab: simple edit of basic fields (example only) ===
+  const [localName, setLocalName] = React.useState(opportunity?.name ?? "");
+  const [localNext, setLocalNext] = React.useState(opportunity?.next_steps ?? "");
 
-  // Local editable state (seeded from props.opportunity)
-  const [name, setName] = useState("");
-  const [amount, setAmount] = useState<string>("");
-  const [probability, setProbability] = useState<string>("");
-  const [stage, setStage] = useState<string>("");
-  const [closeDate, setCloseDate] = useState<string>("");
-  const [description, setDescription] = useState<string>("");
+  React.useEffect(() => {
+    setLocalName(opportunity?.name ?? "");
+    setLocalNext(opportunity?.next_steps ?? "");
+  }, [opportunity?.id]);
 
-  const [advertiserId, setAdvertiserId] = useState<string | null>(null);
-  const [campaignId, setCampaignId] = useState<string | null>(null);
-  const [flightId, setFlightId] = useState<string | null>(null);
+  const saveBasics = useMutation({
+    mutationFn: async () => {
+      if (!opportunity) return;
+      const { error } = await supabase
+        .from("opportunities")
+        .update({ name: localName, next_steps: localNext })
+        .eq("id", opportunity.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Saved", description: "Opportunity updated." });
+      queryClient.invalidateQueries({ queryKey: ["opportunities"] });
+      onUpdate?.();
+    },
+    onError: (e: any) => {
+      toast({
+        title: "Save failed",
+        description: e?.message ?? "Unknown error",
+        variant: "destructive",
+      });
+    },
+  });
 
-  // Select options
-  const [advertisers, setAdvertisers] = useState<Option[]>([]);
-  const [campaigns, setCampaigns] = useState<Option[]>([]);
-  const [flights, setFlights] = useState<Option[]>([]);
+  // === SUGGESTED FLIGHTS ===
+  const oppId = opportunity?.id;
 
-  // Seed state whenever a new opportunity is opened
-  useEffect(() => {
-    if (!opportunity) return;
-    setName(opportunity.name || "");
-    setAmount(opportunity.amount != null ? String(opportunity.amount) : "");
-    setProbability(
-      opportunity.probability != null ? String(opportunity.probability) : ""
-    );
-    setStage(opportunity.stage || "");
-    setCloseDate(opportunity.close_date || "");
-    setDescription(opportunity.description || "");
+  // 1) Buscar sugestões ordenadas por score
+  const { data: suggestions = [], isLoading: sugLoading } = useQuery({
+    queryKey: ["opp-suggestions", oppId],
+    enabled: !!oppId && isOpen,
+    queryFn: async () => {
+      if (!oppId) return [];
+      const { data, error } = await supabase
+        .from("v_opportunity_flight_suggestions")
+        .select("*")
+        .eq("opportunity_id", oppId)
+        .order("total_score", { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return (data ?? []) as SuggestionRow[];
+    },
+  });
 
-    setAdvertiserId(opportunity.advertiser_id);
-    setCampaignId(opportunity.campaign_id);
-    setFlightId(opportunity.flight_id);
-  }, [opportunity]);
+  // 2) Buscar detalhes dos flights (se a view não tiver flight_name/dates)
+  const flightIds = React.useMemo(
+    () =>
+      Array.from(new Set((suggestions ?? []).map((s) => s.flight_id))).filter(
+        Boolean
+      ),
+    [suggestions]
+  );
 
-  // Load options when opened
-  useEffect(() => {
-    if (!isOpen) return;
-    (async () => {
-      const [advRes, campRes, flightRes] = await Promise.all([
-        supabase.from("advertisers").select("id,name").order("name", { ascending: true }),
-        supabase.from("campaigns").select("id,name").order("name", { ascending: true }),
-        supabase.from("flights").select("id,name").order("name", { ascending: true }),
-      ]);
+  const { data: flights = [], isLoading: flightsLoading } = useQuery({
+    queryKey: ["suggestion-flights", flightIds.join(",")],
+    enabled: isOpen && flightIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("flights")
+        .select("id, name, start_date, end_date, campaign_id")
+        .in("id", flightIds);
+      if (error) throw error;
+      return (data ?? []) as FlightMini[];
+    },
+  });
 
-      setAdvertisers((advRes.data || []).filter((r) => !!r.id && !!r.name));
-      setCampaigns((campRes.data || []).filter((r) => !!r.id && !!r.name));
-      setFlights((flightRes.data || []).filter((r) => !!r.id && !!r.name));
-    })();
-  }, [isOpen]);
+  const flightsById = React.useMemo(() => {
+    const m = new Map<string, FlightMini>();
+    flights.forEach((f) => m.set(f.id, f));
+    return m;
+  }, [flights]);
 
-  const handleSave = async () => {
-    if (!opportunity) return;
-    try {
-      setLoading(true);
-
-      const payload = {
-        name,
-        stage: stage || null,
-        amount: amount === "" ? null : Number(amount),
-        probability: probability === "" ? null : Number(probability),
-        close_date: closeDate || null,
-        description: description || null,
-        advertiser_id: advertiserId,
-        campaign_id: campaignId,
+  // 3) Mutação para linkar Flight (e opcionalmente Campaign)
+  const linkFlight = useMutation({
+    mutationFn: async (flightId: string) => {
+      if (!opportunity) return;
+      const f = flightsById.get(flightId);
+      const patch: Partial<Opportunity> = {
         flight_id: flightId,
       };
+      if (f?.campaign_id) patch.campaign_id = f.campaign_id;
 
       const { error } = await supabase
         .from("opportunities")
-        .update(payload)
+        .update(patch)
         .eq("id", opportunity.id);
-
       if (error) throw error;
-
+    },
+    onSuccess: () => {
+      toast({ title: "Linked", description: "Flight linked to opportunity." });
+      queryClient.invalidateQueries({ queryKey: ["opportunities"] });
+      onUpdate?.();
+    },
+    onError: (e: any) => {
       toast({
-        title: "Opportunity updated",
-        description: "Changes saved successfully.",
-      });
-      onUpdate();
-      onClose();
-    } catch (e: any) {
-      console.error(e);
-      toast({
-        title: "Update failed",
-        description: e?.message || "Please try again.",
+        title: "Link failed",
+        description: e?.message ?? "Unknown error",
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+  });
 
-  // Utilities for Select values: Radix Select requires non-empty Item values.
-  // We use "__none" as a sentinel to "clear" the association (sets field to null).
-  const toSelectValue = (val: string | null | undefined) => (val ?? "");
-  const fromSelectChange = (val: string): string | null =>
-    val === "__none" || val === "" ? null : val;
+  // Render helpers
+  function renderSuggestionRow(s: SuggestionRow) {
+    const f = flightsById.get(s.flight_id);
+    const showName = s.flight_name ?? f?.name ?? s.flight_id;
+    const start = s.start_date ?? f?.start_date ?? null;
+    const end = s.end_date ?? f?.end_date ?? null;
+
+    return (
+      <Card key={`${s.flight_id}-${s.total_score}`} className="mb-2">
+        <CardContent className="p-4 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="font-medium truncate">{showName}</div>
+            <div className="text-xs text-muted-foreground">
+              {formatDate(start)} — {formatDate(end)}
+            </div>
+            <div className="flex flex-wrap gap-2 mt-2">
+              <Badge variant="outline">name {Math.round(s.name_score * 100)}%</Badge>
+              <Badge variant="outline">date {Math.round(s.date_score * 100)}%</Badge>
+              <Badge variant="outline">
+                advertiser {Math.round(s.advertiser_score * 100)}%
+              </Badge>
+              <Badge>{Math.round(s.total_score * 100)}%</Badge>
+            </div>
+          </div>
+
+          <Button
+            size="sm"
+            className="shrink-0"
+            disabled={linkFlight.isPending}
+            onClick={() => linkFlight.mutate(s.flight_id)}
+          >
+            {linkFlight.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Linking…
+              </>
+            ) : (
+              <>
+                <LinkIcon className="mr-2 h-4 w-4" />
+                Link
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
-    <Dialog open={isOpen} onOpenChange={(o) => (!o ? onClose() : null)}>
-      <DialogContent className="max-w-2xl">
+    <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Opportunity details</DialogTitle>
+          <DialogTitle>Opportunity</DialogTitle>
+          <DialogDescription>
+            {opportunity?.name ?? "—"} •{" "}
+            <span className="text-muted-foreground">
+              {opportunity?.stage ?? "—"}
+            </span>
+          </DialogDescription>
         </DialogHeader>
 
         {!opportunity ? (
-          <div className="py-6">No opportunity selected.</div>
+          <div className="text-sm text-muted-foreground">No opportunity</div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-2">
-            <div className="space-y-2">
-              <Label>Name</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
+          <Tabs defaultValue="details" className="mt-2">
+            <TabsList className="grid grid-cols-3 w-full">
+              <TabsTrigger value="details">Details</TabsTrigger>
+              <TabsTrigger value="suggested-flights">Suggested Flights</TabsTrigger>
+              <TabsTrigger value="links">Links</TabsTrigger>
+            </TabsList>
 
-            <div className="space-y-2">
-              <Label>Stage</Label>
-              <Select value={toSelectValue(stage)} onValueChange={(v) => setStage(v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select stage" />
-                </SelectTrigger>
-                <SelectContent>
-                  {/* Disabled placeholder with NON-empty value */}
-                  <SelectItem value="__placeholder" disabled>
-                    Select stage
-                  </SelectItem>
-                  {STAGE_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.key} value={opt.key}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* DETAILS */}
+            <TabsContent value="details" className="mt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card>
+                  <CardContent className="p-4 space-y-3">
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Name</div>
+                      <Input
+                        value={localName}
+                        onChange={(e) => setLocalName(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Next steps</div>
+                      <Input
+                        value={localNext}
+                        onChange={(e) => setLocalNext(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => saveBasics.mutate()}
+                        disabled={saveBasics.isPending}
+                      >
+                        {saveBasics.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…
+                          </>
+                        ) : (
+                          "Save"
+                        )}
+                      </Button>
+                      <Button variant="secondary" size="sm" onClick={onClose}>
+                        Close
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
 
-            <div className="space-y-2">
-              <Label>Amount</Label>
-              <Input
-                type="number"
-                inputMode="decimal"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-            </div>
+                <Card>
+                  <CardContent className="p-4 space-y-2">
+                    <div className="text-sm">
+                      <span className="text-muted-foreground mr-2">Amount</span>
+                      <span>
+                        {opportunity.amount != null ? opportunity.amount : "—"}{" "}
+                        {opportunity.currency ?? ""}
+                      </span>
+                    </div>
+                    <div className="text-sm">
+                      <span className="text-muted-foreground mr-2">Probability</span>
+                      <span>{opportunity.probability ?? 0}%</span>
+                    </div>
+                    <div className="text-sm">
+                      <span className="text-muted-foreground mr-2">Close</span>
+                      <span>{formatDate(opportunity.close_date)}</span>
+                    </div>
+                    <div className="text-sm">
+                      <span className="text-muted-foreground mr-2">Flight</span>
+                      <span>{opportunity.flight_id ?? "—"}</span>
+                    </div>
+                    <div className="text-sm">
+                      <span className="text-muted-foreground mr-2">Campaign</span>
+                      <span>{opportunity.campaign_id ?? "—"}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
 
-            <div className="space-y-2">
-              <Label>Probability (%)</Label>
-              <Input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                max={100}
-                value={probability}
-                onChange={(e) => setProbability(e.target.value)}
-              />
-            </div>
+            {/* SUGGESTED FLIGHTS */}
+            <TabsContent value="suggested-flights" className="mt-4">
+              {sugLoading || flightsLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading suggestions…
+                </div>
+              ) : (suggestions?.length ?? 0) === 0 ? (
+                <div className="text-sm text-muted-foreground">
+                  No flight suggestions for this opportunity.
+                </div>
+              ) : (
+                <div>
+                  <div className="text-xs text-muted-foreground mb-2">
+                    Top {Math.min(20, suggestions.length)} suggestions
+                  </div>
+                  {suggestions.map(renderSuggestionRow)}
+                </div>
+              )}
+            </TabsContent>
 
-            <div className="space-y-2">
-              <Label>Close date</Label>
-              <Input
-                type="date"
-                value={closeDate || ""}
-                onChange={(e) => setCloseDate(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <Label>Description</Label>
-              <Textarea
-                value={description || ""}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Advertiser</Label>
-              <Select
-                value={toSelectValue(advertiserId)}
-                onValueChange={(v) => setAdvertiserId(fromSelectChange(v))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="No advertiser" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__placeholder" disabled>
-                    Choose advertiser
-                  </SelectItem>
-                  <SelectItem value="__none">— None —</SelectItem>
-                  {advertisers
-                    .filter((a) => !!a.id)
-                    .map((a) => (
-                      <SelectItem key={a.id} value={a.id}>
-                        {a.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Campaign</Label>
-              <Select
-                value={toSelectValue(campaignId)}
-                onValueChange={(v) => setCampaignId(fromSelectChange(v))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="No campaign" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__placeholder" disabled>
-                    Choose campaign
-                  </SelectItem>
-                  <SelectItem value="__none">— None —</SelectItem>
-                  {campaigns
-                    .filter((c) => !!c.id)
-                    .map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Flight</Label>
-              <Select
-                value={toSelectValue(flightId)}
-                onValueChange={(v) => setFlightId(fromSelectChange(v))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="No flight" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__placeholder" disabled>
-                    Choose flight
-                  </SelectItem>
-                  <SelectItem value="__none">— None —</SelectItem>
-                  {flights
-                    .filter((f) => !!f.id)
-                    .map((f) => (
-                      <SelectItem key={f.id} value={f.id}>
-                        {f.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+            {/* LINKS (read-only quick view) */}
+            <TabsContent value="links" className="mt-4">
+              <Card>
+                <CardContent className="p-4 space-y-2 text-sm">
+                  <div>
+                    <span className="text-muted-foreground mr-2">Advertiser</span>
+                    <span>{opportunity.advertiser_id ?? "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground mr-2">Campaign</span>
+                    <span>{opportunity.campaign_id ?? "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground mr-2">Flight</span>
+                    <span>{opportunity.flight_id ?? "—"}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         )}
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={loading}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={loading || !opportunity}>
-            {loading ? "Saving..." : "Save"}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
