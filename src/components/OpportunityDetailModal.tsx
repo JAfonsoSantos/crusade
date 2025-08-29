@@ -1,11 +1,7 @@
 // src/components/OpportunityDetailModal.tsx
 import * as React from "react";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -79,7 +75,6 @@ export default function OpportunityDetailModal({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Basic edit example
   const [localName, setLocalName] = React.useState(opportunity?.name ?? "");
   const [localNext, setLocalNext] = React.useState(opportunity?.next_steps ?? "");
   React.useEffect(() => {
@@ -112,30 +107,26 @@ export default function OpportunityDetailModal({
 
   const oppId = opportunity?.id;
 
-  // --- SUGGESTIONS (type-forced to avoid Supabase generics explosion)
+  // ---- SUGGESTIONS (sem genéricos em .from, com cast de data)
   const { data: suggestions = [], isLoading: sugLoading } = useQuery<SuggestionRow[]>({
     queryKey: ["opp-suggestions", oppId],
     enabled: !!oppId && isOpen,
     queryFn: async () => {
       if (!oppId) return [] as SuggestionRow[];
-      // Important: <any> to bypass generated-type overloads for a VIEW
       const { data, error } = await supabase
-        .from<any>("v_opportunity_flight_suggestions")
+        .from("v_opportunity_flight_suggestions")
         .select("*")
         .eq("opportunity_id", oppId)
         .order("total_score", { ascending: false })
         .limit(20);
       if (error) throw error;
-      return (data ?? []) as SuggestionRow[];
+      return (data ?? []) as unknown as SuggestionRow[];
     },
   });
 
-  // flight details (explicit generic)
+  // ---- FLIGHTS para as sugestões (idem)
   const flightIds = React.useMemo(
-    () =>
-      Array.from(new Set((suggestions ?? []).map((s) => s.flight_id))).filter(
-        Boolean
-      ),
+    () => Array.from(new Set((suggestions ?? []).map((s) => s.flight_id))).filter(Boolean),
     [suggestions]
   );
 
@@ -144,11 +135,11 @@ export default function OpportunityDetailModal({
     enabled: isOpen && flightIds.length > 0,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from<FlightMini>("flights")
+        .from("flights")
         .select("id, name, start_date, end_date, campaign_id")
         .in("id", flightIds);
       if (error) throw error;
-      return (data ?? []) as FlightMini[];
+      return (data ?? []) as unknown as FlightMini[];
     },
   });
 
@@ -202,9 +193,7 @@ export default function OpportunityDetailModal({
             <div className="flex flex-wrap gap-2 mt-2">
               <Badge variant="outline">name {Math.round(s.name_score * 100)}%</Badge>
               <Badge variant="outline">date {Math.round(s.date_score * 100)}%</Badge>
-              <Badge variant="outline">
-                advertiser {Math.round(s.advertiser_score * 100)}%
-              </Badge>
+              <Badge variant="outline">advertiser {Math.round(s.advertiser_score * 100)}%</Badge>
               <Badge>{Math.round(s.total_score * 100)}%</Badge>
             </div>
           </div>
@@ -261,24 +250,14 @@ export default function OpportunityDetailModal({
                   <CardContent className="p-4 space-y-3">
                     <div className="space-y-1">
                       <div className="text-xs text-muted-foreground">Name</div>
-                      <Input
-                        value={localName}
-                        onChange={(e) => setLocalName(e.target.value)}
-                      />
+                      <Input value={localName} onChange={(e) => setLocalName(e.target.value)} />
                     </div>
                     <div className="space-y-1">
                       <div className="text-xs text-muted-foreground">Next steps</div>
-                      <Input
-                        value={localNext}
-                        onChange={(e) => setLocalNext(e.target.value)}
-                      />
+                      <Input value={localNext} onChange={(e) => setLocalNext(e.target.value)} />
                     </div>
                     <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => saveBasics.mutate()}
-                        disabled={saveBasics.isPending}
-                      >
+                      <Button size="sm" onClick={() => saveBasics.mutate()} disabled={saveBasics.isPending}>
                         {saveBasics.isPending ? (
                           <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…
@@ -299,8 +278,7 @@ export default function OpportunityDetailModal({
                     <div className="text-sm">
                       <span className="text-muted-foreground mr-2">Amount</span>
                       <span>
-                        {opportunity.amount != null ? opportunity.amount : "—"}{" "}
-                        {opportunity.currency ?? ""}
+                        {opportunity.amount != null ? opportunity.amount : "—"} {opportunity.currency ?? ""}
                       </span>
                     </div>
                     <div className="text-sm">
