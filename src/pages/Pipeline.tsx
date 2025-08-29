@@ -1,4 +1,3 @@
-// src/pages/Pipeline.tsx
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,14 +25,14 @@ import {
   useDroppable,
 } from "@dnd-kit/core";
 import {
-  SortableContext,
   sortableKeyboardCoordinates,
+  SortableContext,
   verticalListSortingStrategy,
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-/* ---------------- Types (iguais aos teus + snapshot opcional) ---------------- */
+/** ---------------- Types ---------------- */
 
 type Pipeline = {
   id: string;
@@ -61,53 +60,35 @@ type Opportunity = {
   campaign_id: string | null;
   flight_id: string | null;
   pipeline_id: string | null;
-  advertisers?: {
-    name: string;
-  };
-  campaigns?: {
-    id: string;
-    name: string;
-    status: string;
-    start_date: string;
-    end_date: string;
-  };
-  flights?: {
-    id: string;
-    name: string;
-    status: string;
-    start_date: string;
-    end_date: string;
-  };
-  pipelines?: {
-    name: string;
-    stages: any[];
-  };
+  advertisers?: { name: string };
+  campaigns?: { id: string; name: string; status: string; start_date: string; end_date: string };
+  flights?: { id: string; name: string; status: string; start_date: string; end_date: string };
+  pipelines?: { name: string; stages: any[] };
 };
 
+/** Linha que a view v_advertiser_pipeline devolve (apenas campos usados) */
 type SnapshotRow = {
   advertiser_id: string;
   advertiser_name: string;
   industry?: string | null;
   website?: string | null;
   crm_name?: string | null;
-  crm_opportunities_open?: number | null;
-  crm_opportunities_won?: number | null;
-  crm_opportunities_total?: number | null;
+  ad_server_name?: string | null;
   crm_account_external_id?: string | null;
   ad_server_advertiser_external_id?: string | null;
-  ad_server_name?: string | null;
+  crm_opportunities_open?: number;
+  crm_opportunities_won?: number;
+  crm_opportunities_total?: number;
 };
 
-/* ---------------- Small helpers ---------------- */
+/** ---------------- Helpers ---------------- */
 
-const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(amount ?? 0);
+const showSnapshot = true; // podes desligar se quiseres
 
-/** tenta ler a view v_advertiser_pipeline; se falhar, faz fallback a advertisers básicos */
 async function fetchAdvertiserSnapshot(): Promise<SnapshotRow[]> {
-  // 1) tentar a view (cast para any para não bater no type-literal do client)
-  const tryView = await supabase
-    .from<any>("v_advertiser_pipeline" as any)
+  // Evita erros de tipo dos genéricos do Postgrest: usamos any + cast via unknown
+  const { data, error } = await (supabase as any)
+    .from("v_advertiser_pipeline")
     .select(
       [
         "advertiser_id",
@@ -115,33 +96,32 @@ async function fetchAdvertiserSnapshot(): Promise<SnapshotRow[]> {
         "industry",
         "website",
         "crm_name",
+        "ad_server_name",
+        "crm_account_external_id",
+        "ad_server_advertiser_external_id",
         "crm_opportunities_open",
         "crm_opportunities_won",
         "crm_opportunities_total",
-        "crm_account_external_id",
-        "ad_server_advertiser_external_id",
-        "ad_server_name",
-      ].join(","),
+      ].join(",")
     );
 
-  if (tryView.error) {
-    // fallback seguro
-    // pega advertisers e devolve snapshot mínimo
-    const base = await supabase.from("advertisers").select("id, name");
-    if (base.error) throw base.error;
-    return (base.data || []).map((a: any) => ({
-      advertiser_id: a.id,
-      advertiser_name: a.name,
-      crm_opportunities_open: 0,
-      crm_opportunities_won: 0,
-      crm_opportunities_total: 0,
-    }));
+  if (!error && data) {
+    return (data as unknown) as SnapshotRow[];
   }
 
-  return (tryView.data || []) as SnapshotRow[];
+  // Fallback mínimo: sem snapshot, devolve advertisers básicos
+  const base = await supabase.from("advertisers").select("id, name");
+  if (base.error) throw base.error;
+  return (base.data || []).map((a: any) => ({
+    advertiser_id: a.id,
+    advertiser_name: a.name,
+    crm_opportunities_open: 0,
+    crm_opportunities_won: 0,
+    crm_opportunities_total: 0,
+  })) as SnapshotRow[];
 }
 
-/* ---------------- Component ---------------- */
+/** ---------------- Page ---------------- */
 
 export default function Pipeline() {
   const { hasPermission, loading: permissionsLoading } = usePermissions();
@@ -152,19 +132,17 @@ export default function Pipeline() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [showSnapshot, setShowSnapshot] = useState<boolean>(true); // <-- toggle CRM Snapshot
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Permission gating
   const blocked = !permissionsLoading && !hasPermission("pipeline");
-
   const sensors = useSensors(
     useSensor(PointerSensor),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  /* ---------------- pipelines ---------------- */
-
+  /** Pipelines */
   const { data: pipelines = [], isLoading: pipelinesLoading } = useQuery({
     queryKey: ["pipelines"],
     queryFn: async () => {
@@ -174,7 +152,6 @@ export default function Pipeline() {
         .eq("is_active", true)
         .order("is_default", { ascending: false })
         .order("created_at", { ascending: true });
-
       if (error) throw error;
       return data as Pipeline[];
     },
@@ -188,8 +165,7 @@ export default function Pipeline() {
     }
   }, [pipelines.length, selectedPipelineId]);
 
-  /* ---------------- opportunities ---------------- */
-
+  /** Opportunities */
   const { data: opportunities = [], isLoading } = useQuery({
     queryKey: ["opportunities", selectedPipelineId],
     queryFn: async () => {
@@ -200,34 +176,29 @@ export default function Pipeline() {
           `
           *,
           advertisers ( name ),
-          campaigns ( id, name, status, start_date, end_date ),
-          flights   ( id, name, status, start_date, end_date ),
-          pipelines ( name, stages )
-        `,
+          campaigns   ( id, name, status, start_date, end_date ),
+          flights     ( id, name, status, start_date, end_date ),
+          pipelines   ( name, stages )
+        `
         )
         .eq("pipeline_id", selectedPipelineId)
         .order("created_at", { ascending: false });
-
       if (error) throw error;
       return data as Opportunity[];
     },
     enabled: !!selectedPipelineId && !blocked,
   });
 
-  /* ---------------- snapshot (view + fallback) ---------------- */
-
-  const { data: snapshot = [], isLoading: snapshotLoading } = useQuery({
+  /** Snapshot (view v_advertiser_pipeline) — com TS “safe-cast” */
+  const { data: snapshot = [], isLoading: snapshotLoading } = useQuery<SnapshotRow[]>({
     queryKey: ["advertiser-snapshot"],
     queryFn: fetchAdvertiserSnapshot,
     enabled: showSnapshot && !blocked,
   });
 
-  /* ---------------- current pipeline / stages ---------------- */
-
   const currentPipeline = pipelines.find((p) => p.id === selectedPipelineId);
   const currentStages =
-    currentPipeline?.stages ||
-    [
+    currentPipeline?.stages || [
       { key: "needs_analysis", label: "Needs Analysis", color: "bg-blue-500" },
       { key: "value_proposition", label: "Value Proposition", color: "bg-purple-500" },
       { key: "proposal", label: "Proposal/Quote", color: "bg-orange-500" },
@@ -236,38 +207,19 @@ export default function Pipeline() {
       { key: "closed_lost", label: "Closed Lost", color: "bg-red-500" },
     ];
 
-  /* ---------------- filters + metrics ---------------- */
-
   const filteredOpportunities = useMemo(() => {
     return opportunities.filter((opp) => {
       const matchesSearch =
         opp.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (opp.advertisers?.name && opp.advertisers.name.toLowerCase().includes(searchTerm.toLowerCase()));
+        (opp.advertisers?.name &&
+          opp.advertisers.name.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesStage = stageFilter === "all" || opp.stage === stageFilter;
       return matchesSearch && matchesStage;
     });
   }, [opportunities, searchTerm, stageFilter]);
 
-  const stageMetrics = useMemo(() => {
-    return currentStages.map((stage) => {
-      const stageOpps = filteredOpportunities.filter((opp) => opp.stage === stage.key);
-      const totalValue = stageOpps.reduce((sum, opp) => sum + (opp.amount || 0), 0);
-      return {
-        ...stage,
-        count: stageOpps.length,
-        value: totalValue,
-        opportunities: stageOpps,
-      };
-    });
-  }, [filteredOpportunities, currentStages]);
-
-  const totalPipelineValue = useMemo(() => {
-    return filteredOpportunities
-      .filter((o) => !["closed_won", "closed_lost"].includes(o.stage))
-      .reduce((sum, o) => sum + (o.amount || 0), 0);
-  }, [filteredOpportunities]);
-
-  /* ---------------- mutations ---------------- */
+  /** DnD — update stage */
+  const queryClientKey = ["opportunities", selectedPipelineId];
 
   const updateOpportunityMutation = useMutation({
     mutationFn: async ({ opportunityId, newStage }: { opportunityId: string; newStage: string }) => {
@@ -276,15 +228,12 @@ export default function Pipeline() {
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Opportunity moved successfully" });
-      queryClient.invalidateQueries({ queryKey: ["opportunities", selectedPipelineId] });
+      queryClient.invalidateQueries({ queryKey: queryClientKey });
     },
-    onError: (error: any) => {
-      console.error("Move error", error);
-      toast({ title: "Error", description: error?.message || "Failed to move opportunity", variant: "destructive" });
+    onError: () => {
+      toast({ title: "Error", description: "Failed to move opportunity", variant: "destructive" });
     },
   });
-
-  /* ---------------- DnD handlers ---------------- */
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -296,6 +245,7 @@ export default function Pipeline() {
 
     let targetStageKey: string | null = null;
     const overId = String(over.id);
+
     if (currentStages.some((s) => s.key === overId)) {
       targetStageKey = overId;
     } else {
@@ -307,13 +257,44 @@ export default function Pipeline() {
       updateOpportunityMutation.mutate({ opportunityId: activeOpportunity.id, newStage: targetStageKey });
     }
   };
+
   const handleDragStart = (event: any) => setActiveId(event.active.id);
+
+  /** Stage metrics */
+  const stageMetrics = useMemo(() => {
+    return currentStages.map((stage) => {
+      const stageOpps = filteredOpportunities.filter((opp) => opp.stage === stage.key);
+      const totalValue = stageOpps.reduce((sum, opp) => sum + (opp.amount || 0), 0);
+      return { ...stage, count: stageOpps.length, value: totalValue, opportunities: stageOpps };
+    });
+  }, [filteredOpportunities, currentStages]);
+
+  const totalPipelineValue = useMemo(
+    () =>
+      filteredOpportunities
+        .filter((opp) => !["closed_won", "closed_lost"].includes(opp.stage))
+        .reduce((sum, opp) => sum + (opp.amount || 0), 0),
+    [filteredOpportunities]
+  );
+
+  /** Pequeno uso do snapshot para KPIs */
+  const kpiOpen = useMemo(
+    () => (snapshot || []).reduce((acc, r) => acc + (r.crm_opportunities_open || 0), 0),
+    [snapshot]
+  );
+  const kpiWon = useMemo(
+    () => (snapshot || []).reduce((acc, r) => acc + (r.crm_opportunities_won || 0), 0),
+    [snapshot]
+  );
+
+  /** UI helpers */
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(amount);
+
   const handleOpportunityClick = (opportunity: Opportunity) => {
     setSelectedOpportunity(opportunity);
     setIsModalOpen(true);
   };
-
-  /* ---------------- UI subcomponents ---------------- */
 
   const DroppableStageColumn = ({ stage, opportunities }: { stage: any; opportunities: Opportunity[] }) => {
     const { setNodeRef, isOver } = useDroppable({ id: stage.key });
@@ -361,9 +342,9 @@ export default function Pipeline() {
               className="absolute top-2 right-2 cursor-grab active:cursor-grabbing p-1 rounded hover:bg-muted"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="w-2 h-2 bg-muted-foreground rounded-full mb-1"></div>
-              <div className="w-2 h-2 bg-muted-foreground rounded-full mb-1"></div>
-              <div className="w-2 h-2 bg-muted-foreground rounded-full"></div>
+              <div className="w-2 h-2 bg-muted-foreground rounded-full mb-1" />
+              <div className="w-2 h-2 bg-muted-foreground rounded-full mb-1" />
+              <div className="w-2 h-2 bg-muted-foreground rounded-full" />
             </div>
             <div className="space-y-2 pr-6">
               <h4 className="font-medium text-sm truncate">{opportunity.name}</h4>
@@ -374,10 +355,14 @@ export default function Pipeline() {
                 </div>
               )}
               {opportunity.flights && (
-                <div className="text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded">Flight: {opportunity.flights.name}</div>
+                <div className="text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded">
+                  Flight: {opportunity.flights.name}
+                </div>
               )}
               <div className="flex justify-between items-center">
-                <span className="font-semibold text-sm">{opportunity.amount ? formatCurrency(opportunity.amount) : "—"}</span>
+                <span className="font-semibold text-sm">
+                  {opportunity.amount ? formatCurrency(opportunity.amount) : "—"}
+                </span>
                 <Badge variant="outline" className="text-xs">
                   {opportunity.probability}%
                 </Badge>
@@ -413,14 +398,14 @@ export default function Pipeline() {
             </Badge>
           </div>
           {opportunity.close_date && (
-            <div className="text-xs text-muted-foreground">Close: {new Date(opportunity.close_date).toLocaleDateString("pt-PT")}</div>
+            <div className="text-xs text-muted-foreground">
+              Close: {new Date(opportunity.close_date).toLocaleDateString("pt-PT")}
+            </div>
           )}
         </div>
       </CardContent>
     </Card>
   );
-
-  /* ---------------- guards ---------------- */
 
   if (permissionsLoading) {
     return (
@@ -429,10 +414,18 @@ export default function Pipeline() {
       </div>
     );
   }
+
   if (blocked) {
-    return <AccessDenied module="pipeline" title="Pipeline Management" description="Gerir o pipeline de vendas e oportunidades comerciais." />;
+    return (
+      <AccessDenied
+        module="pipeline"
+        title="Pipeline Management"
+        description="Gerir o pipeline de vendas e oportunidades comerciais."
+      />
+    );
   }
-  if (pipelinesLoading || isLoading) {
+
+  if (pipelinesLoading || isLoading || (showSnapshot && snapshotLoading)) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-lg">Loading pipelines...</div>
@@ -440,12 +433,10 @@ export default function Pipeline() {
     );
   }
 
-  /* ---------------- render ---------------- */
-
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-start mb-2">
+      <div className="flex justify-between items-start mb-6">
         <div className="flex-1">
           <PipelineSelector
             pipelines={pipelines}
@@ -455,10 +446,15 @@ export default function Pipeline() {
           />
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search opportunities..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search opportunities..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
           </div>
           <Select value={stageFilter} onValueChange={setStageFilter}>
             <SelectTrigger className="w-[180px]">
@@ -466,9 +462,9 @@ export default function Pipeline() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Stages</SelectItem>
-              {currentStages.map((s) => (
-                <SelectItem key={s.key} value={s.key}>
-                  {s.label}
+              {currentStages.map((stage) => (
+                <SelectItem key={stage.key} value={stage.key}>
+                  {stage.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -482,147 +478,118 @@ export default function Pipeline() {
         </div>
       </div>
 
-      {/* Snapshot toggle */}
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">Tip: enable the CRM snapshot to see open / won / total by advertiser and links.</div>
-        <div className="flex items-center gap-2">
-          <Badge variant={showSnapshot ? "default" : "outline"} className="cursor-pointer" onClick={() => setShowSnapshot((v) => !v)}>
-            {showSnapshot ? "CRM Snapshot: ON" : "CRM Snapshot: OFF"}
-          </Badge>
+      {!selectedPipelineId ? (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">Select a pipeline to view opportunities</p>
         </div>
-      </div>
-
-      {/* CRM snapshot cards */}
-      {showSnapshot && !snapshotLoading && snapshot.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {snapshot.map((row) => (
-            <Card key={row.advertiser_id}>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">{row.advertiser_name}</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0 text-sm">
-                <div className="flex gap-2 mb-2">
-                  <Badge variant="outline">open: {row.crm_opportunities_open ?? 0}</Badge>
-                  <Badge variant="outline">won: {row.crm_opportunities_won ?? 0}</Badge>
-                  <Badge variant="outline">total: {row.crm_opportunities_total ?? 0}</Badge>
-                </div>
-                {(row.crm_account_external_id || row.ad_server_advertiser_external_id) && (
-                  <div className="flex gap-2 text-xs text-muted-foreground">
-                    {row.crm_account_external_id && <span>CRM ✓</span>}
-                    {row.ad_server_advertiser_external_id && <span>Ad Server ✓</span>}
-                  </div>
-                )}
+      ) : (
+        <>
+          {/* Summary (inclui KPIs do snapshot) */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-2xl font-bold">{formatCurrency(totalPipelineValue)}</div>
+                <div className="text-sm text-muted-foreground">Total Pipeline</div>
               </CardContent>
             </Card>
-          ))}
-        </div>
-      )}
-
-      {/* summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold">{formatCurrency(totalPipelineValue)}</div>
-            <div className="text-sm text-muted-foreground">Total Pipeline</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold">{stageMetrics.find((s) => s.key === "closed_won")?.count ?? 0}</div>
-            <div className="text-sm text-muted-foreground">Closed Won</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold">
-              {formatCurrency(stageMetrics.find((s) => s.key === "closed_won")?.value ?? 0)}
-            </div>
-            <div className="text-sm text-muted-foreground">Won Value</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold">
-              {filteredOpportunities.filter((o) => !["closed_won", "closed_lost"].includes(o.stage)).length}
-            </div>
-            <div className="text-sm text-muted-foreground">Open Deals</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* tabs */}
-      <Tabs value={view} onValueChange={(v) => setView(v as any)} className="mb-6">
-        <TabsList className="grid w-full grid-cols-2 max-w-[200px]">
-          <TabsTrigger value="kanban">Kanban</TabsTrigger>
-          <TabsTrigger value="list">List</TabsTrigger>
-        </TabsList>
-        <TabsContent value="kanban" />
-        <TabsContent value="list" />
-      </Tabs>
-
-      {/* kanban / list */}
-      <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
-        {view === "kanban" ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {stageMetrics.map((stage) => (
-              <DroppableStageColumn key={stage.key} stage={stage} opportunities={stage.opportunities} />
-            ))}
-            <DragOverlay>
-              {activeId ? (
-                <OpportunityCard opportunity={filteredOpportunities.find((opp) => opp.id === activeId)!} />
-              ) : null}
-            </DragOverlay>
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-2xl font-bold">{kpiOpen}</div>
+                <div className="text-sm text-muted-foreground">CRM Open (snapshot)</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-2xl font-bold">{kpiWon}</div>
+                <div className="text-sm text-muted-foreground">CRM Won (snapshot)</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-2xl font-bold">
+                  {filteredOpportunities.filter((o) => !["closed_won", "closed_lost"].includes(o.stage)).length}
+                </div>
+                <div className="text-sm text-muted-foreground">Open Deals</div>
+              </CardContent>
+            </Card>
           </div>
-        ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>All Opportunities</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {filteredOpportunities.map((opp) => (
-                  <div
-                    key={opp.id}
-                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/25 transition-colors cursor-pointer"
-                    onClick={() => handleOpportunityClick(opp)}
-                  >
-                    <div className="space-y-1">
-                      <h4 className="font-medium">{opp.name}</h4>
-                      <div className="text-sm text-muted-foreground">{opp.advertisers?.name || "No Advertiser"}</div>
-                      <div className="flex gap-2 mt-1">
-                        {opp.campaigns && (
-                          <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">{opp.campaigns.name}</span>
-                        )}
-                        {opp.flights && (
-                          <span className="text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded">{opp.flights.name}</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <div className="font-medium">{opp.amount ? formatCurrency(opp.amount) : "—"}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {opp.close_date ? new Date(opp.close_date).toLocaleDateString("pt-PT") : "No date"}
+
+          <Tabs value={view} onValueChange={(value) => setView(value as "kanban" | "list")} className="mb-6">
+            <TabsList className="grid w-full grid-cols-2 max-w-[200px]">
+              <TabsTrigger value="kanban">Kanban</TabsTrigger>
+              <TabsTrigger value="list">List</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {/* Content */}
+          <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
+            {view === "kanban" ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                {stageMetrics.map((stage) => (
+                  <DroppableStageColumn key={stage.key} stage={stage} opportunities={stage.opportunities} />
+                ))}
+
+                <DragOverlay>
+                  {activeId ? (
+                    <OpportunityCard opportunity={filteredOpportunities.find((opp) => opp.id === activeId)!} />
+                  ) : null}
+                </DragOverlay>
+              </div>
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle>All Opportunities</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {filteredOpportunities.map((opp) => (
+                      <div
+                        key={opp.id}
+                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/25 transition-colors cursor-pointer"
+                        onClick={() => handleOpportunityClick(opp)}
+                      >
+                        <div className="space-y-1">
+                          <h4 className="font-medium">{opp.name}</h4>
+                          <div className="text-sm text-muted-foreground">{opp.advertisers?.name || "No Advertiser"}</div>
+                          <div className="flex gap-2 mt-1">
+                            {opp.campaigns && (
+                              <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                                {opp.campaigns.name}
+                              </span>
+                            )}
+                            {opp.flights && (
+                              <span className="text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded">
+                                {opp.flights.name}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <div className="font-medium">{opp.amount ? formatCurrency(opp.amount) : "—"}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {opp.close_date ? new Date(opp.close_date).toLocaleDateString("pt-PT") : "No date"}
+                            </div>
+                          </div>
+                          <Badge
+                            className={`${
+                              currentStages.find((s) => s.key === opp.stage)?.color || "bg-gray-500"
+                            } text-white`}
+                          >
+                            {currentStages.find((s) => s.key === opp.stage)?.label || opp.stage}
+                          </Badge>
+                          <Badge variant="outline">{opp.probability}%</Badge>
                         </div>
                       </div>
-                      <Badge
-                        className={`${
-                          currentStages.find((s) => s.key === opp.stage)?.color || "bg-gray-500"
-                        } text-white`}
-                      >
-                        {currentStages.find((s) => s.key === opp.stage)?.label || opp.stage}
-                      </Badge>
-                      <Badge variant="outline">{opp.probability}%</Badge>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </DndContext>
+                </CardContent>
+              </Card>
+            )}
+          </DndContext>
+        </>
+      )}
 
-      {/* modal */}
       <OpportunityDetailModal
         opportunity={selectedOpportunity}
         isOpen={isModalOpen}
