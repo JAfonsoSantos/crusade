@@ -32,7 +32,6 @@ type SuggestionRow = {
   date_score: number;
   advertiser_score: number;
   total_score: number;
-  // Se tiveres estes campos na view, serão usados; se não, buscamos em flights
   flight_name?: string | null;
   start_date?: string | null;
   end_date?: string | null;
@@ -71,7 +70,7 @@ function formatDate(d?: string | null) {
   }
 }
 
-export function OpportunityDetailModal({
+export default function OpportunityDetailModal({
   opportunity,
   isOpen,
   onClose,
@@ -80,10 +79,9 @@ export function OpportunityDetailModal({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // === Base tab: simple edit of basic fields (example only) ===
+  // Basic edit example
   const [localName, setLocalName] = React.useState(opportunity?.name ?? "");
   const [localNext, setLocalNext] = React.useState(opportunity?.next_steps ?? "");
-
   React.useEffect(() => {
     setLocalName(opportunity?.name ?? "");
     setLocalNext(opportunity?.next_steps ?? "");
@@ -112,17 +110,17 @@ export function OpportunityDetailModal({
     },
   });
 
-  // === SUGGESTED FLIGHTS ===
   const oppId = opportunity?.id;
 
-  // 1) Buscar sugestões ordenadas por score
-  const { data: suggestions = [], isLoading: sugLoading } = useQuery({
+  // --- SUGGESTIONS (type-forced to avoid Supabase generics explosion)
+  const { data: suggestions = [], isLoading: sugLoading } = useQuery<SuggestionRow[]>({
     queryKey: ["opp-suggestions", oppId],
     enabled: !!oppId && isOpen,
     queryFn: async () => {
-      if (!oppId) return [];
+      if (!oppId) return [] as SuggestionRow[];
+      // Important: <any> to bypass generated-type overloads for a VIEW
       const { data, error } = await supabase
-        .from("v_opportunity_flight_suggestions")
+        .from<any>("v_opportunity_flight_suggestions")
         .select("*")
         .eq("opportunity_id", oppId)
         .order("total_score", { ascending: false })
@@ -132,7 +130,7 @@ export function OpportunityDetailModal({
     },
   });
 
-  // 2) Buscar detalhes dos flights (se a view não tiver flight_name/dates)
+  // flight details (explicit generic)
   const flightIds = React.useMemo(
     () =>
       Array.from(new Set((suggestions ?? []).map((s) => s.flight_id))).filter(
@@ -141,12 +139,12 @@ export function OpportunityDetailModal({
     [suggestions]
   );
 
-  const { data: flights = [], isLoading: flightsLoading } = useQuery({
+  const { data: flights = [], isLoading: flightsLoading } = useQuery<FlightMini[]>({
     queryKey: ["suggestion-flights", flightIds.join(",")],
     enabled: isOpen && flightIds.length > 0,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("flights")
+        .from<FlightMini>("flights")
         .select("id, name, start_date, end_date, campaign_id")
         .in("id", flightIds);
       if (error) throw error;
@@ -160,14 +158,11 @@ export function OpportunityDetailModal({
     return m;
   }, [flights]);
 
-  // 3) Mutação para linkar Flight (e opcionalmente Campaign)
   const linkFlight = useMutation({
     mutationFn: async (flightId: string) => {
       if (!opportunity) return;
       const f = flightsById.get(flightId);
-      const patch: Partial<Opportunity> = {
-        flight_id: flightId,
-      };
+      const patch: Partial<Opportunity> = { flight_id: flightId };
       if (f?.campaign_id) patch.campaign_id = f.campaign_id;
 
       const { error } = await supabase
@@ -190,7 +185,6 @@ export function OpportunityDetailModal({
     },
   });
 
-  // Render helpers
   function renderSuggestionRow(s: SuggestionRow) {
     const f = flightsById.get(s.flight_id);
     const showName = s.flight_name ?? f?.name ?? s.flight_id;
@@ -261,7 +255,6 @@ export function OpportunityDetailModal({
               <TabsTrigger value="links">Links</TabsTrigger>
             </TabsList>
 
-            {/* DETAILS */}
             <TabsContent value="details" className="mt-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Card>
@@ -331,7 +324,6 @@ export function OpportunityDetailModal({
               </div>
             </TabsContent>
 
-            {/* SUGGESTED FLIGHTS */}
             <TabsContent value="suggested-flights" className="mt-4">
               {sugLoading || flightsLoading ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -352,7 +344,6 @@ export function OpportunityDetailModal({
               )}
             </TabsContent>
 
-            {/* LINKS (read-only quick view) */}
             <TabsContent value="links" className="mt-4">
               <Card>
                 <CardContent className="p-4 space-y-2 text-sm">
@@ -377,5 +368,3 @@ export function OpportunityDetailModal({
     </Dialog>
   );
 }
-
-export default OpportunityDetailModal;
