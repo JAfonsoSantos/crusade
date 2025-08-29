@@ -181,7 +181,7 @@ export default function Pipeline() {
           pipelines   ( name, stages )
         `
         )
-        .eq("pipeline_id", selectedPipelineId)
+        .or(`pipeline_id.eq.${selectedPipelineId},pipeline_id.is.null`)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data as Opportunity[];
