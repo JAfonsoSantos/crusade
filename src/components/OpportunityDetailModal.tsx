@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { Plus } from "lucide-react";
 
 type Opportunity = {
   id: string;
@@ -55,10 +56,10 @@ export function OpportunityDetailModal({
   onUpdate,
 }: Props) {
   const { toast } = useToast();
-
+  const qc = useQueryClient();
   const oppId = opportunity?.id;
 
-  // -------- Queries de apoio (listas) --------
+  // ------------ Lists ------------
   const { data: advertisers = [] } = useQuery({
     queryKey: ["modal-advertisers"],
     queryFn: async () => {
@@ -72,12 +73,9 @@ export function OpportunityDetailModal({
     enabled: isOpen,
   });
 
-  const advertiserId = React.useMemo(
-    () => opportunity?.advertiser_id ?? null,
-    [opportunity?.advertiser_id]
+  const [advId, setAdvId] = React.useState<string | null>(
+    opportunity?.advertiser_id ?? null
   );
-
-  const [advId, setAdvId] = React.useState<string | null>(advertiserId);
   const [brandId, setBrandId] = React.useState<string | null>(null);
   const [campaignId, setCampaignId] = React.useState<string | null>(
     opportunity?.campaign_id ?? null
@@ -87,7 +85,6 @@ export function OpportunityDetailModal({
   );
   const [stage, setStage] = React.useState<string>(opportunity?.stage ?? "");
 
-  // Sempre que a opportunity muda (abriste outra), repõe os valores
   React.useEffect(() => {
     setAdvId(opportunity?.advertiser_id ?? null);
     setCampaignId(opportunity?.campaign_id ?? null);
@@ -130,8 +127,10 @@ export function OpportunityDetailModal({
     queryKey: ["modal-campaigns", advId, brandId],
     queryFn: async () => {
       if (!advId) return [];
-      // Preferir filtrar por brand se disponível; caso contrário por advertiser
-      const query = supabase.from("campaigns").select("id, name, advertiser_id, brand_id").order("name");
+      const query = supabase
+        .from("campaigns")
+        .select("id, name, advertiser_id, brand_id")
+        .order("name");
       if (brandId) query.eq("brand_id", brandId);
       else query.eq("advertiser_id", advId);
       const { data, error } = await query;
@@ -147,7 +146,7 @@ export function OpportunityDetailModal({
       if (!campaignId) return [];
       const { data, error } = await supabase
         .from("flights")
-        .select("id, name, campaign_id")
+        .select("id, name, campaign_id, start_date, end_date")
         .eq("campaign_id", campaignId)
         .order("start_date", { ascending: false });
       if (error) throw error;
@@ -156,26 +155,23 @@ export function OpportunityDetailModal({
     enabled: isOpen && !!campaignId,
   });
 
-  // Limpar dependentes quando se muda acima na hierarquia
+  // limpar descendentes
   React.useEffect(() => {
-    // mudou advertiser → limpar brand/campaign/flight
     setBrandId(null);
     setCampaignId(null);
     setFlightId(null);
   }, [advId]);
 
   React.useEffect(() => {
-    // mudou brand → limpar campaign/flight
     setCampaignId(null);
     setFlightId(null);
   }, [brandId]);
 
   React.useEffect(() => {
-    // mudou campaign → limpar flight
     setFlightId(null);
   }, [campaignId]);
 
-  // --------- Guardar ---------
+  // ------------ UPDATE opportunity ------------
   const updateMutation = useMutation({
     mutationFn: async () => {
       if (!oppId) return;
@@ -184,12 +180,9 @@ export function OpportunityDetailModal({
         campaign_id: campaignId,
         flight_id: flightId,
       };
-      // Se tiveres brand_id na tabela opportunities, comenta/descomenta:
+      // se tiveres brand_id na tabela, manter
       if (brandId) payload["brand_id"] = brandId;
-
-      if (stage && stage !== opportunity?.stage) {
-        payload.stage = stage;
-      }
+      if (stage && stage !== opportunity?.stage) payload.stage = stage;
 
       const { error } = await supabase
         .from("opportunities")
@@ -198,11 +191,14 @@ export function OpportunityDetailModal({
 
       if (error) throw error;
     },
-    onSuccess: () => {
-      toast({
-        title: "Saved",
-        description: "Opportunity updated successfully.",
-      });
+    onSuccess: async () => {
+      // refresca queries relevantes
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["opportunities"] }),
+        qc.invalidateQueries({ queryKey: ["modal-campaigns"] }),
+        qc.invalidateQueries({ queryKey: ["modal-flights"] }),
+      ]);
+      toast({ title: "Saved", description: "Opportunity updated." });
       onUpdate?.();
       onClose();
     },
@@ -210,6 +206,85 @@ export function OpportunityDetailModal({
       toast({
         title: "Error",
         description: err?.message ?? "Failed to update opportunity.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // ------------ QUICK CREATE: Campaign ------------
+  const [creatingCamp, setCreatingCamp] = React.useState(false);
+  const [campName, setCampName] = React.useState("");
+
+  const createCampaign = useMutation({
+    mutationFn: async () => {
+      if (!advId) throw new Error("Choose an advertiser first.");
+      if (!campName.trim()) throw new Error("Campaign name is required.");
+      const insert: any = { name: campName.trim(), advertiser_id: advId };
+      if (brandId) insert.brand_id = brandId;
+      const { data, error } = await supabase
+        .from("campaigns")
+        .insert(insert)
+        .select("id, name")
+        .single();
+      if (error) throw error;
+      return data as { id: string; name: string };
+    },
+    onSuccess: async (data) => {
+      setCreatingCamp(false);
+      setCampName("");
+      setCampaignId(data.id);
+      await qc.invalidateQueries({ queryKey: ["modal-campaigns"] });
+      toast({ title: "Campaign created" });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Error creating campaign",
+        description: err?.message ?? "Unknown error",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // ------------ QUICK CREATE: Flight ------------
+  const [creatingFlight, setCreatingFlight] = React.useState(false);
+  const [flightName, setFlightName] = React.useState("");
+  const [flightStart, setFlightStart] = React.useState<string>("");
+  const [flightEnd, setFlightEnd] = React.useState<string>("");
+
+  const createFlight = useMutation({
+    mutationFn: async () => {
+      if (!campaignId) throw new Error("Choose a campaign first.");
+      if (!flightName.trim()) throw new Error("Flight name is required.");
+      if (!flightStart || !flightEnd)
+        throw new Error("Start and end dates are required.");
+
+      const insert = {
+        name: flightName.trim(),
+        campaign_id: campaignId,
+        start_date: flightStart,
+        end_date: flightEnd,
+      };
+      const { data, error } = await supabase
+        .from("flights")
+        .insert(insert)
+        .select("id, name")
+        .single();
+      if (error) throw error;
+      return data as { id: string; name: string };
+    },
+    onSuccess: async (data) => {
+      setCreatingFlight(false);
+      setFlightName("");
+      setFlightStart("");
+      setFlightEnd("");
+      setFlightId(data.id);
+      await qc.invalidateQueries({ queryKey: ["modal-flights"] });
+      toast({ title: "Flight created" });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Error creating flight",
+        description: err?.message ?? "Unknown error",
         variant: "destructive",
       });
     },
@@ -327,14 +402,11 @@ export function OpportunityDetailModal({
 
             {/* EDIT / LINK */}
             <TabsContent value="edit" className="pt-4 space-y-4">
-              {/* Stage (opcional) */}
+              {/* Stage */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="mb-1 block">Stage</Label>
-                  <Select
-                    value={stage}
-                    onValueChange={(v) => setStage(v)}
-                  >
+                  <Select value={stage} onValueChange={(v) => setStage(v)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select stage" />
                     </SelectTrigger>
@@ -349,6 +421,7 @@ export function OpportunityDetailModal({
                 </div>
               </div>
 
+              {/* Advertiser / Brand */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="mb-1 block">Advertiser</Label>
@@ -370,7 +443,9 @@ export function OpportunityDetailModal({
                 </div>
 
                 <div>
-                  <Label className="mb-1 block">Brand (optional)</Label>
+                  <div className="flex items-center justify-between">
+                    <Label className="mb-1 block">Brand (optional)</Label>
+                  </div>
                   <Select
                     value={brandId ?? undefined}
                     onValueChange={(v) => setBrandId(v)}
@@ -390,9 +465,22 @@ export function OpportunityDetailModal({
                 </div>
               </div>
 
+              {/* Campaign + Quick Create */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="mb-1 block">Campaign</Label>
+                  <div className="flex items-center justify-between">
+                    <Label className="mb-1 block">Campaign</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={!advId}
+                      onClick={() => setCreatingCamp((v) => !v)}
+                      className="gap-1"
+                    >
+                      <Plus className="h-4 w-4" />
+                      New
+                    </Button>
+                  </div>
                   <Select
                     value={campaignId ?? undefined}
                     onValueChange={(v) => setCampaignId(v)}
@@ -409,10 +497,45 @@ export function OpportunityDetailModal({
                       ))}
                     </SelectContent>
                   </Select>
+
+                  {creatingCamp && (
+                    <div className="mt-3 rounded-lg border p-3 space-y-2">
+                      <Label className="text-sm">New campaign name</Label>
+                      <Input
+                        placeholder="e.g. Q4 Always On"
+                        value={campName}
+                        onChange={(e) => setCampName(e.target.value)}
+                      />
+                      <div className="flex justify-end gap-2">
+                        <Button variant="ghost" onClick={() => setCreatingCamp(false)}>
+                          Cancel
+                        </Button>
+                        <Button
+                          onClick={() => createCampaign.mutate()}
+                          disabled={!advId || !campName.trim()}
+                        >
+                          Create
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
+                {/* Flight + Quick Create */}
                 <div>
-                  <Label className="mb-1 block">Flight</Label>
+                  <div className="flex items-center justify-between">
+                    <Label className="mb-1 block">Flight</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={!campaignId}
+                      onClick={() => setCreatingFlight((v) => !v)}
+                      className="gap-1"
+                    >
+                      <Plus className="h-4 w-4" />
+                      New
+                    </Button>
+                  </div>
                   <Select
                     value={flightId ?? undefined}
                     onValueChange={(v) => setFlightId(v)}
@@ -429,6 +552,52 @@ export function OpportunityDetailModal({
                       ))}
                     </SelectContent>
                   </Select>
+
+                  {creatingFlight && (
+                    <div className="mt-3 rounded-lg border p-3 space-y-2">
+                      <Label className="text-sm">New flight</Label>
+                      <Input
+                        placeholder="Flight name"
+                        value={flightName}
+                        onChange={(e) => setFlightName(e.target.value)}
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-xs text-muted-foreground">
+                            Start date
+                          </Label>
+                          <Input
+                            type="date"
+                            value={flightStart}
+                            onChange={(e) => setFlightStart(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">
+                            End date
+                          </Label>
+                          <Input
+                            type="date"
+                            value={flightEnd}
+                            onChange={(e) => setFlightEnd(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="ghost" onClick={() => setCreatingFlight(false)}>
+                          Cancel
+                        </Button>
+                        <Button
+                          onClick={() => createFlight.mutate()}
+                          disabled={
+                            !campaignId || !flightName.trim() || !flightStart || !flightEnd
+                          }
+                        >
+                          Create
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -436,10 +605,7 @@ export function OpportunityDetailModal({
                 <Button variant="ghost" onClick={onClose}>
                   Cancel
                 </Button>
-                <Button
-                  onClick={() => updateMutation.mutate()}
-                  disabled={!oppId}
-                >
+                <Button onClick={() => updateMutation.mutate()} disabled={!oppId}>
                   Save
                 </Button>
               </div>
