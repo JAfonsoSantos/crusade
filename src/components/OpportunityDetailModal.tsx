@@ -1,5 +1,8 @@
 // src/components/OpportunityDetailModal.tsx
 import * as React from "react";
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+
 import {
   Dialog,
   DialogContent,
@@ -7,73 +10,67 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useToast } from "@/hooks/use-toast";
+import { Search } from "lucide-react";
 
-type Opportunity = {
+// --- Tipos mínimos usados no modal ---
+export type OpportunityLite = {
   id: string;
   name: string;
-  amount: number | null;
+  stage?: string | null;
+  amount?: number | null;
   currency?: string | null;
-  stage: string;
-  probability: number;
-  close_date: string | null; // DATE (YYYY-MM-DD) na tua base
-  advertiser_id: string | null;
-  campaign_id: string | null;
-  flight_id: string | null;
-  pipeline_id: string | null;
-  description?: string | null;
-  next_steps?: string | null;
-  created_at: string;
+  probability?: number | null;
+  close_date?: string | null; // DATE na BD
+  advertiser_id?: string | null;
+  campaign_id?: string | null;
+  flight_id?: string | null;
 };
 
 type SuggestionRow = {
   opportunity_id: string;
   flight_id: string;
-  flight_name: string | null;
+  flight_name: string;
   campaign_id: string | null;
   campaign_name: string | null;
-  start_date: string | null; // YYYY-MM-DD
-  end_date: string | null;   // YYYY-MM-DD
   name_score: number;
   date_score: number;
-  area_score: number;
+  adserver_score: number;
   total_score: number;
+  start_date: string | null;
+  end_date: string | null;
+};
+
+type FlightPick = {
+  id: string;
+  name: string;
+  start_date: string | null;
+  end_date: string | null;
+  campaign_id: string | null;
 };
 
 type Props = {
-  opportunity: Opportunity | null;
+  opportunity: OpportunityLite | null;
   isOpen: boolean;
   onClose: () => void;
-  onUpdate?: () => void; // callback para refrescar a lista depois de alguma ação
+  onUpdate?: () => Promise<void> | void;
 };
 
-function fmtDate(d?: string | null) {
-  if (!d) return "—";
+function formatCurrency(value?: number | null, currency = "EUR") {
+  if (value == null) return "—";
   try {
-    // d é YYYY-MM-DD; criar como UTC para não shiftar
-    const parts = d.split("-");
-    const dt = new Date(
-      Number(parts[0]),
-      Number(parts[1]) - 1,
-      Number(parts[2])
-    );
-    return dt.toLocaleDateString("pt-PT");
+    return new Intl.NumberFormat("pt-PT", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 0,
+    }).format(value);
   } catch {
-    return d;
-  }
-}
-
-function fmtMoney(n?: number | null, currency = "EUR") {
-  if (n == null) return "—";
-  try {
-    return new Intl.NumberFormat("pt-PT", { style: "currency", currency }).format(
-      n
-    );
-  } catch {
-    return String(n);
+    return String(value);
   }
 }
 
@@ -83,160 +80,317 @@ export default function OpportunityDetailModal({
   onClose,
   onUpdate,
 }: Props) {
-  const [loading, setLoading] = React.useState(false);
-  const [suggestions, setSuggestions] = React.useState<SuggestionRow[]>([]);
-  const oppId = opportunity?.id ?? null;
+  const { toast } = useToast();
 
-  React.useEffect(() => {
-    let aborted = false;
-    async function load() {
-      if (!oppId) {
-        setSuggestions([]);
-        return;
-      }
-      setLoading(true);
-      try {
-        // ⚠️ view fora do tipo gerado → forçar o nome:
-        const { data, error } = await supabase
-          .from("v_opportunity_flight_suggestions" as any)
-          .select("*")
-          .eq("opportunity_id", oppId)
-          .order("total_score", { ascending: false })
-          .limit(20);
+  // Sugestões
+  const [suggestions, setSuggestions] = useState<SuggestionRow[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
-        if (error) throw error;
-        if (!aborted) {
-          setSuggestions((data ?? []) as unknown as SuggestionRow[]);
-        }
-      } catch (e) {
-        console.error("load suggestions error:", e);
-        if (!aborted) setSuggestions([]);
-      } finally {
-        if (!aborted) setLoading(false);
+  // Pesquisa manual
+  const [flightQuery, setFlightQuery] = useState("");
+  const [flightResults, setFlightResults] = useState<FlightPick[]>([]);
+  const [searchingFlights, setSearchingFlights] = useState(false);
+
+  // Ligação
+  const [linking, setLinking] = useState(false);
+  const [unlinking, setUnlinking] = useState(false);
+
+  // Recarregar dados quando abrir
+  useEffect(() => {
+    if (!isOpen || !opportunity?.id) return;
+
+    // carregar sugestões
+    (async () => {
+      setLoadingSuggestions(true);
+      const { data, error } = await supabase
+        .from("v_opportunity_flight_suggestions")
+        .select("*")
+        .eq("opportunity_id", opportunity.id)
+        .order("total_score", { ascending: false })
+        .limit(10);
+
+      if (error) {
+        toast({
+          title: "Erro ao carregar sugestões",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        setSuggestions((data || []) as SuggestionRow[]);
       }
+      setLoadingSuggestions(false);
+    })();
+
+    // limpar pesquisa
+    setFlightQuery("");
+    setFlightResults([]);
+  }, [isOpen, opportunity?.id]);
+
+  // Pesquisa manual de flights
+  async function searchFlights(q: string) {
+    setFlightQuery(q);
+    if (!q || q.trim().length < 2) {
+      setFlightResults([]);
+      return;
     }
-    load();
-    return () => {
-      aborted = true;
-    };
-  }, [oppId]);
+    setSearchingFlights(true);
+
+    const { data, error } = await supabase
+      .from("flights")
+      .select("id,name,start_date,end_date,campaign_id")
+      .ilike("name", `%${q}%`)
+      .order("start_date", { ascending: false })
+      .limit(20);
+
+    if (error) {
+      toast({
+        title: "Erro na pesquisa",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      setFlightResults((data || []) as FlightPick[]);
+    }
+    setSearchingFlights(false);
+  }
+
+  // Ligar oportunidade ⇄ flight
+  async function linkFlight(flightId: string) {
+    if (!opportunity?.id) return;
+    setLinking(true);
+    const { error } = await supabase.rpc("upsert_opportunity_flight_link", {
+      p_opportunity_id: opportunity.id,
+      p_flight_id: flightId,
+    });
+    setLinking(false);
+
+    if (error) {
+      toast({
+        title: "Erro ao ligar",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "Ligação criada",
+      description: "Flight associado à oportunidade.",
+    });
+
+    await onUpdate?.();
+  }
+
+  // Desligar
+  async function unlinkFlight() {
+    if (!opportunity?.id) return;
+    setUnlinking(true);
+    const { error } = await supabase.rpc("unlink_opportunity_flight", {
+      p_opportunity_id: opportunity.id,
+    });
+    setUnlinking(false);
+
+    if (error) {
+      toast({
+        title: "Erro ao remover ligação",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({ title: "Ligação removida" });
+    await onUpdate?.();
+  }
+
+  const headerBadges = useMemo(() => {
+    if (!opportunity) return null;
+    return (
+      <div className="flex flex-wrap gap-2">
+        {opportunity.stage && <Badge variant="outline">{opportunity.stage}</Badge>}
+        {typeof opportunity.probability === "number" && (
+          <Badge variant="outline">{opportunity.probability}%</Badge>
+        )}
+        {opportunity.close_date && (
+          <Badge variant="secondary">
+            Fecha: {new Date(opportunity.close_date).toLocaleDateString("pt-PT")}
+          </Badge>
+        )}
+      </div>
+    );
+  }, [opportunity]);
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => (!open ? onClose() : null)}>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
-          <DialogTitle>Opportunity</DialogTitle>
-          <DialogDescription>
-            {opportunity ? opportunity.name : "—"}
+    <Dialog open={isOpen} onOpenChange={(v) => (!v ? onClose() : undefined)}>
+      <DialogContent className="max-w-3xl p-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-6">
+          <DialogTitle>
+            {opportunity?.name ?? "Opportunity"}
+          </DialogTitle>
+          <DialogDescription asChild>
+            <div className="flex items-center justify-between text-sm">
+              <div className="text-muted-foreground">
+                Valor: {formatCurrency(opportunity?.amount)}
+              </div>
+              {headerBadges}
+            </div>
           </DialogDescription>
         </DialogHeader>
 
-        {!opportunity ? (
-          <div className="text-sm text-muted-foreground">No data</div>
-        ) : (
-          <div className="space-y-6">
-            {/* Overview */}
-            <Card>
-              <CardContent className="p-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+        <ScrollArea className="max-h-[70vh] px-6 pb-6">
+          {/* Ligação atual */}
+          <Card className="mb-4">
+            <CardHeader>
+              <CardTitle>Ligação atual</CardTitle>
+            </CardHeader>
+            <CardContent className="flex items-center justify-between">
+              <div className="text-sm text-muted-foreground space-y-1">
                 <div>
-                  <div className="text-xs text-muted-foreground">Amount</div>
-                  <div className="font-medium">
-                    {fmtMoney(opportunity.amount, opportunity.currency || "EUR")}
-                  </div>
+                  Campaign:{" "}
+                  {opportunity?.campaign_id ? (
+                    <Badge variant="outline">{opportunity.campaign_id}</Badge>
+                  ) : (
+                    "—"
+                  )}
                 </div>
                 <div>
-                  <div className="text-xs text-muted-foreground">Probability</div>
-                  <div className="font-medium">{opportunity.probability ?? 0}%</div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground">Close Date</div>
-                  <div className="font-medium">
-                    {fmtDate(opportunity.close_date)}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground">Stage</div>
-                  <Badge variant="outline">{opportunity.stage}</Badge>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Suggestions */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold">Suggested Flights</h3>
-                <div className="text-xs text-muted-foreground">
-                  {loading ? "Loading…" : `${suggestions.length} suggestions`}
+                  Flight:{" "}
+                  {opportunity?.flight_id ? (
+                    <Badge variant="outline">{opportunity.flight_id}</Badge>
+                  ) : (
+                    "—"
+                  )}
                 </div>
               </div>
-
-              <div className="border rounded-lg overflow-hidden">
-                <div className="grid grid-cols-12 gap-0 bg-muted/40 px-3 py-2 text-xs font-medium">
-                  <div className="col-span-3">Flight</div>
-                  <div className="col-span-3">Campaign</div>
-                  <div className="col-span-2">Dates</div>
-                  <div className="col-span-1 text-right">Name</div>
-                  <div className="col-span-1 text-right">Date</div>
-                  <div className="col-span-1 text-right">Area</div>
-                  <div className="col-span-1 text-right">Total</div>
-                </div>
-
-                {(!suggestions || suggestions.length === 0) && !loading ? (
-                  <div className="px-4 py-6 text-sm text-muted-foreground">
-                    No suggestions for this opportunity.
-                  </div>
-                ) : (
-                  <div className="max-h-[340px] overflow-auto divide-y">
-                    {suggestions.map((s) => (
-                      <div
-                        key={`${s.opportunity_id}-${s.flight_id}`}
-                        className="grid grid-cols-12 gap-0 px-3 py-2 text-sm"
-                      >
-                        <div className="col-span-3 truncate">
-                          {s.flight_name ?? "—"}
-                        </div>
-                        <div className="col-span-3 truncate">
-                          {s.campaign_name ?? "—"}
-                        </div>
-                        <div className="col-span-2">
-                          <div className="truncate">
-                            {fmtDate(s.start_date)} — {fmtDate(s.end_date)}
-                          </div>
-                        </div>
-                        <div className="col-span-1 text-right tabular-nums">
-                          {Math.round(s.name_score)}
-                        </div>
-                        <div className="col-span-1 text-right tabular-nums">
-                          {Math.round(s.date_score)}
-                        </div>
-                        <div className="col-span-1 text-right tabular-nums">
-                          {Math.round(s.area_score)}
-                        </div>
-                        <div className="col-span-1 text-right font-medium tabular-nums">
-                          {Math.round(s.total_score)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2">
-              {onUpdate && (
+              <div className="flex gap-2">
                 <Button
                   variant="secondary"
-                  onClick={() => {
-                    onUpdate();
-                  }}
+                  onClick={unlinkFlight}
+                  disabled={!opportunity?.flight_id || unlinking}
                 >
-                  Refresh
+                  {unlinking ? "A remover…" : "Remover ligação"}
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Sugestões */}
+          <Card className="mb-4">
+            <CardHeader>
+              <CardTitle>Sugestões de Flights</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {loadingSuggestions && (
+                <div className="text-sm text-muted-foreground">
+                  A carregar…
+                </div>
               )}
-              <Button onClick={onClose}>Close</Button>
-            </div>
-          </div>
-        )}
+
+              {!loadingSuggestions && suggestions.length === 0 && (
+                <div className="text-sm text-muted-foreground">
+                  Sem sugestões para já.
+                </div>
+              )}
+
+              {suggestions.map((s) => (
+                <div
+                  key={`${s.opportunity_id}-${s.flight_id}`}
+                  className="flex items-center justify-between border rounded-md p-3"
+                >
+                  <div className="space-y-1">
+                    <div className="font-medium">{s.flight_name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {s.campaign_name ? `Campanha: ${s.campaign_name} • ` : ""}
+                      Score: {Math.round(s.total_score)}
+                      {s.start_date
+                        ? ` • ${new Date(s.start_date).toLocaleDateString(
+                            "pt-PT"
+                          )} - ${
+                            s.end_date
+                              ? new Date(s.end_date).toLocaleDateString("pt-PT")
+                              : "—"
+                          }`
+                        : ""}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => linkFlight(s.flight_id)}
+                    disabled={linking}
+                  >
+                    {linking ? "A ligar…" : "Link"}
+                  </Button>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          {/* Pesquisa manual */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Pesquisar Flights</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  className="pl-9"
+                  placeholder="Nome do flight…"
+                  value={flightQuery}
+                  onChange={(e) => searchFlights(e.target.value)}
+                />
+              </div>
+
+              {searchingFlights && (
+                <div className="text-sm text-muted-foreground">A pesquisar…</div>
+              )}
+
+              {!searchingFlights &&
+                flightResults.map((f) => (
+                  <div
+                    key={f.id}
+                    className="flex items-center justify-between border rounded-md p-3"
+                  >
+                    <div className="space-y-1">
+                      <div className="font-medium">{f.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {f.start_date
+                          ? `${new Date(f.start_date).toLocaleDateString(
+                              "pt-PT"
+                            )} - ${
+                              f.end_date
+                                ? new Date(f.end_date).toLocaleDateString(
+                                    "pt-PT"
+                                  )
+                                : "—"
+                            }`
+                          : "Sem datas"}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => linkFlight(f.id)}
+                      disabled={linking}
+                    >
+                      {linking ? "A ligar…" : "Link"}
+                    </Button>
+                  </div>
+                ))}
+
+              {!searchingFlights && flightQuery && flightResults.length === 0 && (
+                <div className="text-sm text-muted-foreground">
+                  Sem resultados.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </ScrollArea>
+
+        <div className="px-6 pb-6 flex justify-end">
+          <Button variant="secondary" onClick={onClose}>
+            Fechar
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
