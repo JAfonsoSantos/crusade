@@ -1,18 +1,29 @@
 
 import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+
+// shadcn/ui
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
-
-type PipelineStage = { key: string; label: string; color?: string };
 
 type Opportunity = {
   id: string;
@@ -21,18 +32,15 @@ type Opportunity = {
   currency: string | null;
   stage: string;
   probability: number;
-  close_date: string | null; // DATE in DB
+  close_date: string | null; // YYYY-MM-DD
   advertiser_id: string | null;
-  description: string | null;
-  next_steps: string | null;
   campaign_id: string | null;
   flight_id: string | null;
   pipeline_id: string | null;
-  // expanded (optional)
-  advertisers?: { name: string } | null;
-  campaigns?: { id: string; name: string } | null;
-  flights?: { id: string; name: string } | null;
+  description: string | null;
 };
+
+type Option = { id: string; name: string };
 
 type Props = {
   opportunity: Opportunity | null;
@@ -41,9 +49,8 @@ type Props = {
   onUpdate: () => void;
 };
 
-type Option = { id: string; name: string };
-
-const fallbackStages: PipelineStage[] = [
+// Stages used on the Pipeline page
+const STAGE_OPTIONS: { key: string; label: string }[] = [
   { key: "needs_analysis", label: "Needs Analysis" },
   { key: "value_proposition", label: "Value Proposition" },
   { key: "proposal", label: "Proposal/Quote" },
@@ -52,125 +59,81 @@ const fallbackStages: PipelineStage[] = [
   { key: "closed_lost", label: "Closed Lost" },
 ];
 
-export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate }: Props) {
+export function OpportunityDetailModal({
+  opportunity,
+  isOpen,
+  onClose,
+  onUpdate,
+}: Props) {
   const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
 
-  // Form state
-  const [name, setName] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+
+  // Local editable state (seeded from props.opportunity)
+  const [name, setName] = useState("");
   const [amount, setAmount] = useState<string>("");
   const [probability, setProbability] = useState<string>("");
+  const [stage, setStage] = useState<string>("");
   const [closeDate, setCloseDate] = useState<string>("");
-  const [stage, setStage] = useState<string>("needs_analysis");
   const [description, setDescription] = useState<string>("");
-  const [nextSteps, setNextSteps] = useState<string>("");
-  const [advertiserId, setAdvertiserId] = useState<string | "">("");
-  const [campaignId, setCampaignId] = useState<string | "">("");
-  const [flightId, setFlightId] = useState<string | "">("");
 
-  // Lookup data
-  const [stages, setStages] = useState<PipelineStage[]>(fallbackStages);
+  const [advertiserId, setAdvertiserId] = useState<string | null>(null);
+  const [campaignId, setCampaignId] = useState<string | null>(null);
+  const [flightId, setFlightId] = useState<string | null>(null);
+
+  // Select options
   const [advertisers, setAdvertisers] = useState<Option[]>([]);
   const [campaigns, setCampaigns] = useState<Option[]>([]);
   const [flights, setFlights] = useState<Option[]>([]);
 
-  // Hydrate when open/opportunity changes
+  // Seed state whenever a new opportunity is opened
   useEffect(() => {
-    if (!isOpen || !opportunity) return;
-    // Set base fields
+    if (!opportunity) return;
     setName(opportunity.name || "");
     setAmount(opportunity.amount != null ? String(opportunity.amount) : "");
-    setProbability(opportunity.probability != null ? String(opportunity.probability) : "0");
+    setProbability(
+      opportunity.probability != null ? String(opportunity.probability) : ""
+    );
+    setStage(opportunity.stage || "");
     setCloseDate(opportunity.close_date || "");
-    setStage(opportunity.stage || "needs_analysis");
     setDescription(opportunity.description || "");
-    setNextSteps(opportunity.next_steps || "");
-    setAdvertiserId(opportunity.advertiser_id || "");
-    setCampaignId(opportunity.campaign_id || "");
-    setFlightId(opportunity.flight_id || "");
 
-    // Load auxiliary options (stages, advertisers, campaigns, flights)
+    setAdvertiserId(opportunity.advertiser_id);
+    setCampaignId(opportunity.campaign_id);
+    setFlightId(opportunity.flight_id);
+  }, [opportunity]);
+
+  // Load options when opened
+  useEffect(() => {
+    if (!isOpen) return;
     (async () => {
-      setLoading(true);
-      try {
-        // Stages: load from pipeline if available
-        if (opportunity.pipeline_id) {
-          const { data: pipe, error: pipeErr } = await supabase
-            .from("pipelines")
-            .select("stages")
-            .eq("id", opportunity.pipeline_id)
-            .maybeSingle();
-          if (!pipeErr && pipe?.stages && Array.isArray(pipe.stages) && pipe.stages.length > 0) {
-            // Normalize to PipelineStage[]
-            const norm: PipelineStage[] = pipe.stages.map((s: any) => ({
-              key: s.key ?? s.id ?? s.value ?? s,
-              label: s.label ?? s.name ?? String(s.key ?? s),
-              color: s.color,
-            }));
-            setStages(norm);
-          } else {
-            setStages(fallbackStages);
-          }
-        } else {
-          setStages(fallbackStages);
-        }
+      const [advRes, campRes, flightRes] = await Promise.all([
+        supabase.from("advertisers").select("id,name").order("name", { ascending: true }),
+        supabase.from("campaigns").select("id,name").order("name", { ascending: true }),
+        supabase.from("flights").select("id,name").order("name", { ascending: true }),
+      ]);
 
-        // Advertisers (basic id+name)
-        const { data: adv, error: advErr } = await supabase
-          .from("advertisers")
-          .select("id,name")
-          .order("name", { ascending: true });
-        if (!advErr && adv) setAdvertisers(adv as Option[]);
-
-        // Campaigns
-        const { data: camp, error: campErr } = await supabase
-          .from("campaigns")
-          .select("id,name")
-          .order("created_at", { ascending: false })
-          .limit(200);
-        if (!campErr && camp) setCampaigns(camp as Option[]);
-
-        // Flights
-        const { data: flt, error: fltErr } = await supabase
-          .from("flights")
-          .select("id,name")
-          .order("created_at", { ascending: false })
-          .limit(200);
-        if (!fltErr && flt) setFlights(flt as Option[]);
-      } catch (e: any) {
-        console.error("Load modal options failed:", e);
-        toast({
-          title: "Erro a carregar dados",
-          description: e?.message || "Tenta de novo.",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
+      setAdvertisers((advRes.data || []).filter((r) => !!r.id && !!r.name));
+      setCampaigns((campRes.data || []).filter((r) => !!r.id && !!r.name));
+      setFlights((flightRes.data || []).filter((r) => !!r.id && !!r.name));
     })();
-  }, [isOpen, opportunity]);
+  }, [isOpen]);
 
-  const currentStageLabel = useMemo(() => {
-    const s = stages.find((x) => x.key === stage);
-    return s?.label ?? stage;
-  }, [stage, stages]);
-
-  async function handleSave() {
+  const handleSave = async () => {
     if (!opportunity) return;
-    setSaving(true);
     try {
-      const payload: any = {
-        name: name?.trim() || null,
-        amount: amount ? Number(amount) : null,
-        probability: probability ? Number(probability) : 0,
-        close_date: closeDate || null, // expect YYYY-MM-DD
-        stage,
-        description: description?.trim() || null,
-        next_steps: nextSteps?.trim() || null,
-        advertiser_id: advertiserId || null,
-        campaign_id: campaignId || null,
-        flight_id: flightId || null,
+      setLoading(true);
+
+      const payload = {
+        name,
+        stage: stage || null,
+        amount: amount === "" ? null : Number(amount),
+        probability: probability === "" ? null : Number(probability),
+        close_date: closeDate || null,
+        description: description || null,
+        advertiser_id: advertiserId,
+        campaign_id: campaignId,
+        flight_id: flightId,
       };
 
       const { error } = await supabase
@@ -182,187 +145,189 @@ export function OpportunityDetailModal({ opportunity, isOpen, onClose, onUpdate 
 
       toast({
         title: "Opportunity updated",
-        description: "As alterações foram guardadas com sucesso.",
+        description: "Changes saved successfully.",
       });
       onUpdate();
       onClose();
     } catch (e: any) {
-      console.error("Save opportunity failed:", e);
+      console.error(e);
       toast({
-        title: "Erro ao guardar",
-        description: e?.message || "Não foi possível guardar a oportunidade.",
+        title: "Update failed",
+        description: e?.message || "Please try again.",
         variant: "destructive",
       });
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
-  }
+  };
 
-  function resetAndClose() {
-    onClose();
-  }
+  // Utilities for Select values: Radix Select requires non-empty Item values.
+  // We use "__none" as a sentinel to "clear" the association (sets field to null).
+  const toSelectValue = (val: string | null | undefined) => (val ?? "");
+  const fromSelectChange = (val: string): string | null =>
+    val === "__none" || val === "" ? null : val;
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && resetAndClose()}>
-      <DialogContent className="max-w-3xl">
+    <Dialog open={isOpen} onOpenChange={(o) => (!o ? onClose() : null)}>
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Opportunity details</DialogTitle>
         </DialogHeader>
 
         {!opportunity ? (
-          <div className="py-12 text-center text-muted-foreground">No opportunity selected</div>
+          <div className="py-6">No opportunity selected.</div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Name</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Amount</Label>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    placeholder="0"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Probability %</Label>
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    max={100}
-                    value={probability}
-                    onChange={(e) => setProbability(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Close date</Label>
-                  <Input
-                    type="date"
-                    value={closeDate || ""}
-                    onChange={(e) => setCloseDate(e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Stage</Label>
-                  <Select value={stage} onValueChange={setStage}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select stage" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {stages.map((s) => (
-                        <SelectItem key={s.key} value={s.key}>
-                          {s.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Description</Label>
-                <Textarea
-                  rows={3}
-                  value={description || ""}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Notes about this deal..."
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Next steps</Label>
-                <Textarea
-                  rows={3}
-                  value={nextSteps || ""}
-                  onChange={(e) => setNextSteps(e.target.value)}
-                  placeholder="What should happen next?"
-                />
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-2">
+            <div className="space-y-2">
+              <Label>Name</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} />
             </div>
 
-            <div className="space-y-4">
-              <Card>
-                <CardContent className="p-4 space-y-4">
-                  <div className="space-y-2">
-                    <Label>Advertiser</Label>
-                    <Select value={advertiserId} onValueChange={setAdvertiserId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select advertiser" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">— None —</SelectItem>
-                        {advertisers.map((a) => (
-                          <SelectItem key={a.id} value={a.id}>
-                            {a.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+            <div className="space-y-2">
+              <Label>Stage</Label>
+              <Select value={toSelectValue(stage)} onValueChange={(v) => setStage(v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select stage" />
+                </SelectTrigger>
+                <SelectContent>
+                  {/* Disabled placeholder with NON-empty value */}
+                  <SelectItem value="__placeholder" disabled>
+                    Select stage
+                  </SelectItem>
+                  {STAGE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.key} value={opt.key}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-                  <div className="space-y-2">
-                    <Label>Campaign</Label>
-                    <Select value={campaignId} onValueChange={setCampaignId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select campaign" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">— None —</SelectItem>
-                        {campaigns.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+            <div className="space-y-2">
+              <Label>Amount</Label>
+              <Input
+                type="number"
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+            </div>
 
-                  <div className="space-y-2">
-                    <Label>Flight</Label>
-                    <Select value={flightId} onValueChange={setFlightId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select flight" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">— None —</SelectItem>
-                        {flights.map((f) => (
-                          <SelectItem key={f.id} value={f.id}>
-                            {f.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+            <div className="space-y-2">
+              <Label>Probability (%)</Label>
+              <Input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={100}
+                value={probability}
+                onChange={(e) => setProbability(e.target.value)}
+              />
+            </div>
 
-                  <div className="text-xs text-muted-foreground pt-2">
-                    Stage now: <Badge variant="outline">{currentStageLabel}</Badge>
-                  </div>
-                </CardContent>
-              </Card>
+            <div className="space-y-2">
+              <Label>Close date</Label>
+              <Input
+                type="date"
+                value={closeDate || ""}
+                onChange={(e) => setCloseDate(e.target.value)}
+              />
+            </div>
 
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={resetAndClose}>
-                  Cancel
-                </Button>
-                <Button onClick={handleSave} disabled={saving}>
-                  {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save
-                </Button>
-              </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label>Description</Label>
+              <Textarea
+                value={description || ""}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={3}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Advertiser</Label>
+              <Select
+                value={toSelectValue(advertiserId)}
+                onValueChange={(v) => setAdvertiserId(fromSelectChange(v))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="No advertiser" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__placeholder" disabled>
+                    Choose advertiser
+                  </SelectItem>
+                  <SelectItem value="__none">— None —</SelectItem>
+                  {advertisers
+                    .filter((a) => !!a.id)
+                    .map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Campaign</Label>
+              <Select
+                value={toSelectValue(campaignId)}
+                onValueChange={(v) => setCampaignId(fromSelectChange(v))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="No campaign" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__placeholder" disabled>
+                    Choose campaign
+                  </SelectItem>
+                  <SelectItem value="__none">— None —</SelectItem>
+                  {campaigns
+                    .filter((c) => !!c.id)
+                    .map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Flight</Label>
+              <Select
+                value={toSelectValue(flightId)}
+                onValueChange={(v) => setFlightId(fromSelectChange(v))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="No flight" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__placeholder" disabled>
+                    Choose flight
+                  </SelectItem>
+                  <SelectItem value="__none">— None —</SelectItem>
+                  {flights
+                    .filter((f) => !!f.id)
+                    .map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={loading || !opportunity}>
+            {loading ? "Saving..." : "Save"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
