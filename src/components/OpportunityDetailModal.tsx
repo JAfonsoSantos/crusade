@@ -93,7 +93,9 @@ export default function OpportunityDetailModal({
       if (!isOpen || !opportunity?.id) return;
       setLoadingSug(true);
       try {
-        const { data, error } = await supabase
+        // cast para ignorar tipos (a view não existe nos types gerados)
+        const sb: any = supabase;
+        const { data, error } = await sb
           .from("v_opportunity_flight_suggestions")
           .select(
             "opportunity_id, flight_id, flight_name, campaign_id, campaign_name, total_score"
@@ -320,7 +322,10 @@ export default function OpportunityDetailModal({
                             Campaign: {s.campaign_name || "—"}
                           </div>
                           <div className="text-xs text-muted-foreground mt-1">
-                            Score: <span className="font-medium">{s.total_score.toFixed(2)}</span>
+                            Score:{" "}
+                            <span className="font-medium">
+                              {Number(s.total_score ?? 0).toFixed(2)}
+                            </span>
                           </div>
                         </div>
                         <Button size="sm" className="gap-2" onClick={() => linkFlight(s.flight_id)}>
@@ -393,7 +398,7 @@ export default function OpportunityDetailModal({
               <CardHeader>
                 <CardTitle>Current Links</CardTitle>
               </CardHeader>
-            <CardContent>
+              <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between rounded-lg border p-3">
                     <div>
