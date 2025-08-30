@@ -12,10 +12,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Link as LinkIcon, Unlink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Search,
+  Link as LinkIcon,
+  Unlink,
+  Maximize2,
+  Minimize2,
+  Pencil,
+  Save,
+  X,
+} from "lucide-react";
 
-/* ---------- types ---------- */
 type Opportunity = {
   id: string;
   name: string;
@@ -28,15 +36,6 @@ type Opportunity = {
   pipeline_id: string | null;
   crm_external_id?: string | null;
   crm_integration_id?: string | null;
-};
-
-type SuggestionRow = {
-  opportunity_id: string;
-  flight_id: string;
-  flight_name: string;
-  campaign_id: string;
-  campaign_name: string;
-  total_score: number;
 };
 
 type FlightRow = {
@@ -66,7 +65,6 @@ type Props = {
   onUpdate?: () => void;
 };
 
-/* ---------- component ---------- */
 export default function OpportunityDetailModal({
   opportunity,
   isOpen,
@@ -75,81 +73,97 @@ export default function OpportunityDetailModal({
 }: Props) {
   const { toast } = useToast();
 
-  // suggestions state
-  const [loadingSug, setLoadingSug] = useState(false);
-  const [suggestions, setSuggestions] = useState<SuggestionRow[]>([]);
+  // --- Header actions state ---
+  const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draftName, setDraftName] = useState("");
+  const [draftAmount, setDraftAmount] = useState<string>("");
 
-  // manual flight search state
+  useEffect(() => {
+    // reset drafts whenever abrimos noutro deal
+    if (isOpen && opportunity) {
+      setEditing(false);
+      setDraftName(opportunity.name ?? "");
+      setDraftAmount(
+        opportunity.amount != null ? String(opportunity.amount) : ""
+      );
+    }
+  }, [isOpen, opportunity]);
+
+  const saveEdits = async () => {
+    if (!opportunity?.id) return;
+    const payload: Partial<Opportunity> = {
+      name: draftName.trim() || opportunity.name,
+    };
+    if (draftAmount.trim() === "") {
+      payload.amount = null;
+    } else {
+      const n = Number(draftAmount);
+      if (Number.isNaN(n)) {
+        toast({
+          title: "Amount inválido",
+          description: "Insere um número ou deixa vazio.",
+          variant: "destructive",
+        });
+        return;
+      }
+      payload.amount = n;
+    }
+
+    const { error } = await supabase
+      .from("opportunities")
+      .update(payload)
+      .eq("id", opportunity.id);
+
+    if (error) {
+      toast({
+        title: "Falha ao guardar",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({ title: "Alterações guardadas" });
+    setEditing(false);
+    onUpdate?.();
+  };
+
+  // ---- Manual search (flights) ----
   const [search, setSearch] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<FlightRow[]>([]);
 
-  // company tab state
+  // ---- Company tab state ----
   const [loadingCompany, setLoadingCompany] = useState(false);
   const [advertiser, setAdvertiser] = useState<AdvertiserInfo | null>(null);
   const [brands, setBrands] = useState<BrandInfo[]>([]);
 
-  /* -------- load suggestions (safe typing via `as any`) -------- */
-  useEffect(() => {
-    const run = async () => {
-      if (!isOpen || !opportunity?.id) return;
-      setLoadingSug(true);
-      try {
-        const { data, error } = await (supabase as any)
-          .from("v_opportunity_flight_suggestions")
-          .select(
-            "opportunity_id, flight_id, flight_name, campaign_id, campaign_name, total_score"
-          )
-          .eq("opportunity_id", opportunity.id)
-          .order("total_score", { ascending: false })
-          .limit(50);
-
-        if (error) throw error;
-
-        const rows: SuggestionRow[] = (data || []).map((r: any) => ({
-          opportunity_id: String(r.opportunity_id),
-          flight_id: String(r.flight_id),
-          flight_name: String(r.flight_name ?? ""),
-          campaign_id: String(r.campaign_id ?? ""),
-          campaign_name: String(r.campaign_name ?? ""),
-          total_score: Number(r.total_score ?? 0),
-        }));
-        setSuggestions(rows);
-      } catch (err: any) {
-        console.error(err);
-        setSuggestions([]);
-      } finally {
-        setLoadingSug(false);
-      }
-    };
-    run();
-  }, [isOpen, opportunity?.id]);
-
-  /* -------- load company (advertiser + brands) -------- */
+  // Load company data when modal opens
   useEffect(() => {
     const loadCompany = async () => {
       if (!isOpen || !opportunity) return;
       setLoadingCompany(true);
 
       try {
+        // Load advertiser
         if (opportunity.advertiser_id) {
           const { data: a, error: aErr } = await supabase
             .from("advertisers")
             .select("id, name")
             .eq("id", opportunity.advertiser_id)
             .maybeSingle();
+
           if (aErr) throw aErr;
           setAdvertiser(a);
 
+          // Load brands for this advertiser
           const { data: b, error: bErr } = await supabase
             .from("brands")
             .select("id, name")
             .eq("advertiser_id", opportunity.advertiser_id);
+
           if (bErr) throw bErr;
-          setBrands((b || []).map((br: any) => ({ id: br.id, name: br.name })));
-        } else {
-          setAdvertiser(null);
-          setBrands([]);
+          setBrands((b || []).map((brand) => ({ id: brand.id, name: brand.name })));
         }
       } catch (e: any) {
         console.error(e);
@@ -166,7 +180,7 @@ export default function OpportunityDetailModal({
     loadCompany();
   }, [isOpen, opportunity, toast]);
 
-  /* -------- manual flight search -------- */
+  // Manual search for flights
   const runSearch = async () => {
     if (!search.trim()) {
       setSearchResults([]);
@@ -214,7 +228,7 @@ export default function OpportunityDetailModal({
     setSearching(false);
   };
 
-  /* -------- link/unlink -------- */
+  // Link / unlink
   const linkFlight = async (flightId: string) => {
     if (!opportunity?.id) return;
     const { error } = await supabase
@@ -253,7 +267,6 @@ export default function OpportunityDetailModal({
     onUpdate?.();
   };
 
-  /* -------- header badges -------- */
   const headerBadges = useMemo(() => {
     if (!opportunity) return null;
     return (
@@ -274,239 +287,279 @@ export default function OpportunityDetailModal({
     );
   }, [opportunity]);
 
+  // classes para expand
+  const contentClasses =
+    "transition-all " +
+    (expanded ? "max-w-[96vw] w-[96vw] h-[90vh]" : "max-w-4xl") +
+    " overflow-hidden";
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
-          <DialogTitle>{opportunity?.name ?? "Opportunity"}</DialogTitle>
-          {headerBadges}
+      <DialogContent className={contentClasses}>
+        <DialogHeader className="flex flex-row items-start justify-between gap-3">
+          <div>
+            <DialogTitle>{opportunity?.name ?? "Opportunity"}</DialogTitle>
+            {headerBadges}
+          </div>
+
+          {/* Header actions */}
+          <div className="flex items-center gap-2">
+            {!editing ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => setEditing(true)}
+              >
+                <Pencil className="h-4 w-4" />
+                Edit
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => {
+                    setEditing(false);
+                    setDraftName(opportunity?.name ?? "");
+                    setDraftAmount(
+                      opportunity?.amount != null ? String(opportunity.amount) : ""
+                    );
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                  Cancel
+                </Button>
+                <Button size="sm" className="gap-2" onClick={saveEdits}>
+                  <Save className="h-4 w-4" />
+                  Save
+                </Button>
+              </>
+            )}
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => setExpanded((v) => !v)}
+            >
+              {expanded ? (
+                <>
+                  <Minimize2 className="h-4 w-4" />
+                  Collapse
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="h-4 w-4" />
+                  Expand
+                </>
+              )}
+            </Button>
+          </div>
         </DialogHeader>
 
-        <Tabs defaultValue="suggestions" className="mt-4">
-          <TabsList className="grid grid-cols-4 w-full max-w-[560px]">
-            <TabsTrigger value="suggestions">Suggestions</TabsTrigger>
-            <TabsTrigger value="search">Search Flights</TabsTrigger>
-            <TabsTrigger value="links">Links</TabsTrigger>
-            <TabsTrigger value="company">Company</TabsTrigger>
-          </TabsList>
+        {/* Inline edit bar (simple) */}
+        {editing && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 px-1">
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Name</div>
+              <Input
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+              />
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Amount (EUR)</div>
+              <Input
+                value={draftAmount}
+                onChange={(e) => setDraftAmount(e.target.value)}
+                placeholder="ex: 25000"
+                inputMode="decimal"
+              />
+            </div>
+          </div>
+        )}
 
-          {/* Suggestions */}
-          <TabsContent value="suggestions" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Suggested Flights</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loadingSug ? (
-                  <div className="text-sm text-muted-foreground">Loading…</div>
-                ) : suggestions.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">
-                    No suggestions for this opportunity.
-                  </div>
-                ) : (
-                  <div className="max-h-[60vh] overflow-auto space-y-2 pr-1">
-                    {suggestions.map((s) => (
-                      <div
-                        key={`${s.opportunity_id}-${s.flight_id}`}
-                        className="flex items-center justify-between rounded-lg border p-3"
-                      >
-                        <div>
-                          <div className="font-medium">{s.flight_name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            Campaign: {s.campaign_name || "—"}
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            Score: <span className="font-medium">{s.total_score.toFixed(2)}</span>
-                          </div>
-                        </div>
-                        <Button
-                          size="sm"
-                          className="gap-2"
-                          onClick={() => linkFlight(s.flight_id)}
-                        >
-                          <LinkIcon className="h-4 w-4" />
-                          Link
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+        <div className={"mt-4 " + (expanded ? "h-[calc(90vh-180px)] overflow-auto pr-1" : "")}>
+          <Tabs defaultValue="search">
+            <TabsList className="grid grid-cols-3 w-full max-w-[400px]">
+              <TabsTrigger value="search">Search Flights</TabsTrigger>
+              <TabsTrigger value="links">Links</TabsTrigger>
+              <TabsTrigger value="company">Company</TabsTrigger>
+            </TabsList>
 
-          {/* Manual Search */}
-          <TabsContent value="search" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Search Flights</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex gap-2 mb-4">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Type flight name…"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
-                  <Button onClick={runSearch} disabled={searching}>
-                    Search
-                  </Button>
-                </div>
-
-                {searching ? (
-                  <div className="text-sm text-muted-foreground">Searching…</div>
-                ) : searchResults.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No results.</div>
-                ) : (
-                  <div className="max-h-[60vh] overflow-auto space-y-2 pr-1">
-                    {searchResults.map((f) => (
-                      <div
-                        key={f.id}
-                        className="flex items-center justify-between rounded-lg border p-3"
-                      >
-                        <div>
-                          <div className="font-medium">{f.name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            Campaign: {f.campaign_name || "—"} •{" "}
-                            {f.start_date || "—"} → {f.end_date || "—"}
-                          </div>
-                        </div>
-                        <Button
-                          size="sm"
-                          className="gap-2"
-                          onClick={() => linkFlight(f.id)}
-                        >
-                          <LinkIcon className="h-4 w-4" />
-                          Link
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Links */}
-          <TabsContent value="links" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Current Links</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between rounded-lg border p-3">
-                    <div>
-                      <div className="text-sm text-muted-foreground">Flight</div>
-                      <div className="font-medium">
-                        {opportunity?.flight_id || "—"}
-                      </div>
-                    </div>
-                    {opportunity?.flight_id ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-2"
-                        onClick={unlinkFlight}
-                      >
-                        <Unlink className="h-4 w-4" />
-                        Unlink
-                      </Button>
-                    ) : (
-                      <div className="text-xs text-muted-foreground">Not linked</div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-lg border p-3">
-                    <div>
-                      <div className="text-sm text-muted-foreground">Campaign</div>
-                      <div className="font-medium">
-                        {opportunity?.campaign_id || "—"}
-                      </div>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      (Indirect link via Flight)
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-lg border p-3">
-                    <div>
-                      <div className="text-sm text-muted-foreground">Advertiser</div>
-                      <div className="font-medium">
-                        {opportunity?.advertiser_id || "—"}
-                      </div>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      (From CRM Account mapping)
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Company */}
-          <TabsContent value="company" className="mt-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Search */}
+            <TabsContent value="search" className="mt-4">
               <Card>
                 <CardHeader>
-                  <CardTitle>Advertiser</CardTitle>
+                  <CardTitle>Search Flights</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {loadingCompany ? (
-                    <div className="text-sm text-muted-foreground">Loading…</div>
-                  ) : !advertiser ? (
-                    <div className="text-sm text-muted-foreground">
-                      This opportunity has no associated advertiser.
+                  <div className="flex gap-2 mb-4">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Type flight name…"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="pl-9"
+                      />
                     </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div>
-                        <div className="text-lg font-semibold">
-                          {advertiser.name}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          ID: {advertiser.id}
-                        </div>
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        External linking functionality temporarily disabled.
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                    <Button onClick={runSearch} disabled={searching}>
+                      Search
+                    </Button>
+                  </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Brands</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {loadingCompany ? (
-                    <div className="text-sm text-muted-foreground">Loading…</div>
-                  ) : brands.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">
-                      No brands associated with this advertiser.
-                    </div>
+                  {searching ? (
+                    <div className="text-sm text-muted-foreground">Searching…</div>
+                  ) : searchResults.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No results.</div>
                   ) : (
                     <div className="space-y-2">
-                      {brands.map((b) => (
-                        <div key={b.id} className="rounded-lg border p-3">
-                          <div className="font-medium">{b.name}</div>
-                          <div className="text-xs text-muted-foreground">ID: {b.id}</div>
+                      {searchResults.map((f) => (
+                        <div
+                          key={f.id}
+                          className="flex items-center justify-between rounded-lg border p-3"
+                        >
+                          <div>
+                            <div className="font-medium">{f.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              Campaign: {f.campaign_name || "—"} •{" "}
+                              {f.start_date || "—"} → {f.end_date || "—"}
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => linkFlight(f.id)}
+                          >
+                            <LinkIcon className="h-4 w-4" />
+                            Link
+                          </Button>
                         </div>
                       ))}
                     </div>
                   )}
                 </CardContent>
               </Card>
-            </div>
-          </TabsContent>
-        </Tabs>
+            </TabsContent>
+
+            {/* Links */}
+            <TabsContent value="links" className="mt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Current Links</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between rounded-lg border p-3">
+                      <div>
+                        <div className="text-sm text-muted-foreground">Flight</div>
+                        <div className="font-medium">
+                          {opportunity?.flight_id || "—"}
+                        </div>
+                      </div>
+                      {opportunity?.flight_id ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          onClick={unlinkFlight}
+                        >
+                          <Unlink className="h-4 w-4" />
+                          Unlink
+                        </Button>
+                      ) : (
+                        <div className="text-xs text-muted-foreground">Not linked</div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-lg border p-3">
+                      <div>
+                        <div className="text-sm text-muted-foreground">Campaign</div>
+                        <div className="font-medium">
+                          {opportunity?.campaign_id || "—"}
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        (Indirect link via Flight)
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-lg border p-3">
+                      <div>
+                        <div className="text-sm text-muted-foreground">Advertiser</div>
+                        <div className="font-medium">
+                          {opportunity?.advertiser_id || "—"}
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        (From CRM Account mapping)
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Company */}
+            <TabsContent value="company" className="mt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Advertiser</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingCompany ? (
+                      <div className="text-sm text-muted-foreground">Loading…</div>
+                    ) : !advertiser ? (
+                      <div className="text-sm text-muted-foreground">
+                        This opportunity has no associated advertiser.
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div>
+                          <div className="text-lg font-semibold">{advertiser.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            ID: {advertiser.id}
+                          </div>
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          External linking functionality temporarily disabled.
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Brands</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingCompany ? (
+                      <div className="text-sm text-muted-foreground">Loading…</div>
+                    ) : brands.length === 0 ? (
+                      <div className="text-sm text-muted-foreground">
+                        No brands associated with this advertiser.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {brands.map((b) => (
+                          <div key={b.id} className="rounded-lg border p-3">
+                            <div className="font-medium">{b.name}</div>
+                            <div className="text-xs text-muted-foreground">ID: {b.id}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </div>
       </DialogContent>
     </Dialog>
   );
