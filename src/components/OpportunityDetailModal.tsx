@@ -105,23 +105,10 @@ export default function OpportunityDetailModal({
     const run = async () => {
       if (!isOpen || !oppId) return;
       setLoadingSug(true);
-      const { data, error } = await supabase
-        .from("v_opportunity_flight_suggestions")
-        .select("*")
-        .eq("opportunity_id", oppId)
-        .order("total_score", { ascending: false })
-        .limit(50);
-
-      if (error) {
-        console.error(error);
-        toast({
-          title: "Falha ao carregar sugestões",
-          description: error.message,
-          variant: "destructive",
-        });
-      } else {
-        setSuggestions((data || []) as SuggestionRow[]);
-      }
+      
+      // For now, disable suggestions since the view doesn't exist
+      // TODO: Implement flight suggestion logic using regular tables
+      setSuggestions([]);
       setLoadingSug(false);
     };
     run();
@@ -134,37 +121,47 @@ export default function OpportunityDetailModal({
       setLoadingCompany(true);
 
       try {
-        // 1) Advertiser identity (view que agregámos: v_advertiser_identity)
-        //    se ainda não existir no teu schema, podes trocar por "advertisers" + joins simples
+        // 1) Advertiser identity using regular table
         let advRow: AdvertiserIdentity | null = null;
 
         if (opportunity.advertiser_id) {
           const { data: a, error: aErr } = await supabase
-            .from("v_advertiser_identity")
-            .select(
-              "advertiser_id, advertiser_name, website, industry, crm_account_external_id, ad_server_advertiser_external_id, crm_name, ad_server_name, crm_opportunities_open, crm_opportunities_won"
-            )
-            .eq("advertiser_id", opportunity.advertiser_id)
+            .from("advertisers")
+            .select("id, name")
+            .eq("id", opportunity.advertiser_id)
             .maybeSingle();
 
           if (aErr) throw aErr;
-          advRow = (a as AdvertiserIdentity) || null;
+          if (a) {
+            advRow = {
+              advertiser_id: a.id,
+              advertiser_name: a.name,
+              website: null,
+              industry: null,
+              crm_account_external_id: null,
+              ad_server_advertiser_external_id: null,
+              crm_name: null,
+              ad_server_name: null,
+              crm_opportunities_open: null,
+              crm_opportunities_won: null,
+            };
+          }
         }
 
-        // 2) Brands (se houver advertiser)
+        // 2) Brands using regular table
         let brandRows: BrandIdentity[] = [];
         if (opportunity.advertiser_id) {
           const { data: b, error: bErr } = await supabase
-            .from("v_brand_identity")
-            .select(
-              "brand_id, brand_name, ad_server_brand_external_id"
-            )
+            .from("brands")
+            .select("id, name")
             .eq("advertiser_id", opportunity.advertiser_id);
 
           if (bErr) throw bErr;
-          brandRows = ((b || []) as BrandIdentity[]).sort((x, y) =>
-            x.brand_name.localeCompare(y.brand_name)
-          );
+          brandRows = ((b || []) as any[]).map(brand => ({
+            brand_id: brand.id,
+            brand_name: brand.name,
+            ad_server_brand_external_id: null,
+          })).sort((x, y) => x.brand_name.localeCompare(y.brand_name));
         }
 
         setAdv(advRow);
