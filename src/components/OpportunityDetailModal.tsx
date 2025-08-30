@@ -12,12 +12,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Link as LinkIcon, Unlink, Maximize2, Minimize2, Edit3 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Search, Link as LinkIcon, Unlink, Pencil, Save, X } from "lucide-react";
 
-/* ---------- Types ---------- */
+// ---------- types ----------
 type Opportunity = {
   id: string;
   name: string;
@@ -42,38 +40,41 @@ type FlightRow = {
   campaign_name?: string | null;
 };
 
-type AdvertiserInfo = { id: string; name: string };
-type BrandInfo = { id: string; name: string };
+type AdvertiserInfo = {
+  id: string;
+  name: string;
+};
 
-type SuggestionRow = {
-  opportunity_id: string;
-  flight_id: string;
-  flight_name: string;
-  campaign_id: string | null;
-  campaign_name: string | null;
-  total_score: number;
+type BrandInfo = {
+  id: string;
+  name: string;
 };
 
 type Props = {
   opportunity: Opportunity | null;
   isOpen: boolean;
   onClose: () => void;
-  onUpdate?: () => void;
+  onUpdate?: () => void; // chamado depois de guardar/ligar/desligar/fechar
 };
 
-/* ---------- Aux ---------- */
-const STAGES = [
-  "needs_analysis",
-  "value_proposition",
-  "proposal",
-  "negotiation",
-  "closed_won",
-  "closed_lost",
-] as const;
+// ---------- consts ----------
+const STAGE_OPTIONS = [
+  { value: "needs_analysis", label: "Needs analysis" },
+  { value: "value_proposition", label: "Value proposition" },
+  { value: "proposal", label: "Proposal" },
+  { value: "negotiation", label: "Negotiation" },
+  { value: "closed_won", label: "Closed won" },
+  { value: "closed_lost", label: "Closed lost" },
+];
 
-/* ============================================================
-   Component
-============================================================ */
+// helper simples para num safe
+function toNumberOrNull(v: string): number | null {
+  if (v === "" || v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+// ---------- component ----------
 export default function OpportunityDetailModal({
   opportunity,
   isOpen,
@@ -81,149 +82,108 @@ export default function OpportunityDetailModal({
   onUpdate,
 }: Props) {
   const { toast } = useToast();
+  const oppId = opportunity?.id;
 
-  /* ---------- Expand / Edit state ---------- */
-  const [expanded, setExpanded] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
-  const [savingEdit, setSavingEdit] = useState(false);
-  const [form, setForm] = useState<{
-    name: string;
-    amount: string; // keep string for input; cast when saving
-    probability: string;
-    stage: (typeof STAGES)[number];
-  } | null>(null);
+  // --------- Inline edit state (badges) ----------
+  const original = useRef<Opportunity | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [saving, setSaving] = useState(false);
 
+  const [formName, setFormName] = useState<string>("");
+  const [formAmount, setFormAmount] = useState<string>("");
+  const [formProb, setFormProb] = useState<string>("");
+  const [formStage, setFormStage] = useState<string>(STAGE_OPTIONS[0].value);
+
+  // re-hydrate form when opp changes/open
   useEffect(() => {
-    if (isOpen && opportunity) {
-      // prepara form sempre que abre (ou troca opp)
-      setForm({
-        name: opportunity.name ?? "",
-        amount:
-          typeof opportunity.amount === "number"
-            ? String(opportunity.amount)
-            : "",
-        probability: String(opportunity.probability ?? 0),
-        stage: (STAGES.includes(opportunity.stage as any)
-          ? (opportunity.stage as any)
-          : "needs_analysis") as (typeof STAGES)[number],
-      });
-    }
+    if (!isOpen || !opportunity) return;
+    original.current = opportunity;
+    setFormName(opportunity.name ?? "");
+    setFormAmount(opportunity.amount != null ? String(opportunity.amount) : "");
+    setFormProb(String(opportunity.probability ?? 0));
+    setFormStage(opportunity.stage || STAGE_OPTIONS[0].value);
+    setEditMode(false);
   }, [isOpen, opportunity]);
 
-  const openEdit = () => setEditOpen(true);
-  const closeEdit = () => setEditOpen(false);
-
-  const saveEdit = async () => {
-    if (!opportunity?.id || !form) return;
-    setSavingEdit(true);
-    try {
-      const amountNum =
-        form.amount.trim() === "" ? null : Number.parseFloat(form.amount);
-      const probNum = Number.parseInt(form.probability || "0", 10);
-      const { error } = await supabase
-        .from("opportunities")
-        .update({
-          name: form.name,
-          amount: amountNum,
-          probability: isFinite(probNum) ? probNum : 0,
-          stage: form.stage,
-        })
-        .eq("id", opportunity.id);
-
-      if (error) {
-        toast({
-          title: "Failed to save changes",
-          description: error.message,
-          variant: "destructive",
-        });
-        return;
+  // ENTER para guardar, ESC para fechar
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Enter" && editMode) {
+        e.preventDefault();
+        void handleSave();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        // fecha sempre; refresh pipeline ao fechar
+        onClose();
+        onUpdate?.();
       }
-      toast({ title: "Opportunity updated" });
-      setEditOpen(false);
-      onUpdate?.();
-    } finally {
-      setSavingEdit(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isOpen, editMode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const hasDiff = useMemo(() => {
+    if (!original.current) return false;
+    const a = original.current;
+    const amount = toNumberOrNull(formAmount);
+    const prob = Math.max(0, Math.min(100, Number(formProb || 0) || 0));
+    return (
+      a.name !== formName ||
+      (a.amount ?? null) !== (amount ?? null) ||
+      (a.probability ?? 0) !== prob ||
+      (a.stage || "") !== (formStage || "")
+    );
+  }, [formName, formAmount, formProb, formStage]);
+
+  async function handleSave() {
+    if (!oppId || !original.current) return;
+    if (!hasDiff) {
+      setEditMode(false);
+      return;
     }
-  };
+    setSaving(true);
+    const before = original.current;
 
-  /* ---------- Suggestions (RPC + infinite scroll) ---------- */
-  const PAGE_SIZE = 20;
-  const [sugs, setSugs] = useState<SuggestionRow[]>([]);
-  const [sugsLoading, setSugsLoading] = useState(false);
-  const [sugsError, setSugsError] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!isOpen || !opportunity?.id) return;
-    setSugs([]);
-    setPage(0);
-    setHasMore(true);
-    setSugsError(null);
-  }, [isOpen, opportunity?.id]);
-
-  useEffect(() => {
-    const load = async () => {
-      if (!isOpen || !opportunity?.id || !hasMore || sugsLoading) return;
-      setSugsLoading(true);
-      setSugsError(null);
-
-      // 1) RPC (tipagem via any para evitar dependência dos types gerados)
-      const { data, error } = await (supabase as any).rpc(
-        "fetch_opportunity_flight_suggestions",
-        {
-          p_opportunity_id: opportunity.id,
-          p_limit: PAGE_SIZE,
-          p_offset: page * PAGE_SIZE,
-        }
-      );
-
-      if (!error && Array.isArray(data)) {
-        const rows = (data || []) as SuggestionRow[];
-        setSugs((prev) => [...prev, ...rows]);
-        setHasMore(rows.length === PAGE_SIZE);
-        setSugsLoading(false);
-        return;
-      }
-
-      // 2) fallback para view
-      const { data: vdata, error: vErr } = (supabase as any)
-        .from("v_opportunity_flight_suggestions")
-        .select(
-          `opportunity_id, flight_id, flight_name, campaign_id, campaign_name, total_score`
-        )
-        .eq("opportunity_id", opportunity.id)
-        .order("total_score", { ascending: false })
-        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
-
-      if (vErr) {
-        setSugsError(vErr.message || "Failed to load suggestions");
-      } else {
-        const rows = (vdata || []) as SuggestionRow[];
-        setSugs((prev) => [...prev, ...rows]);
-        setHasMore(rows.length === PAGE_SIZE);
-      }
-      setSugsLoading(false);
+    const payload: Partial<Opportunity> = {
+      name: formName.trim() || before.name,
+      amount: toNumberOrNull(formAmount),
+      probability: Math.max(0, Math.min(100, Number(formProb || 0) || 0)),
+      stage: formStage || before.stage || STAGE_OPTIONS[0].value,
     };
 
-    load();
-  }, [isOpen, opportunity?.id, page, hasMore, sugsLoading]);
+    const { error } = await supabase.from("opportunities").update(payload).eq("id", oppId);
+    setSaving(false);
 
-  useEffect(() => {
-    if (!sentinelRef.current) return;
-    const el = sentinelRef.current;
-    const io = new IntersectionObserver((entries) => {
-      const first = entries[0];
-      if (first.isIntersecting && hasMore && !sugsLoading) {
-        setPage((p) => p + 1);
-      }
+    if (error) {
+      toast({
+        title: "Falha ao guardar",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // diff bonitinho
+    const diffs: string[] = [];
+    if (before.name !== payload.name) diffs.push(`name: “${before.name}” → “${payload.name}”`);
+    if ((before.amount ?? null) !== (payload.amount ?? null))
+      diffs.push(`amount: ${before.amount ?? "—"} → ${payload.amount ?? "—"}`);
+    if ((before.probability ?? 0) !== (payload.probability ?? 0))
+      diffs.push(`probability: ${before.probability}% → ${payload.probability}%`);
+    if ((before.stage || "") !== (payload.stage || ""))
+      diffs.push(`stage: ${before.stage} → ${payload.stage}`);
+
+    toast({
+      title: "Opportunity atualizada",
+      description: diffs.length ? diffs.join(" • ") : "Sem alterações",
     });
-    io.observe(el);
-    return () => io.unobserve(el);
-  }, [hasMore, sugsLoading]);
 
-  /* ---------- Manual flight search ---------- */
+    setEditMode(false);
+    onUpdate?.(); // auto-refresh pipeline / lista
+  }
+
+  // --------- Flights: search & link/unlink ----------
   const [search, setSearch] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<FlightRow[]>([]);
@@ -252,7 +212,6 @@ export default function OpportunityDetailModal({
       .limit(50);
 
     if (error) {
-      console.error(error);
       toast({
         title: "Search failed",
         description: error.message,
@@ -271,11 +230,40 @@ export default function OpportunityDetailModal({
       }));
       setSearchResults(rows);
     }
-
     setSearching(false);
   };
 
-  /* ---------- Company tab ---------- */
+  const linkFlight = async (flightId: string) => {
+    if (!oppId) return;
+    const { error } = await supabase.from("opportunities").update({ flight_id: flightId }).eq("id", oppId);
+    if (error) {
+      toast({
+        title: "Failed to link flight",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({ title: "Flight linked to opportunity" });
+    onUpdate?.();
+  };
+
+  const unlinkFlight = async () => {
+    if (!oppId) return;
+    const { error } = await supabase.from("opportunities").update({ flight_id: null }).eq("id", oppId);
+    if (error) {
+      toast({
+        title: "Failed to unlink flight",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({ title: "Flight unlinked" });
+    onUpdate?.();
+  };
+
+  // --------- Company tab ----------
   const [loadingCompany, setLoadingCompany] = useState(false);
   const [advertiser, setAdvertiser] = useState<AdvertiserInfo | null>(null);
   const [brands, setBrands] = useState<BrandInfo[]>([]);
@@ -292,20 +280,19 @@ export default function OpportunityDetailModal({
             .eq("id", opportunity.advertiser_id)
             .maybeSingle();
           if (aErr) throw aErr;
-          setAdvertiser(a);
+          setAdvertiser(a || null);
 
           const { data: b, error: bErr } = await supabase
             .from("brands")
             .select("id, name")
             .eq("advertiser_id", opportunity.advertiser_id);
           if (bErr) throw bErr;
-          setBrands((b || []).map((r) => ({ id: r.id, name: r.name })));
+          setBrands((b || []).map((it) => ({ id: it.id, name: it.name })));
         } else {
           setAdvertiser(null);
           setBrands([]);
         }
       } catch (e: any) {
-        console.error(e);
         toast({
           title: "Failed to load company data",
           description: String(e.message || e),
@@ -318,432 +305,282 @@ export default function OpportunityDetailModal({
     loadCompany();
   }, [isOpen, opportunity, toast]);
 
-  /* ---------- Link / Unlink ---------- */
-  const linkFlight = async (flightId: string) => {
-    if (!opportunity?.id) return;
-    const { error } = await supabase
-      .from("opportunities")
-      .update({ flight_id: flightId })
-      .eq("id", opportunity.id);
-
-    if (error) {
-      toast({
-        title: "Failed to link flight",
-        description: error.message,
-        variant: "destructive",
-      });
-      return;
-    }
-    toast({ title: "Flight linked to opportunity" });
-    onUpdate?.();
-  };
-
-  const unlinkFlight = async () => {
-    if (!opportunity?.id) return;
-    const { error } = await supabase
-      .from("opportunities")
-      .update({ flight_id: null })
-      .eq("id", opportunity.id);
-
-    if (error) {
-      toast({
-        title: "Failed to unlink flight",
-        description: error.message,
-        variant: "destructive",
-      });
-      return;
-    }
-    toast({ title: "Flight unlinked" });
-    onUpdate?.();
-  };
-
-  /* ---------- Header badges ---------- */
+  // header badges / inline edit
   const headerBadges = useMemo(() => {
     if (!opportunity) return null;
-    return (
-      <div className="flex gap-2 flex-wrap">
-        <Badge variant="outline">{opportunity.stage}</Badge>
-        <Badge variant="secondary">
-          {opportunity.probability ?? 0}% prob.
-        </Badge>
-        {typeof opportunity.amount === "number" && (
-          <Badge variant="outline">
-            {new Intl.NumberFormat("pt-PT", {
-              style: "currency",
-              currency: "EUR",
-            }).format(opportunity.amount)}
+
+    if (!editMode) {
+      return (
+        <div className="flex gap-2 flex-wrap mt-2">
+          <Badge variant="outline" className="cursor-pointer" onClick={() => setEditMode(true)} title="Edit stage">
+            {opportunity.stage}
           </Badge>
-        )}
+          <Badge variant="secondary" className="cursor-pointer" onClick={() => setEditMode(true)} title="Edit probability">
+            {opportunity.probability ?? 0}% prob.
+          </Badge>
+          {typeof opportunity.amount === "number" ? (
+            <Badge variant="outline" className="cursor-pointer" onClick={() => setEditMode(true)} title="Edit amount">
+              {new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(opportunity.amount)}
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="cursor-pointer" onClick={() => setEditMode(true)} title="Edit amount">
+              Amount: —
+            </Badge>
+          )}
+          <Button variant="ghost" size="sm" className="h-7 px-2 gap-1" onClick={() => setEditMode(true)}>
+            <Pencil className="h-4 w-4" /> Edit
+          </Button>
+        </div>
+      );
+    }
+
+    // EDIT MODE – inputs inline
+    return (
+      <div className="flex flex-col md:flex-row md:items-center gap-3 mt-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground w-16">Stage</span>
+          <select
+            className="h-8 rounded-md border bg-background px-2 text-sm"
+            value={formStage || STAGE_OPTIONS[0].value}
+            onChange={(e) => setFormStage(e.target.value)}
+          >
+            {STAGE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground w-16">Prob.</span>
+          <Input
+            className="h-8 w-20"
+            type="number"
+            min={0}
+            max={100}
+            step={1}
+            value={formProb}
+            onChange={(e) => setFormProb(e.target.value)}
+          />
+          <span className="text-xs text-muted-foreground">%</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground w-16">Amount</span>
+          <Input
+            className="h-8 w-36"
+            type="number"
+            step="0.01"
+            value={formAmount}
+            onChange={(e) => setFormAmount(e.target.value)}
+            placeholder="€"
+          />
+        </div>
+
+        <div className="ml-auto flex gap-2">
+          <Button size="sm" className="gap-2" disabled={saving || !hasDiff} onClick={handleSave} title="Enter também guarda">
+            <Save className="h-4 w-4" />
+            Save
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-2"
+            disabled={saving}
+            onClick={() => {
+              // revert
+              if (original.current) {
+                setFormName(original.current.name ?? "");
+                setFormAmount(original.current.amount != null ? String(original.current.amount) : "");
+                setFormProb(String(original.current.probability ?? 0));
+                setFormStage(original.current.stage || STAGE_OPTIONS[0].value);
+              }
+              setEditMode(false);
+            }}
+          >
+            <X className="h-4 w-4" />
+            Cancel
+          </Button>
+        </div>
       </div>
     );
-  }, [opportunity]);
+  }, [opportunity, editMode, formAmount, formProb, formStage, saving, hasDiff]);
 
-  /* ---------- Render ---------- */
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
-        className={
-          expanded
-            ? "w-[90vw] max-w-[90vw] h-[90vh] max-h-[90vh] flex flex-col"
-            : "max-w-4xl"
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          onClose();
+          onUpdate?.(); // auto-refresh ao fechar
         }
-      >
-        <DialogHeader className="flex flex-row items-start justify-between gap-3">
-          <div>
-            <DialogTitle>{opportunity?.name ?? "Opportunity"}</DialogTitle>
-            {headerBadges}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setExpanded((v) => !v)}
-              className="gap-2"
-            >
-              {expanded ? (
-                <>
-                  <Minimize2 className="h-4 w-4" />
-                  Collapse
-                </>
-              ) : (
-                <>
-                  <Maximize2 className="h-4 w-4" />
-                  Expand
-                </>
-              )}
-            </Button>
-
-            <Button variant="default" size="sm" onClick={openEdit} className="gap-2">
-              <Edit3 className="h-4 w-4" />
-              Edit
-            </Button>
-          </div>
+      }}
+    >
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle className="flex flex-col gap-2">
+            {/* Nome pode ser editável quando em modo de edição */}
+            {!editMode ? (
+              <span>{formName || opportunity?.name || "Opportunity"}</span>
+            ) : (
+              <Input value={formName} onChange={(e) => setFormName(e.target.value)} />
+            )}
+          </DialogTitle>
+          {headerBadges}
         </DialogHeader>
 
-        <div className={expanded ? "flex-1 overflow-y-auto pr-1" : ""}>
-          <Tabs defaultValue="suggestions" className="mt-2">
-            <TabsList className="grid grid-cols-4 w-full max-w-[620px]">
-              <TabsTrigger value="suggestions">Suggestions</TabsTrigger>
-              <TabsTrigger value="search">Search Flights</TabsTrigger>
-              <TabsTrigger value="links">Links</TabsTrigger>
-              <TabsTrigger value="company">Company</TabsTrigger>
-            </TabsList>
+        <Tabs defaultValue="search" className="mt-4">
+          <TabsList className="grid grid-cols-3 w-full max-w-[420px]">
+            <TabsTrigger value="search">Search Flights</TabsTrigger>
+            <TabsTrigger value="links">Links</TabsTrigger>
+            <TabsTrigger value="company">Company</TabsTrigger>
+          </TabsList>
 
-            {/* Suggestions */}
-            <TabsContent value="suggestions" className="mt-4">
+          {/* Manual Search */}
+          <TabsContent value="search" className="mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Search Flights</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-2 mb-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Type flight name…"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
+                  <Button onClick={runSearch} disabled={searching}>
+                    Search
+                  </Button>
+                </div>
+
+                {searching ? (
+                  <div className="text-sm text-muted-foreground">Searching…</div>
+                ) : searchResults.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">No results.</div>
+                ) : (
+                  <div className="space-y-2 max-h-[420px] overflow-auto pr-1">
+                    {searchResults.map((f) => (
+                      <div
+                        key={f.id}
+                        className="flex items-center justify-between rounded-lg border p-3"
+                      >
+                        <div>
+                          <div className="font-medium">{f.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            Campaign: {f.campaign_name || "—"} • {f.start_date || "—"} → {f.end_date || "—"}
+                          </div>
+                        </div>
+                        <Button size="sm" className="gap-2" onClick={() => linkFlight(f.id)}>
+                          <LinkIcon className="h-4 w-4" />
+                          Link
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Links (current link / unlink) */}
+          <TabsContent value="links" className="mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Current Links</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between rounded-lg border p-3">
+                    <div>
+                      <div className="text-sm text-muted-foreground">Flight</div>
+                      <div className="font-medium">{opportunity?.flight_id || "—"}</div>
+                    </div>
+                    {opportunity?.flight_id ? (
+                      <Button variant="outline" size="sm" className="gap-2" onClick={unlinkFlight}>
+                        <Unlink className="h-4 w-4" />
+                        Unlink
+                      </Button>
+                    ) : (
+                      <div className="text-xs text-muted-foreground">Not linked</div>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border p-3">
+                    <div>
+                      <div className="text-sm text-muted-foreground">Campaign</div>
+                      <div className="font-medium">{opportunity?.campaign_id || "—"}</div>
+                    </div>
+                    <div className="text-xs text-muted-foreground">(Indirect link via Flight)</div>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border p-3">
+                    <div>
+                      <div className="text-sm text-muted-foreground">Advertiser</div>
+                      <div className="font-medium">{opportunity?.advertiser_id || "—"}</div>
+                    </div>
+                    <div className="text-xs text-muted-foreground">(From CRM Account mapping)</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Company */}
+          <TabsContent value="company" className="mt-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card>
                 <CardHeader>
-                  <CardTitle>Suggested Flights</CardTitle>
+                  <CardTitle>Advertiser</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {sugsError && (
-                    <div className="text-sm text-red-600 mb-3">{sugsError}</div>
-                  )}
-
-                  {sugs.length === 0 && !sugsLoading ? (
+                  {loadingCompany ? (
+                    <div className="text-sm text-muted-foreground">Loading…</div>
+                  ) : !advertiser ? (
                     <div className="text-sm text-muted-foreground">
-                      No suggestions for this opportunity.
+                      This opportunity has no associated advertiser.
                     </div>
                   ) : (
-                    <>
-                      <div className="max-h-[60vh] overflow-y-auto pr-1 space-y-2">
-                        {sugs.map((s) => (
-                          <div
-                            key={`${s.opportunity_id}-${s.flight_id}`}
-                            className="flex items-center justify-between rounded-lg border p-3"
-                          >
-                            <div>
-                              <div className="font-medium">{s.flight_name}</div>
-                              <div className="text-xs text-muted-foreground">
-                                Campaign: {s.campaign_name || "—"}
-                              </div>
-                              <div className="text-xs text-muted-foreground mt-1">
-                                Score:{" "}
-                                <span className="font-medium">
-                                  {Number(s.total_score).toFixed(2)}
-                                </span>
-                              </div>
-                            </div>
-                            <Button
-                              size="sm"
-                              className="gap-2"
-                              onClick={() => linkFlight(s.flight_id)}
-                            >
-                              <LinkIcon className="h-4 w-4" />
-                              Link
-                            </Button>
-                          </div>
-                        ))}
-                        {hasMore && (
-                          <div
-                            ref={sentinelRef}
-                            className="h-6 w-full flex items-center justify-center text-xs text-muted-foreground"
-                          >
-                            {sugsLoading ? "Loading…" : "Scroll to load more"}
-                          </div>
-                        )}
+                    <div className="space-y-4">
+                      <div>
+                        <div className="text-lg font-semibold">{advertiser.name}</div>
+                        <div className="text-sm text-muted-foreground">ID: {advertiser.id}</div>
                       </div>
-                    </>
+                      <div className="text-sm text-muted-foreground">
+                        External linking functionality temporarily disabled.
+                      </div>
+                    </div>
                   )}
                 </CardContent>
               </Card>
-            </TabsContent>
 
-            {/* Manual Search */}
-            <TabsContent value="search" className="mt-4">
               <Card>
                 <CardHeader>
-                  <CardTitle>Search Flights</CardTitle>
+                  <CardTitle>Brands</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex gap-2 mb-4">
-                    <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Type flight name…"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="pl-9"
-                      />
-                    </div>
-                    <Button onClick={runSearch} disabled={searching}>
-                      Search
-                    </Button>
-                  </div>
-
-                  {searching ? (
-                    <div className="text-sm text-muted-foreground">Searching…</div>
-                  ) : searchResults.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">No results.</div>
+                  {loadingCompany ? (
+                    <div className="text-sm text-muted-foreground">Loading…</div>
+                  ) : brands.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No brands associated with this advertiser.</div>
                   ) : (
-                    <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
-                      {searchResults.map((f) => (
-                        <div
-                          key={f.id}
-                          className="flex items-center justify-between rounded-lg border p-3"
-                        >
-                          <div>
-                            <div className="font-medium">{f.name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              Campaign: {f.campaign_name || "—"} •{" "}
-                              {f.start_date || "—"} → {f.end_date || "—"}
-                            </div>
-                          </div>
-                          <Button
-                            size="sm"
-                            className="gap-2"
-                            onClick={() => linkFlight(f.id)}
-                          >
-                            <LinkIcon className="h-4 w-4" />
-                            Link
-                          </Button>
+                    <div className="space-y-2 max-h-[360px] overflow-auto pr-1">
+                      {brands.map((b) => (
+                        <div key={b.id} className="rounded-lg border p-3">
+                          <div className="font-medium">{b.name}</div>
+                          <div className="text-xs text-muted-foreground">ID: {b.id}</div>
                         </div>
                       ))}
                     </div>
                   )}
                 </CardContent>
               </Card>
-            </TabsContent>
-
-            {/* Links */}
-            <TabsContent value="links" className="mt-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Current Links</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between rounded-lg border p-3">
-                      <div>
-                        <div className="text-sm text-muted-foreground">Flight</div>
-                        <div className="font-medium">
-                          {opportunity?.flight_id || "—"}
-                        </div>
-                      </div>
-                      {opportunity?.flight_id ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-2"
-                          onClick={unlinkFlight}
-                        >
-                          <Unlink className="h-4 w-4" />
-                          Unlink
-                        </Button>
-                      ) : (
-                        <div className="text-xs text-muted-foreground">
-                          Not linked
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between rounded-lg border p-3">
-                      <div>
-                        <div className="text-sm text-muted-foreground">Campaign</div>
-                        <div className="font-medium">
-                          {opportunity?.campaign_id || "—"}
-                        </div>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        (Indirect link via Flight)
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between rounded-lg border p-3">
-                      <div>
-                        <div className="text-sm text-muted-foreground">
-                          Advertiser
-                        </div>
-                        <div className="font-medium">
-                          {opportunity?.advertiser_id || "—"}
-                        </div>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        (From CRM Account mapping)
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Company */}
-            <TabsContent value="company" className="mt-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Advertiser</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {loadingCompany ? (
-                      <div className="text-sm text-muted-foreground">Loading…</div>
-                    ) : !advertiser ? (
-                      <div className="text-sm text-muted-foreground">
-                        This opportunity has no associated advertiser.
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <div>
-                          <div className="text-lg font-semibold">{advertiser.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            ID: {advertiser.id}
-                          </div>
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          External linking functionality temporarily disabled.
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Brands</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {loadingCompany ? (
-                      <div className="text-sm text-muted-foreground">Loading…</div>
-                    ) : brands.length === 0 ? (
-                      <div className="text-sm text-muted-foreground">
-                        No brands associated with this advertiser.
-                      </div>
-                    ) : (
-                      <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
-                        {brands.map((b) => (
-                          <div key={b.id} className="rounded-lg border p-3">
-                            <div className="font-medium">{b.name}</div>
-                            <div className="text-xs text-muted-foreground">ID: {b.id}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-          </Tabs>
-        </div>
-
-        {/* Inline Edit drawer (simple) */}
-        {editOpen && form && (
-          <div className="mt-4 border-t pt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Edit Opportunity</CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="op-name">Name</Label>
-                  <Input
-                    id="op-name"
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="op-amount">Amount</Label>
-                  <Input
-                    id="op-amount"
-                    inputMode="decimal"
-                    value={form.amount}
-                    onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                    placeholder="e.g. 10000"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="op-prob">Probability %</Label>
-                  <Input
-                    id="op-prob"
-                    inputMode="numeric"
-                    value={form.probability}
-                    onChange={(e) =>
-                      setForm({ ...form, probability: e.target.value })
-                    }
-                    placeholder="0-100"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Stage</Label>
-                  {/* IMPORTANT: Select value must never be empty string */}
-                  <Select
-                    value={form.stage}
-                    onValueChange={(v) =>
-                      setForm({
-                        ...form,
-                        stage: (v as (typeof STAGES)[number]) || "needs_analysis",
-                      })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select stage" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        {STAGES.map((s) => (
-                          <SelectItem key={s} value={s}>
-                            {s}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="md:col-span-2 flex items-center justify-end gap-2 pt-2">
-                  <Button variant="outline" onClick={closeEdit} disabled={savingEdit}>
-                    Cancel
-                  </Button>
-                  <Button onClick={saveEdit} disabled={savingEdit}>
-                    {savingEdit ? "Saving…" : "Save"}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+            </div>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
