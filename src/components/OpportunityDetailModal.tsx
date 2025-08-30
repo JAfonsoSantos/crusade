@@ -74,7 +74,7 @@ export default function OpportunityDetailModal({
   const [advertiser, setAdvertiser] = useState<AdvertiserInfo | null>(null);
   const [brands, setBrands] = useState<BrandInfo[]>([]);
 
-  // ---- Quick Actions state (NEW) ----
+  // ---- Quick Actions state ----
   const [linkId, setLinkId] = useState("");
   const [campaignName, setCampaignName] = useState("");
   const [creatingCampaign, setCreatingCampaign] = useState(false);
@@ -91,23 +91,19 @@ export default function OpportunityDetailModal({
       setLoadingCompany(true);
 
       try {
-        // Load advertiser
         if (opportunity.advertiser_id) {
           const { data: a, error: aErr } = await supabase
             .from("advertisers")
             .select("id, name")
             .eq("id", opportunity.advertiser_id)
             .maybeSingle();
-
           if (aErr) throw aErr;
           setAdvertiser(a);
 
-          // Load brands for this advertiser
           const { data: b, error: bErr } = await supabase
             .from("brands")
             .select("id, name")
             .eq("advertiser_id", opportunity.advertiser_id);
-
           if (bErr) throw bErr;
           setBrands((b || []).map(brand => ({ id: brand.id, name: brand.name })));
         } else {
@@ -228,7 +224,7 @@ export default function OpportunityDetailModal({
     setLinkId("");
   };
 
-  // 2) Create Campaign (draft-ish – só com name)
+  // 2) Create Campaign (cast para any para contornar tipos gerados)
   const createCampaign = async () => {
     if (!campaignName.trim()) {
       toast({ title: "Insert a campaign name", variant: "destructive" });
@@ -238,7 +234,8 @@ export default function OpportunityDetailModal({
     try {
       const { data, error } = await supabase
         .from("campaigns")
-        .insert({ name: campaignName.trim() })
+        // 👇 cast para any para não exigir todos os campos do tipo gerado
+        .insert([{ name: campaignName.trim() } as any])
         .select("id")
         .single();
 
@@ -260,7 +257,7 @@ export default function OpportunityDetailModal({
     }
   };
 
-  // 3) Create Flight (draft) and link right away
+  // 3) Create Flight & Link (cast para any)
   const createFlightAndLink = async () => {
     if (!opportunity?.id) return;
     if (!flightName.trim()) {
@@ -274,7 +271,7 @@ export default function OpportunityDetailModal({
 
       const { data, error } = await supabase
         .from("flights")
-        .insert(payload)
+        .insert([payload as any]) // 👈 cast
         .select("id, campaign_id")
         .single();
 
@@ -394,7 +391,7 @@ export default function OpportunityDetailModal({
             </Card>
           </TabsContent>
 
-          {/* Links (current link / unlink) */}
+          {/* Links & Quick Actions */}
           <TabsContent value="links" className="mt-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <Card>
@@ -450,7 +447,6 @@ export default function OpportunityDetailModal({
                 </CardContent>
               </Card>
 
-              {/* Quick Actions */}
               <Card>
                 <CardHeader>
                   <CardTitle>Quick Actions</CardTitle>
