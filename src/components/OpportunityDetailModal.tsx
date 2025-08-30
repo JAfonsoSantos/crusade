@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Link as LinkIcon, Unlink } from "lucide-react";
+import { Search, Link as LinkIcon, Unlink, PlusCircle, Link2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type Opportunity = {
@@ -74,6 +74,16 @@ export default function OpportunityDetailModal({
   const [advertiser, setAdvertiser] = useState<AdvertiserInfo | null>(null);
   const [brands, setBrands] = useState<BrandInfo[]>([]);
 
+  // ---- Quick Actions state (NEW) ----
+  const [linkId, setLinkId] = useState("");
+  const [campaignName, setCampaignName] = useState("");
+  const [creatingCampaign, setCreatingCampaign] = useState(false);
+  const [createdCampaignId, setCreatedCampaignId] = useState<string | null>(null);
+
+  const [flightName, setFlightName] = useState("");
+  const [flightCampaignId, setFlightCampaignId] = useState("");
+  const [creatingFlight, setCreatingFlight] = useState(false);
+
   // Load company data when modal opens
   useEffect(() => {
     const loadCompany = async () => {
@@ -100,6 +110,9 @@ export default function OpportunityDetailModal({
 
           if (bErr) throw bErr;
           setBrands((b || []).map(brand => ({ id: brand.id, name: brand.name })));
+        } else {
+          setAdvertiser(null);
+          setBrands([]);
         }
       } catch (e: any) {
         console.error(e);
@@ -203,6 +216,97 @@ export default function OpportunityDetailModal({
     onUpdate?.();
   };
 
+  // ---- Quick Actions handlers ----
+
+  // 1) Link by Flight ID
+  const linkById = async () => {
+    if (!linkId.trim()) {
+      toast({ title: "Insert a Flight ID", variant: "destructive" });
+      return;
+    }
+    await linkFlight(linkId.trim());
+    setLinkId("");
+  };
+
+  // 2) Create Campaign (draft-ish – só com name)
+  const createCampaign = async () => {
+    if (!campaignName.trim()) {
+      toast({ title: "Insert a campaign name", variant: "destructive" });
+      return;
+    }
+    setCreatingCampaign(true);
+    try {
+      const { data, error } = await supabase
+        .from("campaigns")
+        .insert({ name: campaignName.trim() })
+        .select("id")
+        .single();
+
+      if (error) throw error;
+
+      setCreatedCampaignId(data.id);
+      setCampaignName("");
+      toast({ title: "Campaign created", description: `ID: ${data.id}` });
+    } catch (e: any) {
+      toast({
+        title: "Failed to create campaign",
+        description:
+          e?.message ||
+          "Your schema may require additional fields (e.g., company/status).",
+        variant: "destructive",
+      });
+    } finally {
+      setCreatingCampaign(false);
+    }
+  };
+
+  // 3) Create Flight (draft) and link right away
+  const createFlightAndLink = async () => {
+    if (!opportunity?.id) return;
+    if (!flightName.trim()) {
+      toast({ title: "Insert a flight name", variant: "destructive" });
+      return;
+    }
+    setCreatingFlight(true);
+    try {
+      const payload: Record<string, any> = { name: flightName.trim() };
+      if (flightCampaignId.trim()) payload.campaign_id = flightCampaignId.trim();
+
+      const { data, error } = await supabase
+        .from("flights")
+        .insert(payload)
+        .select("id, campaign_id")
+        .single();
+
+      if (error) throw error;
+
+      const update: Record<string, any> = { flight_id: data.id };
+      if (data.campaign_id) update.campaign_id = data.campaign_id;
+
+      const { error: upErr } = await supabase
+        .from("opportunities")
+        .update(update)
+        .eq("id", opportunity.id);
+
+      if (upErr) throw upErr;
+
+      setFlightName("");
+      setFlightCampaignId("");
+      toast({ title: "Flight created and linked", description: `ID: ${data.id}` });
+      onUpdate?.();
+    } catch (e: any) {
+      toast({
+        title: "Failed to create/link flight",
+        description:
+          e?.message ||
+          "Your schema may require additional fields (e.g., campaign/status).",
+        variant: "destructive",
+      });
+    } finally {
+      setCreatingFlight(false);
+    }
+  };
+
   const headerBadges = useMemo(() => {
     if (!opportunity) return null;
     return (
@@ -227,9 +331,7 @@ export default function OpportunityDetailModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-4xl">
         <DialogHeader>
-          <DialogTitle>
-            {opportunity?.name ?? "Opportunity"}
-          </DialogTitle>
+          <DialogTitle>{opportunity?.name ?? "Opportunity"}</DialogTitle>
           {headerBadges}
         </DialogHeader>
 
@@ -265,9 +367,7 @@ export default function OpportunityDetailModal({
                 {searching ? (
                   <div className="text-sm text-muted-foreground">Searching…</div>
                 ) : searchResults.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">
-                    No results.
-                  </div>
+                  <div className="text-sm text-muted-foreground">No results.</div>
                 ) : (
                   <div className="space-y-2">
                     {searchResults.map((f) => (
@@ -282,11 +382,7 @@ export default function OpportunityDetailModal({
                             {f.start_date || "—"} → {f.end_date || "—"}
                           </div>
                         </div>
-                        <Button
-                          size="sm"
-                          className="gap-2"
-                          onClick={() => linkFlight(f.id)}
-                        >
+                        <Button size="sm" className="gap-2" onClick={() => linkFlight(f.id)}>
                           <LinkIcon className="h-4 w-4" />
                           Link
                         </Button>
@@ -300,64 +396,130 @@ export default function OpportunityDetailModal({
 
           {/* Links (current link / unlink) */}
           <TabsContent value="links" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Current Links</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between rounded-lg border p-3">
-                    <div>
-                      <div className="text-sm text-muted-foreground">Flight</div>
-                      <div className="font-medium">
-                        {opportunity?.flight_id || "—"}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Current Links</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between rounded-lg border p-3">
+                      <div>
+                        <div className="text-sm text-muted-foreground">Flight</div>
+                        <div className="font-medium">
+                          {opportunity?.flight_id || "—"}
+                        </div>
+                      </div>
+                      {opportunity?.flight_id ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          onClick={unlinkFlight}
+                        >
+                          <Unlink className="h-4 w-4" />
+                          Unlink
+                        </Button>
+                      ) : (
+                        <div className="text-xs text-muted-foreground">Not linked</div>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between rounded-lg border p-3">
+                      <div>
+                        <div className="text-sm text-muted-foreground">Campaign</div>
+                        <div className="font-medium">
+                          {opportunity?.campaign_id || "—"}
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        (Indirect link via Flight)
                       </div>
                     </div>
-                    {opportunity?.flight_id ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-2"
-                        onClick={unlinkFlight}
-                      >
-                        <Unlink className="h-4 w-4" />
-                        Unlink
-                      </Button>
-                    ) : (
+                    <div className="flex items-center justify-between rounded-lg border p-3">
+                      <div>
+                        <div className="text-sm text-muted-foreground">Advertiser</div>
+                        <div className="font-medium">
+                          {opportunity?.advertiser_id || "—"}
+                        </div>
+                      </div>
                       <div className="text-xs text-muted-foreground">
-                        Not linked
+                        (From CRM Account mapping)
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Quick Actions */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Quick Actions</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Link by Flight ID */}
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium">Link by Flight ID</div>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="paste flight_id…"
+                        value={linkId}
+                        onChange={(e) => setLinkId(e.target.value)}
+                      />
+                      <Button onClick={linkById} className="gap-2">
+                        <Link2 className="h-4 w-4" />
+                        Link
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Create Campaign */}
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium">Create Campaign (draft)</div>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="campaign name…"
+                        value={campaignName}
+                        onChange={(e) => setCampaignName(e.target.value)}
+                      />
+                      <Button onClick={createCampaign} className="gap-2" disabled={creatingCampaign}>
+                        <PlusCircle className="h-4 w-4" />
+                        Create
+                      </Button>
+                    </div>
+                    {createdCampaignId && (
+                      <div className="text-xs text-muted-foreground">
+                        Last created ID: <span className="font-mono">{createdCampaignId}</span>
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center justify-between rounded-lg border p-3">
-                    <div>
-                      <div className="text-sm text-muted-foreground">
-                        Campaign
-                      </div>
-                      <div className="font-medium">
-                        {opportunity?.campaign_id || "—"}
-                      </div>
+
+                  {/* Create Flight & Link */}
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium">Create Flight & Link</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <Input
+                        placeholder="flight name…"
+                        value={flightName}
+                        onChange={(e) => setFlightName(e.target.value)}
+                      />
+                      <Input
+                        placeholder="campaign_id (optional)…"
+                        value={flightCampaignId}
+                        onChange={(e) => setFlightCampaignId(e.target.value)}
+                      />
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      (Indirect link via Flight)
-                    </div>
+                    <Button
+                      onClick={createFlightAndLink}
+                      className="gap-2"
+                      disabled={creatingFlight}
+                    >
+                      <PlusCircle className="h-4 w-4" />
+                      Create & Link
+                    </Button>
                   </div>
-                  <div className="flex items-center justify-between rounded-lg border p-3">
-                    <div>
-                      <div className="text-sm text-muted-foreground">
-                        Advertiser
-                      </div>
-                      <div className="font-medium">
-                        {opportunity?.advertiser_id || "—"}
-                      </div>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      (From CRM Account mapping)
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           {/* Company */}
@@ -406,10 +568,7 @@ export default function OpportunityDetailModal({
                   ) : (
                     <div className="space-y-2">
                       {brands.map((b) => (
-                        <div
-                          key={b.id}
-                          className="rounded-lg border p-3"
-                        >
+                        <div key={b.id} className="rounded-lg border p-3">
                           <div className="font-medium">{b.name}</div>
                           <div className="text-xs text-muted-foreground">
                             ID: {b.id}
