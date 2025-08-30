@@ -76,6 +76,8 @@ export default function OpportunityDetailModal({
   // ---- Suggestions ----
   const [loadingSug, setLoadingSug] = useState(false);
   const [suggestions, setSuggestions] = useState<SuggestionRow[]>([]);
+  const [showAllSug, setShowAllSug] = useState(false);
+  const [minScore, setMinScore] = useState(0.2); // esconder matches fracos por defeito
 
   // ---- Manual search (flights) ----
   const [search, setSearch] = useState("");
@@ -93,8 +95,7 @@ export default function OpportunityDetailModal({
       if (!isOpen || !opportunity?.id) return;
       setLoadingSug(true);
       try {
-        // cast para ignorar tipos (a view não existe nos types gerados)
-        const sb: any = supabase;
+        const sb: any = supabase; // view não existe nos types
         const { data, error } = await sb
           .from("v_opportunity_flight_suggestions")
           .select(
@@ -102,7 +103,7 @@ export default function OpportunityDetailModal({
           )
           .eq("opportunity_id", opportunity.id)
           .order("total_score", { ascending: false })
-          .limit(10);
+          .limit(50);
 
         if (error) throw error;
 
@@ -223,7 +224,7 @@ export default function OpportunityDetailModal({
     setSearching(false);
   };
 
-  // Link selected flight to opportunity
+  // Link/unlink
   const linkFlight = async (flightId: string) => {
     if (!opportunity?.id) return;
     const { error } = await supabase
@@ -280,6 +281,16 @@ export default function OpportunityDetailModal({
     );
   }, [opportunity]);
 
+  // Sugestões visíveis + filtros
+  const filteredSuggestions = useMemo(
+    () => suggestions.filter((s) => (s.total_score ?? 0) >= minScore),
+    [suggestions, minScore]
+  );
+  const visibleSuggestions = useMemo(
+    () => (showAllSug ? filteredSuggestions : filteredSuggestions.slice(0, 5)),
+    [filteredSuggestions, showAllSug]
+  );
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-4xl">
@@ -299,42 +310,74 @@ export default function OpportunityDetailModal({
           {/* Suggestions */}
           <TabsContent value="suggestions" className="mt-4">
             <Card>
-              <CardHeader>
-                <CardTitle>Suggested Flights</CardTitle>
+              <CardHeader className="flex flex-col gap-3">
+                <CardTitle className="flex items-center justify-between">
+                  <span>Suggested Flights</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground">
+                      Min score: {minScore.toFixed(2)}
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={minScore}
+                      onChange={(e) => setMinScore(Number(e.target.value))}
+                      className="w-40"
+                    />
+                  </div>
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 {loadingSug ? (
                   <div className="text-sm text-muted-foreground">Loading…</div>
-                ) : suggestions.length === 0 ? (
+                ) : filteredSuggestions.length === 0 ? (
                   <div className="text-sm text-muted-foreground">
                     No suggestions for this opportunity.
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {suggestions.map((s) => (
-                      <div
-                        key={`${s.opportunity_id}-${s.flight_id}`}
-                        className="flex items-center justify-between rounded-lg border p-3"
-                      >
-                        <div>
-                          <div className="font-medium">{s.flight_name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            Campaign: {s.campaign_name || "—"}
+                  <>
+                    <div className="max-h-[380px] overflow-auto pr-2 space-y-2">
+                      {visibleSuggestions.map((s) => (
+                        <div
+                          key={`${s.opportunity_id}-${s.flight_id}`}
+                          className="flex items-center justify-between rounded-lg border p-3"
+                        >
+                          <div>
+                            <div className="font-medium">{s.flight_name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              Campaign: {s.campaign_name || "—"}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              Score:{" "}
+                              <span className="font-medium">
+                                {Number(s.total_score ?? 0).toFixed(2)}
+                              </span>
+                            </div>
                           </div>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            Score:{" "}
-                            <span className="font-medium">
-                              {Number(s.total_score ?? 0).toFixed(2)}
-                            </span>
-                          </div>
+                          <Button size="sm" className="gap-2" onClick={() => linkFlight(s.flight_id)}>
+                            <LinkIcon className="h-4 w-4" />
+                            Link
+                          </Button>
                         </div>
-                        <Button size="sm" className="gap-2" onClick={() => linkFlight(s.flight_id)}>
-                          <LinkIcon className="h-4 w-4" />
-                          Link
+                      ))}
+                    </div>
+
+                    {filteredSuggestions.length > 5 && (
+                      <div className="flex justify-center pt-3">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowAllSug((v) => !v)}
+                        >
+                          {showAllSug
+                            ? "Show less"
+                            : `Show all (${filteredSuggestions.length})`}
                         </Button>
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -367,7 +410,7 @@ export default function OpportunityDetailModal({
                 ) : searchResults.length === 0 ? (
                   <div className="text-sm text-muted-foreground">No results.</div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-2 max-h-[380px] overflow-auto pr-2">
                     {searchResults.map((f) => (
                       <div
                         key={f.id}
