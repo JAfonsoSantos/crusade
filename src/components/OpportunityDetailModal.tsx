@@ -18,7 +18,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { Search } from "lucide-react";
 
-// --- Tipos mínimos usados no modal ---
+/* ----------------------------- Tipos mínimos ----------------------------- */
+
 export type OpportunityLite = {
   id: string;
   name: string;
@@ -26,7 +27,7 @@ export type OpportunityLite = {
   amount?: number | null;
   currency?: string | null;
   probability?: number | null;
-  close_date?: string | null; // DATE na BD
+  close_date?: string | null;
   advertiser_id?: string | null;
   campaign_id?: string | null;
   flight_id?: string | null;
@@ -61,6 +62,8 @@ type Props = {
   onUpdate?: () => Promise<void> | void;
 };
 
+/* -------------------------------- Utils ---------------------------------- */
+
 function formatCurrency(value?: number | null, currency = "EUR") {
   if (value == null) return "—";
   try {
@@ -73,6 +76,8 @@ function formatCurrency(value?: number | null, currency = "EUR") {
     return String(value);
   }
 }
+
+/* ------------------------------ Componente -------------------------------- */
 
 export default function OpportunityDetailModal({
   opportunity,
@@ -91,42 +96,46 @@ export default function OpportunityDetailModal({
   const [flightResults, setFlightResults] = useState<FlightPick[]>([]);
   const [searchingFlights, setSearchingFlights] = useState(false);
 
-  // Ligação
+  // Estado de ligação
   const [linking, setLinking] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
 
-  // Recarregar dados quando abrir
+  /* --------------------------- Load ao abrir --------------------------- */
+
   useEffect(() => {
     if (!isOpen || !opportunity?.id) return;
 
-    // carregar sugestões
     (async () => {
       setLoadingSuggestions(true);
-      const { data, error } = await supabase
-        .from("v_opportunity_flight_suggestions")
+
+      // Evita “No overload matches this call” devido a view não tipada:
+      const res: any = await supabase
+        .from("v_opportunity_flight_suggestions" as any)
         .select("*")
         .eq("opportunity_id", opportunity.id)
         .order("total_score", { ascending: false })
         .limit(10);
 
-      if (error) {
+      if (res.error) {
         toast({
           title: "Erro ao carregar sugestões",
-          description: error.message,
+          description: res.error.message,
           variant: "destructive",
         });
+        setSuggestions([]);
       } else {
-        setSuggestions((data || []) as SuggestionRow[]);
+        setSuggestions((res.data as unknown as SuggestionRow[]) ?? []);
       }
       setLoadingSuggestions(false);
     })();
 
-    // limpar pesquisa
+    // limpar pesquisa manual
     setFlightQuery("");
     setFlightResults([]);
-  }, [isOpen, opportunity?.id]);
+  }, [isOpen, opportunity?.id, toast]);
 
-  // Pesquisa manual de flights
+  /* --------------------------- Pesquisa manual -------------------------- */
+
   async function searchFlights(q: string) {
     setFlightQuery(q);
     if (!q || q.trim().length < 2) {
@@ -148,20 +157,28 @@ export default function OpportunityDetailModal({
         description: error.message,
         variant: "destructive",
       });
+      setFlightResults([]);
     } else {
       setFlightResults((data || []) as FlightPick[]);
     }
     setSearchingFlights(false);
   }
 
-  // Ligar oportunidade ⇄ flight
+  /* ----------------------------- Link / Unlink ----------------------------- */
+
   async function linkFlight(flightId: string) {
     if (!opportunity?.id) return;
     setLinking(true);
-    const { error } = await supabase.rpc("upsert_opportunity_flight_link", {
-      p_opportunity_id: opportunity.id,
-      p_flight_id: flightId,
-    });
+
+    // Funções RPC não presentes no d.ts gerado → cast para any
+    const { error }: any = await supabase.rpc(
+      "upsert_opportunity_flight_link" as any,
+      {
+        p_opportunity_id: opportunity.id,
+        p_flight_id: flightId,
+      } as any
+    );
+
     setLinking(false);
 
     if (error) {
@@ -181,13 +198,15 @@ export default function OpportunityDetailModal({
     await onUpdate?.();
   }
 
-  // Desligar
   async function unlinkFlight() {
     if (!opportunity?.id) return;
     setUnlinking(true);
-    const { error } = await supabase.rpc("unlink_opportunity_flight", {
-      p_opportunity_id: opportunity.id,
-    });
+
+    const { error }: any = await supabase.rpc(
+      "unlink_opportunity_flight" as any,
+      { p_opportunity_id: opportunity.id } as any
+    );
+
     setUnlinking(false);
 
     if (error) {
@@ -202,6 +221,8 @@ export default function OpportunityDetailModal({
     toast({ title: "Ligação removida" });
     await onUpdate?.();
   }
+
+  /* -------------------------------- UI ---------------------------------- */
 
   const headerBadges = useMemo(() => {
     if (!opportunity) return null;
@@ -224,9 +245,7 @@ export default function OpportunityDetailModal({
     <Dialog open={isOpen} onOpenChange={(v) => (!v ? onClose() : undefined)}>
       <DialogContent className="max-w-3xl p-0 overflow-hidden">
         <DialogHeader className="px-6 pt-6">
-          <DialogTitle>
-            {opportunity?.name ?? "Opportunity"}
-          </DialogTitle>
+          <DialogTitle>{opportunity?.name ?? "Opportunity"}</DialogTitle>
           <DialogDescription asChild>
             <div className="flex items-center justify-between text-sm">
               <div className="text-muted-foreground">
@@ -281,9 +300,7 @@ export default function OpportunityDetailModal({
             </CardHeader>
             <CardContent className="space-y-3">
               {loadingSuggestions && (
-                <div className="text-sm text-muted-foreground">
-                  A carregar…
-                </div>
+                <div className="text-sm text-muted-foreground">A carregar…</div>
               )}
 
               {!loadingSuggestions && suggestions.length === 0 && (
@@ -292,36 +309,39 @@ export default function OpportunityDetailModal({
                 </div>
               )}
 
-              {suggestions.map((s) => (
-                <div
-                  key={`${s.opportunity_id}-${s.flight_id}`}
-                  className="flex items-center justify-between border rounded-md p-3"
-                >
-                  <div className="space-y-1">
-                    <div className="font-medium">{s.flight_name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {s.campaign_name ? `Campanha: ${s.campaign_name} • ` : ""}
-                      Score: {Math.round(s.total_score)}
-                      {s.start_date
-                        ? ` • ${new Date(s.start_date).toLocaleDateString(
-                            "pt-PT"
-                          )} - ${
-                            s.end_date
-                              ? new Date(s.end_date).toLocaleDateString("pt-PT")
-                              : "—"
-                          }`
-                        : ""}
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    onClick={() => linkFlight(s.flight_id)}
-                    disabled={linking}
+              {!loadingSuggestions &&
+                suggestions.map((s) => (
+                  <div
+                    key={`${s.opportunity_id}-${s.flight_id}`}
+                    className="flex items-center justify-between border rounded-md p-3"
                   >
-                    {linking ? "A ligar…" : "Link"}
-                  </Button>
-                </div>
-              ))}
+                    <div className="space-y-1">
+                      <div className="font-medium">{s.flight_name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {s.campaign_name ? `Campanha: ${s.campaign_name} • ` : ""}
+                        Score: {Math.round(s.total_score)}
+                        {s.start_date
+                          ? ` • ${new Date(s.start_date).toLocaleDateString(
+                              "pt-PT"
+                            )} - ${
+                              s.end_date
+                                ? new Date(s.end_date).toLocaleDateString(
+                                    "pt-PT"
+                                  )
+                                : "—"
+                            }`
+                          : ""}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => linkFlight(s.flight_id)}
+                      disabled={linking}
+                    >
+                      {linking ? "A ligar…" : "Link"}
+                    </Button>
+                  </div>
+                ))}
             </CardContent>
           </Card>
 
