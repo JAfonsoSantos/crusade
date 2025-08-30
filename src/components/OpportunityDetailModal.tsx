@@ -1,48 +1,7 @@
 // src/components/OpportunityDetailModal.tsx
 /**
- * ✅ PRÉ-REQUISITO (uma vez no Supabase):
- *
- * create or replace function public.fetch_opportunity_flight_suggestions(
- *   p_opportunity_id uuid,
- *   p_limit integer default 30,
- *   p_offset integer default 0
- * )
- * returns table (
- *   opportunity_id uuid,
- *   flight_id uuid,
- *   flight_name text,
- *   campaign_id uuid,
- *   campaign_name text,
- *   total_score numeric
- * )
- * language sql
- * stable
- * as $$
- *   select
- *     o.id              as opportunity_id,
- *     f.id              as flight_id,
- *     f.name            as flight_name,
- *     f.campaign_id,
- *     c.name            as campaign_name,
- *     (
- *       case
- *         when f.name ilike '%' || o.name || '%' then 0.7
- *         when o.name ilike '%' || f.name || '%' then 0.5
- *         else 0.2
- *       end
- *       + case
- *           when f.start_date is not null and f.end_date is not null and o.close_date is not null
- *                and (o.close_date between f.start_date and f.end_date) then 0.3
- *           else 0
- *         end
- *     )::numeric(4,2) as total_score
- *   from public.opportunities o
- *   join public.flights f on true
- *   left join public.campaigns c on c.id = f.campaign_id
- *   where o.id = p_opportunity_id
- *   order by 6 desc
- *   limit p_limit offset p_offset;
- * $$;
+ * RPC opcional (no Supabase) — ver notas que te enviei.
+ * O componente funciona mesmo sem a RPC (faz fallback para a view).
  */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -85,15 +44,8 @@ type FlightRow = {
   campaign_name?: string | null;
 };
 
-type AdvertiserInfo = {
-  id: string;
-  name: string;
-};
-
-type BrandInfo = {
-  id: string;
-  name: string;
-};
+type AdvertiserInfo = { id: string; name: string };
+type BrandInfo = { id: string; name: string };
 
 type SuggestionRow = {
   opportunity_id: string;
@@ -130,7 +82,6 @@ export default function OpportunityDetailModal({
 
   useEffect(() => {
     if (!isOpen || !opportunity?.id) return;
-    // reset on open/opportunity change
     setSugs([]);
     setPage(0);
     setHasMore(true);
@@ -143,8 +94,8 @@ export default function OpportunityDetailModal({
       setSugsLoading(true);
       setSugsError(null);
 
-      // 1) tentar via RPC tipado
-      const { data, error } = await supabase.rpc(
+      // 1) Tenta via RPC — cast a any porque a função não está nas types geradas
+      const { data, error } = await (supabase as any).rpc(
         "fetch_opportunity_flight_suggestions",
         {
           p_opportunity_id: opportunity.id,
@@ -154,14 +105,14 @@ export default function OpportunityDetailModal({
       );
 
       if (!error && Array.isArray(data)) {
-        const rows = data as SuggestionRow[];
+        const rows = (data || []) as SuggestionRow[];
         setSugs((prev) => [...prev, ...rows]);
         setHasMore(rows.length === PAGE_SIZE);
         setSugsLoading(false);
         return;
       }
 
-      // 2) fallback para a view (pode não estar nos tipos)
+      // 2) Fallback para a view (também fora das types)
       const { data: vdata, error: vErr } = (supabase as any)
         .from("v_opportunity_flight_suggestions")
         .select(
@@ -192,7 +143,6 @@ export default function OpportunityDetailModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, opportunity?.id, page]);
 
-  // IntersectionObserver for infinite scroll
   useEffect(() => {
     if (!sentinelRef.current) return;
     const el = sentinelRef.current;
@@ -370,7 +320,7 @@ export default function OpportunityDetailModal({
         </DialogHeader>
 
         <Tabs defaultValue="suggestions" className="mt-4">
-          <TabsList className="grid grid-cols-3 w-full max-w-[520px]">
+          <TabsList className="grid grid-cols-4 w-full max-w-[620px]">
             <TabsTrigger value="suggestions">Suggestions</TabsTrigger>
             <TabsTrigger value="search">Search Flights</TabsTrigger>
             <TabsTrigger value="links">Links</TabsTrigger>
@@ -422,7 +372,6 @@ export default function OpportunityDetailModal({
                           </Button>
                         </div>
                       ))}
-                      {/* sentinel for infinite scroll */}
                       {hasMore && (
                         <div
                           ref={sentinelRef}
