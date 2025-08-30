@@ -12,8 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Search, Link as LinkIcon, Unlink, ExternalLink, Pencil } from "lucide-react";
+import { Search, Link as LinkIcon, Unlink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type Opportunity = {
@@ -28,15 +27,6 @@ type Opportunity = {
   pipeline_id: string | null;
   crm_external_id?: string | null;
   crm_integration_id?: string | null;
-};
-
-type SuggestionRow = {
-  opportunity_id: string;
-  flight_id: string;
-  flight_name: string;
-  campaign_id: string;
-  campaign_name: string;
-  total_score: number;
 };
 
 type FlightRow = {
@@ -66,15 +56,6 @@ type Props = {
   onUpdate?: () => void;
 };
 
-const STAGES = [
-  "needs_analysis",
-  "value_proposition",
-  "proposal",
-  "negotiation",
-  "closed_won",
-  "closed_lost",
-];
-
 export default function OpportunityDetailModal({
   opportunity,
   isOpen,
@@ -82,10 +63,6 @@ export default function OpportunityDetailModal({
   onUpdate,
 }: Props) {
   const { toast } = useToast();
-
-  // ---- Suggestions state ----
-  const [loadingSug, setLoadingSug] = useState(false);
-  const [suggestions, setSuggestions] = useState<SuggestionRow[]>([]);
 
   // ---- Manual search (flights) ----
   const [search, setSearch] = useState("");
@@ -97,56 +74,20 @@ export default function OpportunityDetailModal({
   const [advertiser, setAdvertiser] = useState<AdvertiserInfo | null>(null);
   const [brands, setBrands] = useState<BrandInfo[]>([]);
 
-  // ---- Inline edit (header) ----
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(opportunity?.name ?? "");
-  const [amount, setAmount] = useState<string>(opportunity?.amount != null ? String(opportunity.amount) : "");
-  const [prob, setProb] = useState<string>(opportunity ? String(opportunity.probability ?? 0) : "0");
-  const [stage, setStage] = useState(opportunity?.stage ?? STAGES[0]);
-  useEffect(() => {
-    setName(opportunity?.name ?? "");
-    setAmount(opportunity?.amount != null ? String(opportunity.amount) : "");
-    setProb(opportunity ? String(opportunity.probability ?? 0) : "0");
-    setStage(opportunity?.stage ?? STAGES[0]);
-  }, [opportunity?.id]);
-
-  const saveEdits = async () => {
-    if (!opportunity?.id) return;
-    const payload: Partial<Opportunity> = {
-      name: name.trim(),
-      stage,
-      probability: Number.isFinite(Number(prob)) ? Number(prob) : 0,
-      amount: amount === "" ? null : Number(amount),
-    };
-    const { error } = await supabase.from("opportunities").update(payload).eq("id", opportunity.id);
-    if (error) {
-      toast({ title: "Failed to save", description: error.message, variant: "destructive" });
-      return;
-    }
-    toast({ title: "Opportunity updated" });
-    setEditing(false);
-    onUpdate?.();
-  };
-
-  const openDeals = () => {
-    if (!opportunity?.id) return;
-    // simples: navega para /deals com query
-    window.location.href = `/deals?opportunity=${opportunity.id}`;
-  };
-
-  // Load suggestions when modal opens — for views sem tipos, força any e mapeia manual
+  // Load company data when modal opens
+   // Load suggestions when modal opens
   useEffect(() => {
     const run = async () => {
       if (!isOpen || !opportunity?.id) return;
       setLoadingSug(true);
       try {
-        // ⚠️ Cast para evitar “Invalid Relationships cannot infer result type”
-        const { data, error } = await (supabase
-          .from<any>("v_opportunity_flight_suggestions")
+        // usa "as any" para evitar TS2558/TS2345 em views não tipadas
+        const { data, error } = await (supabase as any)
+          .from("v_opportunity_flight_suggestions")
           .select("opportunity_id, flight_id, flight_name, campaign_id, campaign_name, total_score")
           .eq("opportunity_id", opportunity.id)
           .order("total_score", { ascending: false })
-          .limit(50) as any);
+          .limit(50);
 
         if (error) throw error;
         const rows: SuggestionRow[] = (data || []).map((r: any) => ({
@@ -167,46 +108,6 @@ export default function OpportunityDetailModal({
     };
     run();
   }, [isOpen, opportunity?.id]);
-
-  // Load company data when modal opens
-  useEffect(() => {
-    const loadCompany = async () => {
-      if (!isOpen || !opportunity) return;
-      setLoadingCompany(true);
-
-      try {
-        if (opportunity.advertiser_id) {
-          const { data: a, error: aErr } = await supabase
-            .from("advertisers")
-            .select("id, name")
-            .eq("id", opportunity.advertiser_id)
-            .maybeSingle();
-
-          if (aErr) throw aErr;
-          setAdvertiser(a);
-
-          const { data: b, error: bErr } = await supabase
-            .from("brands")
-            .select("id, name")
-            .eq("advertiser_id", opportunity.advertiser_id);
-
-          if (bErr) throw bErr;
-          setBrands((b || []).map(brand => ({ id: brand.id, name: brand.name })));
-        }
-      } catch (e: any) {
-        console.error(e);
-        toast({
-          title: "Failed to load company data",
-          description: String(e.message || e),
-          variant: "destructive",
-        });
-      } finally {
-        setLoadingCompany(false);
-      }
-    };
-
-    loadCompany();
-  }, [isOpen, opportunity, toast]);
 
   // Manual search for flights
   const runSearch = async () => {
@@ -319,118 +220,18 @@ export default function OpportunityDetailModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-4xl">
         <DialogHeader>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <DialogTitle>{opportunity?.name ?? "Opportunity"}</DialogTitle>
-              {headerBadges}
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setEditing((v) => !v)}>
-                <Pencil className="h-4 w-4 mr-2" />
-                {editing ? "Cancel" : "Edit"}
-              </Button>
-              <Button variant="outline" size="sm" onClick={openDeals}>
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Open
-              </Button>
-            </div>
-          </div>
+          <DialogTitle>
+            {opportunity?.name ?? "Opportunity"}
+          </DialogTitle>
+          {headerBadges}
         </DialogHeader>
 
-        {/* Inline edit panel */}
-        {editing && (
-          <div className="rounded-lg border p-4 mb-4 grid grid-cols-1 md:grid-cols-4 gap-3">
-            <div className="md:col-span-2">
-              <label className="text-xs text-muted-foreground">Name</label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Amount</label>
-              <Input
-                inputMode="decimal"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="e.g. 10000"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Probability (%)</label>
-              <Input
-                inputMode="numeric"
-                value={prob}
-                onChange={(e) => setProb(e.target.value)}
-                placeholder="0-100"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="text-xs text-muted-foreground">Stage</label>
-              <Select value={stage} onValueChange={setStage}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select stage" />
-                </SelectTrigger>
-                <SelectContent>
-                  {STAGES.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="md:col-span-2 flex items-end justify-end">
-              <Button onClick={saveEdits}>Save</Button>
-            </div>
-          </div>
-        )}
-
-        <Tabs defaultValue="suggestions" className="mt-2">
-          <TabsList className="grid grid-cols-4 w-full max-w-[560px]">
-            <TabsTrigger value="suggestions">Suggestions</TabsTrigger>
+        <Tabs defaultValue="search" className="mt-4">
+          <TabsList className="grid grid-cols-3 w-full max-w-[400px]">
             <TabsTrigger value="search">Search Flights</TabsTrigger>
             <TabsTrigger value="links">Links</TabsTrigger>
             <TabsTrigger value="company">Company</TabsTrigger>
           </TabsList>
-
-          {/* Suggestions */}
-          <TabsContent value="suggestions" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Suggested Flights</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loadingSug ? (
-                  <div className="text-sm text-muted-foreground">Loading…</div>
-                ) : suggestions.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">
-                    No suggestions available for this opportunity.
-                  </div>
-                ) : (
-                  <div className="max-h-[400px] overflow-y-auto space-y-2">
-                    {suggestions.map((s) => (
-                      <div
-                        key={`${s.opportunity_id}-${s.flight_id}`}
-                        className="flex items-center justify-between rounded-lg border p-3"
-                      >
-                        <div>
-                          <div className="font-medium">{s.flight_name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            Campaign: {s.campaign_name || "—"}
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            Score: <span className="font-medium">{s.total_score.toFixed(2)}</span>
-                          </div>
-                        </div>
-                        <Button size="sm" className="gap-2" onClick={() => linkFlight(s.flight_id)}>
-                          <LinkIcon className="h-4 w-4" />
-                          Link
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
 
           {/* Manual Search */}
           <TabsContent value="search" className="mt-4">
@@ -457,18 +258,28 @@ export default function OpportunityDetailModal({
                 {searching ? (
                   <div className="text-sm text-muted-foreground">Searching…</div>
                 ) : searchResults.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No results.</div>
+                  <div className="text-sm text-muted-foreground">
+                    No results.
+                  </div>
                 ) : (
-                  <div className="max-h-[400px] overflow-y-auto space-y-2">
+                  <div className="space-y-2">
                     {searchResults.map((f) => (
-                      <div key={f.id} className="flex items-center justify-between rounded-lg border p-3">
+                      <div
+                        key={f.id}
+                        className="flex items-center justify-between rounded-lg border p-3"
+                      >
                         <div>
                           <div className="font-medium">{f.name}</div>
                           <div className="text-xs text-muted-foreground">
-                            Campaign: {f.campaign_name || "—"} • {f.start_date || "—"} → {f.end_date || "—"}
+                            Campaign: {f.campaign_name || "—"} •{" "}
+                            {f.start_date || "—"} → {f.end_date || "—"}
                           </div>
                         </div>
-                        <Button size="sm" className="gap-2" onClick={() => linkFlight(f.id)}>
+                        <Button
+                          size="sm"
+                          className="gap-2"
+                          onClick={() => linkFlight(f.id)}
+                        >
                           <LinkIcon className="h-4 w-4" />
                           Link
                         </Button>
@@ -480,7 +291,7 @@ export default function OpportunityDetailModal({
             </Card>
           </TabsContent>
 
-          {/* Links */}
+          {/* Links (current link / unlink) */}
           <TabsContent value="links" className="mt-4">
             <Card>
               <CardHeader>
@@ -491,30 +302,51 @@ export default function OpportunityDetailModal({
                   <div className="flex items-center justify-between rounded-lg border p-3">
                     <div>
                       <div className="text-sm text-muted-foreground">Flight</div>
-                      <div className="font-medium">{opportunity?.flight_id || "—"}</div>
+                      <div className="font-medium">
+                        {opportunity?.flight_id || "—"}
+                      </div>
                     </div>
                     {opportunity?.flight_id ? (
-                      <Button variant="outline" size="sm" className="gap-2" onClick={unlinkFlight}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={unlinkFlight}
+                      >
                         <Unlink className="h-4 w-4" />
                         Unlink
                       </Button>
                     ) : (
-                      <div className="text-xs text-muted-foreground">Not linked</div>
+                      <div className="text-xs text-muted-foreground">
+                        Not linked
+                      </div>
                     )}
                   </div>
                   <div className="flex items-center justify-between rounded-lg border p-3">
                     <div>
-                      <div className="text-sm text-muted-foreground">Campaign</div>
-                      <div className="font-medium">{opportunity?.campaign_id || "—"}</div>
+                      <div className="text-sm text-muted-foreground">
+                        Campaign
+                      </div>
+                      <div className="font-medium">
+                        {opportunity?.campaign_id || "—"}
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground">(Indirect link via Flight)</div>
+                    <div className="text-xs text-muted-foreground">
+                      (Indirect link via Flight)
+                    </div>
                   </div>
                   <div className="flex items-center justify-between rounded-lg border p-3">
                     <div>
-                      <div className="text-sm text-muted-foreground">Advertiser</div>
-                      <div className="font-medium">{opportunity?.advertiser_id || "—"}</div>
+                      <div className="text-sm text-muted-foreground">
+                        Advertiser
+                      </div>
+                      <div className="font-medium">
+                        {opportunity?.advertiser_id || "—"}
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground">(From CRM Account mapping)</div>
+                    <div className="text-xs text-muted-foreground">
+                      (From CRM Account mapping)
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -538,8 +370,12 @@ export default function OpportunityDetailModal({
                   ) : (
                     <div className="space-y-4">
                       <div>
-                        <div className="text-lg font-semibold">{advertiser.name}</div>
-                        <div className="text-sm text-muted-foreground">ID: {advertiser.id}</div>
+                        <div className="text-lg font-semibold">
+                          {advertiser.name}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          ID: {advertiser.id}
+                        </div>
                       </div>
                       <div className="text-sm text-muted-foreground">
                         External linking functionality temporarily disabled.
@@ -561,11 +397,16 @@ export default function OpportunityDetailModal({
                       No brands associated with this advertiser.
                     </div>
                   ) : (
-                    <div className="max-h-[300px] overflow-y-auto space-y-2">
+                    <div className="space-y-2">
                       {brands.map((b) => (
-                        <div key={b.id} className="rounded-lg border p-3">
+                        <div
+                          key={b.id}
+                          className="rounded-lg border p-3"
+                        >
                           <div className="font-medium">{b.name}</div>
-                          <div className="text-xs text-muted-foreground">ID: {b.id}</div>
+                          <div className="text-xs text-muted-foreground">
+                            ID: {b.id}
+                          </div>
                         </div>
                       ))}
                     </div>
